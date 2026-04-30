@@ -15,18 +15,18 @@ import {
   useStdin
 } from 'ink';
 import { TextInput } from '@inkjs/ui';
-import { runCouncil } from './council.ts';
+import { runCouncil } from './council.js';
 import {
   buildHotkeyParts,
   buildSessionBlocks
-} from './presentation.ts';
+} from './presentation.js';
 import {
   createCouncilRuntimeFailureResult,
   createSessionState,
   hydrateSessionStateFromResult,
   reduceSessionEvent,
   summaryTextForConversation
-} from './session-core.ts';
+} from './session-core.js';
 
 export function shouldUseInteractiveDashboard(
   ui,

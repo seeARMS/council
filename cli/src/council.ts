@@ -6,7 +6,7 @@ import {
   buildMemberPrompt,
   buildSummaryPrompt,
   runEngine
-} from './engines.ts';
+} from './engines.js';
 
 export async function runCouncil(options: any = {}) {
   const {

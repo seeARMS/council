@@ -2,7 +2,7 @@ import {
   colorForSummaryStatus,
   colorForStatus,
   formatDuration
-} from './presentation.ts';
+} from './presentation.js';
 
 function style(text, ansiCode, enabled) {
   return enabled ? `\u001b[${ansiCode}m${text}\u001b[0m` : text;

@@ -1,4 +1,4 @@
-import { formatDuration, renderSummaryFailure } from './presentation.ts';
+import { formatDuration, renderSummaryFailure } from './presentation.js';
 
 export function renderHumanResult(result, { summaryOnly = false } = {}) {
   if (summaryOnly) {

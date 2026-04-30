@@ -1,19 +1,19 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { parseArgs, usageText } from './args.ts';
-import { exitCodeForResult, EXIT_CODES } from './exit-codes.ts';
+import { parseArgs, usageText } from './args.js';
+import { exitCodeForResult, EXIT_CODES } from './exit-codes.js';
 import {
   runInteractiveSession,
   shouldUseInteractiveDashboard
-} from './interactive-ui.ts';
-import { readPromptFromArgsAndStdin } from './utils.ts';
-import { runCouncil } from './council.ts';
-import { renderHumanResult } from './render.ts';
+} from './interactive-ui.js';
+import { readPromptFromArgsAndStdin } from './utils.js';
+import { runCouncil } from './council.js';
+import { renderHumanResult } from './render.js';
 import {
   renderBanner,
   renderProgressEvent,
   resolveUiOptions
-} from './ui.ts';
+} from './ui.js';
 
 export function readVersion() {
   const packageJsonPath = new URL('../package.json', import.meta.url);

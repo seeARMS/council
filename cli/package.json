@@ -8,25 +8,26 @@
   },
   "exports": {
     ".": {
-      "types": "./src/index.d.ts",
-      "default": "./src/index.js"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     }
   },
-  "types": "./src/index.d.ts",
+  "types": "./dist/index.d.ts",
   "files": [
     "bin",
-    "src",
+    "dist",
     "README.md",
     "LICENSE",
     "CONTRIBUTING.md"
   ],
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "test": "node --test",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm test && npm run typecheck"
+    "prepublishOnly": "npm run build && npm test && npm run typecheck"
   },
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=22.0.0"
   },
   "keywords": [
     "ai",

@@ -4,7 +4,7 @@ import {
   AUTO_SUMMARIZER,
   DEFAULT_MAX_MEMBER_CHARS,
   DEFAULT_TIMEOUT_MS
-} from './engines.ts';
+} from './engines.js';
 
 const OPTIONS = {
   help: { type: 'boolean', short: 'h' },

@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { extractJsonObject, runCommand } from './process.ts';
+import { extractJsonObject, runCommand } from './process.js';
 
 export const ALL_ENGINES = ['codex', 'claude', 'gemini'];
 export const AUTO_SUMMARIZER = 'auto';
