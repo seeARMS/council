@@ -1,437 +1,776 @@
-function style(text, ansiCode, enabled) {
-  return enabled ? `\u001b[${ansiCode}m${text}\u001b[0m` : text;
-}
+import {
+  createElement as h,
+  Fragment,
+  useEffect,
+  useReducer,
+  useRef,
+  useState
+} from 'react';
+import { Box, render, Static, Text, useInput, useStdin } from 'ink';
+import TextInput from 'ink-text-input';
+import { runCouncil } from './council.js';
 
-export function shouldUseInteractiveDashboard(ui, { stdinIsTTY = Boolean(process.stdin.isTTY) } = {}) {
-  return ui.outputMode === 'text' && ui.showProgress && !ui.summaryOnly && !ui.plain && stdinIsTTY;
-}
-
-export function createInteractiveState(members) {
-  return {
-    members: [...members],
-    items: members.map((name, index) => createMemberItem(name, index + 1)),
-    summaryItem: createSummaryItem(members.length + 1),
-    completed: false,
-    footerMode: 'running'
-  };
-}
-
-export function applyInteractiveEvent(state, event) {
-  switch (event.type) {
-    case 'run_started':
-      return;
-    case 'member_started': {
-      const item = getMemberItem(state, event.name);
-      item.status = 'running';
-      item.startedAt = timestamp(event.at);
-      item.progressDetail = 'thinking...';
-      return;
-    }
-    case 'member_progress': {
-      const item = getMemberItem(state, event.name);
-      item.progressDetail = event.detail;
-      return;
-    }
-    case 'member_completed': {
-      const item = getMemberItem(state, event.result.name);
-      item.status = event.result.status;
-      item.startedAt ??= timestamp(event.at);
-      item.completedAt = timestamp(event.at);
-      item.result = event.result;
-      item.progressDetail = '';
-      return;
-    }
-    case 'summary_started': {
-      state.summaryItem.status = 'running';
-      state.summaryItem.summarizerName = event.name;
-      state.summaryItem.startedAt = timestamp(event.at);
-      state.summaryItem.completedAt = null;
-      state.summaryItem.result = null;
-      state.summaryItem.progressDetail = 'synthesizing...';
-      return;
-    }
-    case 'summary_progress': {
-      state.summaryItem.progressDetail = event.detail;
-      return;
-    }
-    case 'summary_completed': {
-      state.summaryItem.status = event.result.status;
-      state.summaryItem.summarizerName = event.result.name;
-      state.summaryItem.startedAt ??= timestamp(event.at);
-      state.summaryItem.completedAt = timestamp(event.at);
-      state.summaryItem.result = event.result;
-      state.summaryItem.progressDetail = '';
-      return;
-    }
-    case 'run_completed':
-      state.completed = true;
-      state.footerMode = 'completed';
-      return;
-    default:
-      return;
-  }
-}
-
-export function toggleInteractiveItem(state, hotkey) {
-  const item = getExpandableItems(state).find((entry) => entry.hotkey === hotkey);
-  if (!item) {
-    return false;
-  }
-
-  item.expanded = !item.expanded;
-  return true;
-}
-
-export function renderInteractiveSnapshot(state, { width = 100, rows, colorEnabled = false } = {}) {
-  const clampedWidth = Math.max(width, 60);
-  const lines = [];
-
-  lines.push(style(`Council is consulting: ${state.members.join(', ')}`, '36', colorEnabled));
-
-  for (const item of state.items) {
-    lines.push(...renderItem(item, { width: clampedWidth, colorEnabled }));
-  }
-
-  if (state.summaryItem) {
-    lines.push('');
-    lines.push(style('----------- synthesis -----------', summaryDividerColor(state.summaryItem), colorEnabled));
-    lines.push(...renderItem(state.summaryItem, { width: clampedWidth, colorEnabled }));
-  }
-
-  lines.push('');
-  lines.push(...renderFooter(state, { width: clampedWidth, colorEnabled }));
-
-  return fitToHeight(lines, rows, colorEnabled);
-}
-
-function fitToHeight(lines, rows, colorEnabled) {
-  if (!Number.isFinite(rows) || rows <= 0 || lines.length <= rows) {
-    return lines;
-  }
-
-  if (rows < 3) {
-    return lines.slice(-rows);
-  }
-
-  const ellipsis = style('...', '90', colorEnabled);
-  const tailCount = rows - 2;
-  return [lines[0], ellipsis, ...lines.slice(-tailCount)];
-}
-
-export function createInteractiveDashboard({
-  stream = process.stderr,
-  input = process.stdin,
-  colorEnabled = false,
-  members = []
-} = {}) {
-  const state = createInteractiveState(members);
-  let blockHeight = 0;
-  let lastFrame = null;
-  let timer = null;
-  let disposed = false;
-  let actionResolver = null;
-  let pendingAction = null;
-  let inputListener = null;
-  let previousRawMode = input.isRaw;
-
-  return {
-    start() {
-      if (disposed) {
-        return;
-      }
-
-      timer = setInterval(() => {
-        render();
-      }, 1_000);
-      timer.unref?.();
-      attachInput();
-      render();
-    },
-    handleEvent(event) {
-      if (disposed) {
-        return;
-      }
-
-      applyInteractiveEvent(state, event);
-      render();
-
-      if (state.completed && timer) {
-        clearInterval(timer);
-        timer = null;
-      }
-    },
-    async waitForAction() {
-      if (disposed || !state.completed || !input.isTTY || !input.setRawMode) {
-        return { type: 'quit', seed: '' };
-      }
-
-      render();
-      if (pendingAction) {
-        const action = pendingAction;
-        pendingAction = null;
-        detachInput();
-        return action;
-      }
-
-      return await new Promise((resolve) => {
-        actionResolver = resolve;
-      });
-    },
-    dispose() {
-      disposed = true;
-      if (timer) {
-        clearInterval(timer);
-        timer = null;
-      }
-      if (actionResolver) {
-        actionResolver({ type: 'quit', seed: '' });
-        actionResolver = null;
-      }
-      detachInput();
-    }
-  };
-
-  function render() {
-    const lines = renderInteractiveSnapshot(state, {
-      width: stream.columns ?? 100,
-      rows: stream.rows,
-      colorEnabled
-    });
-    const frame = lines.join('\n');
-
-    if (frame === lastFrame) {
-      return;
-    }
-
-    if (blockHeight > 0) {
-      if (blockHeight > 1) {
-        stream.write(`\u001b[${blockHeight - 1}F\u001b[J`);
-      } else {
-        stream.write('\r\u001b[J');
-      }
-    }
-
-    stream.write(frame);
-    blockHeight = lines.length;
-    lastFrame = frame;
-  }
-
-  function attachInput() {
-    if (inputListener || !input.isTTY || !input.setRawMode) {
-      return;
-    }
-
-    previousRawMode = input.isRaw;
-    inputListener = (buffer) => {
-      const key = buffer.toString('utf8');
-
-      if (toggleInteractiveItem(state, key)) {
-        render();
-        return;
-      }
-
-      if (!state.completed) {
-        return;
-      }
-
-      if (key === '\u0003') {
-        process.exitCode = 130;
-        settleAction({ type: 'quit', seed: '' });
-        return;
-      }
-
-      if (key === 'q' || key === '\u001b') {
-        settleAction({ type: 'quit', seed: '' });
-        return;
-      }
-
-      if (key === 'f' || key === 'c' || key === '\r' || key === '\n') {
-        settleAction({ type: 'continue', seed: '' });
-        return;
-      }
-
-      if (isPrintableKey(key)) {
-        settleAction({ type: 'continue', seed: key });
-      }
-    };
-
-    input.setRawMode(true);
-    input.resume();
-    input.on('data', inputListener);
-  }
-
-  function detachInput() {
-    if (!inputListener || !input.setRawMode) {
-      return;
-    }
-
-    input.off('data', inputListener);
-    input.setRawMode(previousRawMode);
-    input.pause();
-    inputListener = null;
-  }
-
-  function settleAction(action) {
-    if (actionResolver) {
-      const resolve = actionResolver;
-      actionResolver = null;
-      detachInput();
-      resolve(action);
-      return;
-    }
-
-    pendingAction = action;
-  }
-}
-
-function createMemberItem(name, hotkeyNumber) {
-  return {
-    id: `member:${name}`,
-    kind: 'member',
-    hotkey: String(hotkeyNumber),
-    name,
-    status: 'pending',
-    startedAt: null,
-    completedAt: null,
-    result: null,
-    progressDetail: '',
-    expanded: false
-  };
-}
-
-function createSummaryItem(hotkeyNumber) {
-  return {
-    id: 'summary',
-    kind: 'summary',
-    hotkey: String(hotkeyNumber),
-    name: 'synthesis',
-    summarizerName: null,
-    status: 'pending',
-    startedAt: null,
-    completedAt: null,
-    result: null,
-    progressDetail: '',
-    expanded: true
-  };
-}
-
-function getMemberItem(state, name) {
-  const item = state.items.find((entry) => entry.name === name);
-
-  if (!item) {
-    throw new Error(`Unknown member item: ${name}`);
-  }
-
-  return item;
-}
-
-function getExpandableItems(state) {
-  return [...state.items, state.summaryItem].filter(
-    (item) => item && item.status !== 'pending' && getPrimaryText(item)
+export function shouldUseInteractiveDashboard(
+  ui,
+  { stdinIsTTY = Boolean(process.stdin.isTTY) } = {}
+) {
+  return (
+    ui.outputMode === 'text' &&
+    ui.showProgress &&
+    !ui.summaryOnly &&
+    !ui.plain &&
+    stdinIsTTY
   );
 }
 
-function renderItem(item, { width, colorEnabled }) {
-  if (item.status === 'pending' && item.kind !== 'summary') {
-    return [];
+export async function runInteractiveSession({
+  initialPrompt = '',
+  members,
+  summarizer,
+  timeoutMs,
+  maxMemberChars,
+  cwd,
+  conversation = [],
+  onEvent
+}) {
+  let prompt = initialPrompt.trim();
+  let lastResult = null;
+
+  if (!prompt) {
+    prompt = await runInitialPromptPhase();
+    if (!prompt) {
+      return null;
+    }
   }
 
-  if (item.status === 'pending') {
-    return renderPendingItem(item, { colorEnabled });
-  }
+  while (prompt) {
+    const result = await runLivePhase({
+      prompt,
+      members,
+      summarizer,
+      timeoutMs,
+      maxMemberChars,
+      cwd,
+      conversation,
+      onEvent
+    });
 
-  if (item.expanded) {
-    return renderExpandedItem(item, { width, colorEnabled });
-  }
-
-  return renderCollapsedItem(item, { width, colorEnabled });
-}
-
-function renderCollapsedItem(item, { width, colorEnabled }) {
-  const text = getPrimaryText(item);
-  const prefix = buildCollapsedPrefix(item, {
-    includePreview: Boolean(text)
-  });
-
-  if (!text) {
-    return [style(prefix.trimEnd(), colorForItem(item), colorEnabled)];
-  }
-
-  const wrappedLines = wrapPreviewWithPrefix(prefix, `"${compactWhitespace(text)}"`, width, 2);
-  return wrappedLines.map((line) => style(line, colorForItem(item), colorEnabled));
-}
-
-function renderExpandedItem(item, { width, colorEnabled }) {
-  const lines = [
-    style(`${buildExpandedPrefix(item)} [expanded]`, colorForItem(item), colorEnabled)
-  ];
-  const wrappedBody = wrapMultilineText(getPrimaryText(item), Math.max(width - 4, 20));
-
-  for (const line of wrappedBody) {
-    lines.push(style(`    ${line}`, colorForItem(item), colorEnabled));
-  }
-
-  return lines;
-}
-
-function renderPendingItem(item, { colorEnabled }) {
-  return [style(`${item.hotkey}. ${statusToken(item)} ${itemLabel(item)}`, colorForItem(item), colorEnabled)];
-}
-
-function renderFooter(state, { width, colorEnabled }) {
-  const expandableItems = getExpandableItems(state);
-  const styledLines = (text) =>
-    wrapMultilineText(text, width).map((line) => style(line, '90', colorEnabled));
-
-  if (!state.completed) {
-    if (expandableItems.length === 0) {
-      return styledLines('Waiting for council members to finish...');
+    if (!result) {
+      return lastResult;
     }
 
-    const mapping = expandableItems
-      .map((item) => `${item.hotkey} ${describeFooterItem(item)}`)
-      .join('  ');
+    lastResult = result;
+    conversation.push({
+      user: prompt,
+      assistant: summaryTextForConversation(result)
+    });
 
-    return [
-      ...styledLines(`Hotkeys: ${mapping}`),
-      ...styledLines('Waiting for council members to finish. Press a number to expand or collapse available results.')
-    ];
+    const action = await runStaticPhase({ result, members });
+
+    if (action.type !== 'continue' || !action.followUp) {
+      return lastResult;
+    }
+
+    prompt = action.followUp;
   }
 
-  if (expandableItems.length === 0) {
-    return styledLines('Type a follow-up, or press q or Esc to exit.');
+  return lastResult;
+}
+
+function summaryTextForConversation(result) {
+  if (result.summary?.status === 'ok') {
+    return result.summary.output;
+  }
+  if (result.summary?.name) {
+    return `Summary failed via ${result.summary.name}: ${result.summary.detail || 'Unknown error.'}`;
+  }
+  return `Summary failed: ${result.summary?.detail || 'Unknown error.'}`;
+}
+
+function runInitialPromptPhase() {
+  return new Promise((resolve) => {
+    let resolved = false;
+    const finish = (value) => {
+      if (resolved) return;
+      resolved = true;
+      app.unmount();
+      resolve(value);
+    };
+
+    const app = render(
+      h(InitialPrompt, { onSubmit: finish }),
+      {
+        stdout: process.stderr,
+        exitOnCtrlC: false,
+        patchConsole: false
+      }
+    );
+  });
+}
+
+function InitialPrompt({ onSubmit }) {
+  const [value, setValue] = useState('');
+  const { isRawModeSupported } = useStdin();
+
+  useInput(
+    (input, key) => {
+      if (key.ctrl && input === 'c') {
+        process.exitCode = 130;
+        onSubmit('');
+        return;
+      }
+      if (key.escape) {
+        onSubmit('');
+      }
+    },
+    { isActive: isRawModeSupported }
+  );
+
+  if (!isRawModeSupported) {
+    return h(Text, { color: 'red' }, 'Interactive prompt requires a TTY.');
   }
 
-  const mapping = expandableItems
-    .map((item) => `${item.hotkey} ${describeFooterItem(item)}`)
-    .join('  ');
-
-  return [
-    ...styledLines(`Hotkeys: ${mapping}`),
-    ...styledLines('Press a number to expand or collapse a result. Type a follow-up, or press q or Esc to exit.')
-  ];
+  return h(
+    Box,
+    null,
+    h(Text, { color: 'cyan' }, 'you> '),
+    h(TextInput, {
+      value,
+      onChange: setValue,
+      onSubmit: (text) => onSubmit(text.trim())
+    })
+  );
 }
 
-function buildCollapsedPrefix(item, { includePreview }) {
-  return includePreview
-    ? `${item.hotkey}. ${statusToken(item)} ${itemLabel(item)} (${formatElapsed(item)}): `
-    : `${item.hotkey}. ${statusToken(item)} ${itemLabel(item)} (${formatElapsed(item)})`;
+function runLivePhase({
+  prompt,
+  members,
+  summarizer,
+  timeoutMs,
+  maxMemberChars,
+  cwd,
+  conversation,
+  onEvent
+}) {
+  return new Promise((resolve) => {
+    let result = null;
+    let resolved = false;
+    let app;
+
+    const finish = (value) => {
+      if (resolved) return;
+      resolved = true;
+      result = value ?? result;
+      try {
+        app?.clear();
+        app?.unmount();
+      } catch {
+        /* ignore */
+      }
+      resolve(result);
+    };
+
+    app = render(
+      h(LivePhase, {
+        prompt,
+        members,
+        summarizer,
+        timeoutMs,
+        maxMemberChars,
+        cwd,
+        conversation,
+        onEvent,
+        onComplete: (value) => {
+          result = value;
+        },
+        onUnmount: () => finish(result)
+      }),
+      {
+        stdout: process.stderr,
+        exitOnCtrlC: false,
+        patchConsole: false
+      }
+    );
+
+    app.waitUntilExit().then(() => finish(result));
+  });
 }
 
-function buildExpandedPrefix(item) {
-  return `${item.hotkey}. ${statusToken(item)} ${itemLabel(item)} (${formatElapsed(item)})`;
+function LivePhase({
+  prompt,
+  members,
+  summarizer,
+  timeoutMs,
+  maxMemberChars,
+  cwd,
+  conversation,
+  onEvent,
+  onComplete,
+  onUnmount
+}) {
+  const [state, dispatch] = useReducer(
+    reducer,
+    undefined,
+    () => createInitialState(members)
+  );
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    runCouncil({
+      query: prompt,
+      members,
+      summarizer,
+      timeoutMs,
+      maxMemberChars,
+      cwd,
+      conversation,
+      onEvent: (event) => {
+        if (cancelled) return;
+        onEvent?.(event);
+        dispatch({ type: 'event', event });
+      }
+    })
+      .then((value) => {
+        if (cancelled) return;
+        onComplete(value);
+        onUnmount();
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        const fallback = {
+          query: prompt,
+          cwd,
+          membersRequested: [...members],
+          summarizerRequested: summarizer,
+          members: [],
+          summaryAttempts: [],
+          summary: {
+            name: null,
+            status: 'error',
+            detail: error instanceof Error ? error.message : String(error)
+          },
+          summaryContextLimit: maxMemberChars
+        };
+        onComplete(fallback);
+        onUnmount();
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const { isRawModeSupported } = useStdin();
+  useInput(
+    (input, key) => {
+      if (key.ctrl && input === 'c') {
+        process.exitCode = 130;
+        onUnmount();
+      }
+    },
+    { isActive: isRawModeSupported }
+  );
+
+  return h(LiveDashboard, { state, members });
+}
+
+function LiveDashboard({ state, members }) {
+  return h(
+    Box,
+    { flexDirection: 'column' },
+    h(
+      Text,
+      { color: 'cyan' },
+      `Council is consulting: ${members.join(', ')}`
+    ),
+    ...state.items.map((item, index) =>
+      h(EngineRow, {
+        key: item.name,
+        item,
+        hotkey: index + 1
+      })
+    ),
+    h(Text, { color: 'gray' }, ''),
+    h(
+      Text,
+      { color: summaryDividerColor(state.summaryItem) },
+      '----------- synthesis -----------'
+    ),
+    h(SummaryRow, {
+      item: state.summaryItem,
+      hotkey: members.length + 1
+    })
+  );
+}
+
+function EngineRow({ item, hotkey }) {
+  const elapsed = formatElapsed(item);
+  const status = statusToken(item);
+  const preview = compactWhitespace(getPrimaryText(item));
+  const color = colorForStatus(item.status);
+  const headerText = `${hotkey}. ${status} ${item.name} (${elapsed})`;
+
+  if (!preview || item.status === 'pending') {
+    return h(Text, { color }, headerText);
+  }
+
+  return h(
+    Text,
+    { color, wrap: 'truncate-end' },
+    `${headerText}: "${preview}"`
+  );
+}
+
+function SummaryRow({ item, hotkey }) {
+  const elapsed = formatElapsed(item);
+  const status = statusToken(item);
+  const color = colorForSummary(item);
+  const label = item.summarizerName
+    ? `synthesis via ${item.summarizerName}`
+    : 'synthesis';
+  const headerText = `${hotkey}. ${status} ${label} (${elapsed})`;
+
+  if (item.status === 'pending') {
+    return h(Text, { color }, headerText);
+  }
+
+  if (item.status === 'running') {
+    const detail = compactWhitespace(item.progressDetail);
+    return h(
+      Text,
+      { color, wrap: 'truncate-end' },
+      detail ? `${headerText}: "${detail}"` : headerText
+    );
+  }
+
+  const text = item.result?.output ?? item.result?.detail ?? '';
+  return h(
+    Box,
+    { flexDirection: 'column' },
+    h(Text, { color }, headerText),
+    text
+      ? h(
+          Box,
+          { paddingLeft: 4, flexDirection: 'column' },
+          h(Text, { color }, text)
+        )
+      : null
+  );
+}
+
+function runStaticPhase({ result, members }) {
+  return new Promise((resolve) => {
+    let resolved = false;
+    let app;
+
+    const finish = (action) => {
+      if (resolved) return;
+      resolved = true;
+      try {
+        app?.unmount();
+      } catch {
+        /* ignore */
+      }
+      resolve(action);
+    };
+
+    app = render(
+      h(StaticPhase, {
+        result,
+        members,
+        onAction: finish
+      }),
+      {
+        stdout: process.stderr,
+        exitOnCtrlC: false,
+        patchConsole: false
+      }
+    );
+  });
+}
+
+function StaticPhase({ result, members, onAction }) {
+  const initialBlocks = useRef(buildInitialStaticBlocks(result, members));
+  const [extraBlocks, setExtraBlocks] = useState([]);
+  const expandedRef = useRef(new Set());
+  const [followUpSeed, setFollowUpSeed] = useState(null);
+  const [followUpValue, setFollowUpValue] = useState('');
+  const { isRawModeSupported } = useStdin();
+
+  const allBlocks = [...initialBlocks.current, ...extraBlocks];
+
+  useInput(
+    (input, key) => {
+      if (key.ctrl && input === 'c') {
+        process.exitCode = 130;
+        onAction({ type: 'quit' });
+        return;
+      }
+
+      if (input === 'q' || key.escape) {
+        onAction({ type: 'quit' });
+        return;
+      }
+
+      if (key.return) {
+        return;
+      }
+
+      if (/^[1-9]$/.test(input)) {
+        const idx = parseInt(input, 10);
+        if (idx >= 1 && idx <= members.length) {
+          const member = result.members[idx - 1];
+          if (member && !expandedRef.current.has(`member:${member.name}`)) {
+            expandedRef.current.add(`member:${member.name}`);
+            setExtraBlocks((blocks) => [
+              ...blocks,
+              { id: `member:${member.name}`, kind: 'member', member }
+            ]);
+          }
+          return;
+        }
+        if (idx === members.length + 1) {
+          if (!expandedRef.current.has('summary')) {
+            expandedRef.current.add('summary');
+            setExtraBlocks((blocks) => [
+              ...blocks,
+              { id: 'summary', kind: 'summary', summary: result.summary }
+            ]);
+          }
+          return;
+        }
+      }
+
+      if (input && input.length === 1 && input >= ' ') {
+        setFollowUpSeed(input);
+        setFollowUpValue(input);
+      }
+    },
+    { isActive: isRawModeSupported && followUpSeed === null }
+  );
+
+  // When TTY isn't available, just print the static blocks and exit.
+  useEffect(() => {
+    if (!isRawModeSupported) {
+      onAction({ type: 'quit' });
+    }
+  }, [isRawModeSupported]);
+
+  return h(
+    Fragment,
+    null,
+    h(
+      Static,
+      { items: allBlocks },
+      (block) =>
+        h(StaticBlock, {
+          key: block.id,
+          block
+        })
+    ),
+    isRawModeSupported
+      ? followUpSeed === null
+        ? h(StaticFooter, {
+            members,
+            summary: result.summary,
+            expanded: expandedRef.current
+          })
+        : h(FollowUpPrompt, {
+            value: followUpValue,
+            onChange: setFollowUpValue,
+            onSubmit: (text) => {
+              const trimmed = text.trim();
+              if (!trimmed) {
+                setFollowUpSeed(null);
+                setFollowUpValue('');
+                return;
+              }
+              onAction({ type: 'continue', followUp: trimmed });
+            },
+            onCancel: () => {
+              setFollowUpSeed(null);
+              setFollowUpValue('');
+            }
+          })
+      : null
+  );
+}
+
+function StaticBlock({ block }) {
+  if (block.kind === 'header') {
+    return h(
+      Box,
+      { flexDirection: 'column' },
+      h(Text, { color: 'cyan' }, block.text)
+    );
+  }
+
+  if (block.kind === 'summary-row') {
+    return h(Text, { color: block.color }, block.text);
+  }
+
+  if (block.kind === 'synthesis') {
+    return h(
+      Box,
+      { flexDirection: 'column' },
+      h(Text, null, ''),
+      h(Text, { color: 'gray' }, '----------- synthesis -----------'),
+      h(Text, { color: block.color }, block.headerText),
+      block.body
+        ? h(
+            Box,
+            { paddingLeft: 4, flexDirection: 'column' },
+            h(Text, { color: block.color }, block.body)
+          )
+        : null
+    );
+  }
+
+  if (block.kind === 'member') {
+    const member = block.member;
+    const color = colorForStatus(member.status);
+    const text = member.output || member.detail || '';
+    return h(
+      Box,
+      { flexDirection: 'column', marginTop: 1 },
+      h(
+        Text,
+        { color },
+        `=== ${member.name} (${formatDuration(member.durationMs)}) ===`
+      ),
+      text ? h(Text, null, text) : null
+    );
+  }
+
+  if (block.kind === 'summary') {
+    const summary = block.summary;
+    const color = colorForSummaryStatus(summary?.status);
+    const label = summary?.name ? `synthesis via ${summary.name}` : 'synthesis';
+    const text = summary?.output || summary?.detail || '';
+    return h(
+      Box,
+      { flexDirection: 'column', marginTop: 1 },
+      h(Text, { color }, `=== ${label} ===`),
+      text ? h(Text, null, text) : null
+    );
+  }
+
+  return null;
+}
+
+function StaticFooter({ members, summary, expanded }) {
+  const parts = members.map((name, idx) => {
+    const used = expanded.has(`member:${name}`);
+    return `${idx + 1} ${name}${used ? ' (shown)' : ''}`;
+  });
+  const summaryHotkey = members.length + 1;
+  const summaryUsed = expanded.has('summary');
+  parts.push(
+    `${summaryHotkey} synthesis${summaryUsed ? ' (shown)' : ''}`
+  );
+
+  return h(
+    Box,
+    { flexDirection: 'column', marginTop: 1 },
+    h(Text, { color: 'gray' }, `Hotkeys: ${parts.join('  ')}`),
+    h(
+      Text,
+      { color: 'gray' },
+      'Press a number to print full output. Type to start a follow-up. q or Esc to exit.'
+    )
+  );
+}
+
+function FollowUpPrompt({ value, onChange, onSubmit, onCancel }) {
+  useInput((input, key) => {
+    if (key.escape) {
+      onCancel();
+      return;
+    }
+    if (key.ctrl && input === 'c') {
+      process.exitCode = 130;
+      onSubmit('');
+    }
+  });
+
+  return h(
+    Box,
+    { marginTop: 1 },
+    h(Text, { color: 'cyan' }, 'you> '),
+    h(TextInput, { value, onChange, onSubmit })
+  );
+}
+
+function buildInitialStaticBlocks(result, members) {
+  const blocks = [];
+
+  blocks.push({
+    id: 'header',
+    kind: 'header',
+    text: `Council consulted: ${members.join(', ')}`
+  });
+
+  for (let i = 0; i < members.length; i += 1) {
+    const member = result.members[i];
+    if (!member) continue;
+    blocks.push({
+      id: `row:${member.name}`,
+      kind: 'summary-row',
+      color: colorForStatus(member.status),
+      text: formatMemberRowLine(member, i + 1)
+    });
+  }
+
+  blocks.push({
+    id: 'synthesis',
+    kind: 'synthesis',
+    color: colorForSummaryStatus(result.summary?.status),
+    headerText: formatSummaryRowLine(result.summary, members.length + 1),
+    body: result.summary?.output || result.summary?.detail || ''
+  });
+
+  return blocks;
+}
+
+function formatMemberRowLine(member, hotkey) {
+  const status = statusFromString(member.status);
+  const elapsed = formatDuration(member.durationMs);
+  const preview = compactWhitespace(member.output || member.detail || '');
+  const head = `${hotkey}. ${status} ${member.name} (${elapsed})`;
+
+  if (!preview) {
+    return head;
+  }
+
+  const truncated =
+    preview.length > 120 ? `${preview.slice(0, 120).trimEnd()}...` : preview;
+  return `${head}: "${truncated}"`;
+}
+
+function formatSummaryRowLine(summary, hotkey) {
+  const status = statusFromString(summary?.status);
+  const elapsed = formatDuration(summary?.durationMs);
+  const label = summary?.name ? `synthesis via ${summary.name}` : 'synthesis';
+  return `${hotkey}. ${status} ${label} (${elapsed})`;
+}
+
+function statusFromString(status) {
+  switch (status) {
+    case 'ok':
+      return '[ok] ';
+    case 'missing':
+      return '[skip]';
+    case 'timeout':
+      return '[time]';
+    case 'running':
+      return '[run]';
+    case 'pending':
+      return '[...]';
+    default:
+      return '[err]';
+  }
+}
+
+function reducer(state, action) {
+  if (action.type !== 'event') return state;
+
+  const event = action.event;
+  const next = {
+    ...state,
+    items: state.items.map((item) => ({ ...item })),
+    summaryItem: { ...state.summaryItem }
+  };
+
+  switch (event.type) {
+    case 'member_started': {
+      const item = next.items.find((entry) => entry.name === event.name);
+      if (item) {
+        item.status = 'running';
+        item.startedAt = timestamp(event.at);
+        item.progressDetail = 'thinking...';
+      }
+      return next;
+    }
+    case 'member_progress': {
+      const item = next.items.find((entry) => entry.name === event.name);
+      if (item) {
+        item.progressDetail = event.detail;
+      }
+      return next;
+    }
+    case 'member_completed': {
+      const item = next.items.find(
+        (entry) => entry.name === event.result.name
+      );
+      if (item) {
+        item.status = event.result.status;
+        item.startedAt ??= timestamp(event.at);
+        item.completedAt = timestamp(event.at);
+        item.result = event.result;
+        item.progressDetail = '';
+      }
+      return next;
+    }
+    case 'summary_started': {
+      next.summaryItem.status = 'running';
+      next.summaryItem.summarizerName = event.name;
+      next.summaryItem.startedAt = timestamp(event.at);
+      next.summaryItem.completedAt = null;
+      next.summaryItem.result = null;
+      next.summaryItem.progressDetail = 'synthesizing...';
+      return next;
+    }
+    case 'summary_progress': {
+      next.summaryItem.progressDetail = event.detail;
+      return next;
+    }
+    case 'summary_completed': {
+      next.summaryItem.status = event.result.status;
+      next.summaryItem.summarizerName = event.result.name;
+      next.summaryItem.startedAt ??= timestamp(event.at);
+      next.summaryItem.completedAt = timestamp(event.at);
+      next.summaryItem.result = event.result;
+      next.summaryItem.progressDetail = '';
+      return next;
+    }
+    default:
+      return next;
+  }
+}
+
+function createInitialState(members) {
+  return {
+    items: members.map((name) => ({
+      name,
+      status: 'pending',
+      startedAt: null,
+      completedAt: null,
+      result: null,
+      progressDetail: ''
+    })),
+    summaryItem: {
+      name: 'synthesis',
+      summarizerName: null,
+      status: 'pending',
+      startedAt: null,
+      completedAt: null,
+      result: null,
+      progressDetail: ''
+    }
+  };
 }
 
 function statusToken(item) {
-  if (item.kind === 'summary' && item.status === 'pending') {
-    return '[sum]';
-  }
-
-  if (item.kind === 'summary' && item.status === 'running') {
-    return '[sum]';
-  }
-
   switch (item.status) {
+    case 'pending':
+      return '[...]';
     case 'running':
       return '[run]';
     case 'ok':
@@ -445,184 +784,75 @@ function statusToken(item) {
   }
 }
 
-function itemLabel(item) {
-  if (item.kind === 'summary') {
-    return item.summarizerName ? `synthesis via ${item.summarizerName}` : 'synthesis';
-  }
-
-  return item.name;
-}
-
-function colorForItem(item) {
-  if (item.kind === 'summary') {
-    if (item.status === 'timeout' || item.status === 'error') {
-      return '31';
-    }
-
-    return '33';
-  }
-
-  return colorForStatus(item.status);
-}
-
-function summaryDividerColor(item) {
-  return item.status === 'timeout' || item.status === 'error' ? '31' : '90';
-}
-
-function describeFooterItem(item) {
-  if (item.kind === 'summary') {
-    return 'synthesis';
-  }
-
-  return item.name;
-}
-
 function colorForStatus(status) {
   switch (status) {
     case 'running':
-      return '36';
+      return 'cyan';
     case 'ok':
-      return '32';
+      return 'green';
     case 'missing':
-      return '33';
+      return 'yellow';
     case 'timeout':
     case 'error':
-      return '31';
+      return 'red';
     default:
-      return '31';
+      return undefined;
   }
+}
+
+function colorForSummary(item) {
+  if (item.status === 'timeout' || item.status === 'error') return 'red';
+  if (item.status === 'ok') return 'green';
+  return 'yellow';
+}
+
+function colorForSummaryStatus(status) {
+  if (status === 'timeout' || status === 'error') return 'red';
+  if (status === 'ok') return 'green';
+  return 'yellow';
+}
+
+function summaryDividerColor(item) {
+  return item.status === 'timeout' || item.status === 'error'
+    ? 'red'
+    : 'gray';
 }
 
 function getPrimaryText(item) {
   if (item.status === 'running' && item.progressDetail) {
     return item.progressDetail;
   }
-
   if (item.result?.output) {
     return item.result.output;
   }
-
   if (item.result?.detail) {
     return item.result.detail;
   }
-
   return '';
+}
+
+function compactWhitespace(text) {
+  return String(text || '').replace(/\s+/g, ' ').trim();
 }
 
 function formatElapsed(item) {
   if (!item.startedAt) {
     return '0.0s';
   }
-
   const end = item.completedAt ?? Date.now();
   return `${(Math.max(end - item.startedAt, 0) / 1_000).toFixed(1)}s`;
 }
 
-function compactWhitespace(text) {
-  return text.replace(/\s+/g, ' ').trim();
-}
-
-function wrapPreviewWithPrefix(prefix, text, width, maxLines) {
-  const safeWidth = Math.max(width, 40);
-  const firstWidth = Math.max(safeWidth - prefix.length, 10);
-  const continuationPrefix = ' '.repeat(prefix.length);
-  const continuationWidth = Math.max(safeWidth - continuationPrefix.length, 10);
-
-  const remaining = [...tokenize(text)];
-  const lines = [];
-
-  const firstLine = consumeWrappedLine(remaining, firstWidth);
-  lines.push(`${prefix}${firstLine}`);
-
-  for (let index = 1; index < maxLines; index += 1) {
-    if (remaining.length === 0) {
-      break;
-    }
-
-    const nextLine = consumeWrappedLine(remaining, continuationWidth);
-    lines.push(`${continuationPrefix}${nextLine}`);
+function formatDuration(durationMs) {
+  if (!Number.isFinite(durationMs)) {
+    return 'n/a';
   }
-
-  if (remaining.length > 0) {
-    const lastIndex = lines.length - 1;
-    lines[lastIndex] = appendEllipsis(lines[lastIndex], safeWidth);
+  if (durationMs < 1_000) {
+    return `${durationMs}ms`;
   }
-
-  return lines;
-}
-
-function consumeWrappedLine(tokens, width) {
-  if (tokens.length === 0) {
-    return '';
-  }
-
-  let line = '';
-
-  while (tokens.length > 0) {
-    const token = tokens[0];
-    const separator = line ? ' ' : '';
-    const candidate = `${line}${separator}${token}`;
-
-    if (candidate.length <= width) {
-      line = candidate;
-      tokens.shift();
-      continue;
-    }
-
-    if (!line) {
-      line = token.slice(0, Math.max(width - 1, 1));
-      tokens[0] = token.slice(line.length);
-    }
-
-    break;
-  }
-
-  return line;
-}
-
-function appendEllipsis(line, width) {
-  const trimmed = line.trimEnd();
-  if (trimmed.length + 3 <= width) {
-    return `${trimmed}...`;
-  }
-
-  const room = Math.max(width - 3, 1);
-  return `${trimmed.slice(0, room).trimEnd()}...`;
-}
-
-function wrapMultilineText(text, width) {
-  const paragraphs = String(text)
-    .split('\n')
-    .map((line) => line.trimEnd());
-  const lines = [];
-
-  for (const paragraph of paragraphs) {
-    if (!paragraph.trim()) {
-      lines.push('');
-      continue;
-    }
-
-    const tokens = [...tokenize(paragraph)];
-    while (tokens.length > 0) {
-      lines.push(consumeWrappedLine(tokens, width));
-    }
-  }
-
-  return lines.length > 0 ? lines : [''];
-}
-
-function* tokenize(text) {
-  for (const token of text.trim().split(/\s+/)) {
-    if (token) {
-      yield token;
-    }
-  }
+  return `${(durationMs / 1_000).toFixed(1)}s`;
 }
 
 function timestamp(value) {
   return value ? new Date(value).getTime() : Date.now();
-}
-
-function isPrintableKey(key) {
-  return key >= ' ' && key !== '\u007f';
 }
