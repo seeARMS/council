@@ -16,10 +16,11 @@ const title = "council — ask Codex, Claude, and Gemini the same question";
 const description =
   "Open-source CLI that runs your prompt through Codex, Claude, and Gemini in parallel and merges the answers into one.";
 const examplePrompt = "review this migration plan";
+const GA_MEASUREMENT_ID = "G-VLG18DVXN5";
 ---
 
 <!DOCTYPE html>
-<html lang="en" style="color-scheme: light">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -30,7 +31,8 @@ const examplePrompt = "review this migration plan";
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-title" content="council" />
     <link rel="manifest" href="/site.webmanifest" />
-    <meta name="theme-color" content="#243050" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#18181b" media="(prefers-color-scheme: dark)" />
 
     <title>{title}</title>
     <meta name="description" content={description} />
@@ -46,6 +48,7 @@ const examplePrompt = "review this migration plan";
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={metaImage} />
 
+    <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
     <link href="/fonts/inter/inter.css" rel="stylesheet" />
     <link href="/fonts/geist-mono/style.css" rel="stylesheet" />
 
@@ -53,6 +56,7 @@ const examplePrompt = "review this migration plan";
     <script is:inline src="/vendor/tailwindcss.js"></script>
     <script is:inline>
       tailwind.config = {
+        darkMode: "class",
         theme: {
           extend: {
             fontFamily: {
@@ -63,6 +67,49 @@ const examplePrompt = "review this migration plan";
         },
       };
     </script>
+    <script is:inline>
+      const darkModeMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+      const THEME_TRANSITION_MS = 280;
+      let themeTransitionTimeout;
+
+      updateMode();
+      darkModeMediaQuery.addEventListener("change", () => {
+        if (localStorage.getItem("theme")) {
+          updateMode();
+          return;
+        }
+
+        startThemeTransition();
+        window.requestAnimationFrame(() => {
+          updateMode();
+        });
+      });
+
+      function updateMode() {
+        const saved = localStorage.getItem("theme");
+        const isDark = saved === "dark" || (!saved && darkModeMediaQuery.matches);
+
+        document.documentElement.classList.toggle("dark", isDark);
+        document.documentElement.style.colorScheme = isDark ? "dark" : "light";
+      }
+
+      function startThemeTransition() {
+        document.documentElement.classList.add("theme-switching");
+        window.clearTimeout(themeTransitionTimeout);
+        themeTransitionTimeout = window.setTimeout(() => {
+          document.documentElement.classList.remove("theme-switching");
+        }, THEME_TRANSITION_MS);
+      }
+
+      window.toggleDarkMode = function () {
+        const isDark = document.documentElement.classList.contains("dark");
+        localStorage.setItem("theme", isDark ? "light" : "dark");
+        startThemeTransition();
+        window.requestAnimationFrame(() => {
+          updateMode();
+        });
+      };
+    </script>
     <style is:global>
       html {
         scroll-behavior: smooth;
@@ -70,6 +117,24 @@ const examplePrompt = "review this migration plan";
 
       :root {
         font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+      }
+
+      .theme-switching,
+      .theme-switching *,
+      .theme-switching *::before,
+      .theme-switching *::after {
+        transition-property:
+          background-color,
+          border-color,
+          color,
+          fill,
+          stroke,
+          opacity,
+          box-shadow,
+          transform,
+          filter !important;
+        transition-duration: 280ms !important;
+        transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
       }
 
       .command-shell {
@@ -106,6 +171,10 @@ const examplePrompt = "review this migration plan";
           0 10px 30px rgba(15, 23, 42, 0.06);
         font-size: 0.95rem;
         line-height: 1;
+        transition:
+          border-color 200ms ease,
+          background-color 200ms ease,
+          box-shadow 200ms ease;
       }
 
       .agent-chip img {
@@ -129,12 +198,57 @@ const examplePrompt = "review this migration plan";
         gap: 0.75rem;
       }
 
+      .dark .agent-chip {
+        border-color: rgba(63, 63, 70, 0.95);
+        background: rgba(39, 39, 42, 0.9);
+        box-shadow:
+          0 1px 2px rgba(0, 0, 0, 0.22),
+          0 10px 30px rgba(0, 0, 0, 0.2),
+          inset 0 1px 0 rgba(255, 255, 255, 0.04);
+      }
+
+      .hero-spotlight {
+        position: absolute;
+        left: 50%;
+        top: 1.5rem;
+        width: min(42rem, 78vw);
+        height: 24rem;
+        transform: translateX(-50%);
+        pointer-events: none;
+        border-radius: 9999px;
+        background:
+          radial-gradient(circle at 50% 22%, rgba(84, 111, 181, 0.2), rgba(84, 111, 181, 0.08) 24%, rgba(84, 111, 181, 0.02) 46%, rgba(84, 111, 181, 0) 68%),
+          radial-gradient(circle at 50% 30%, rgba(36, 48, 80, 0.12), rgba(36, 48, 80, 0.04) 32%, rgba(36, 48, 80, 0) 60%);
+        filter: blur(18px);
+        opacity: 0.72;
+      }
+
+      .hero-spotlight::after {
+        content: "";
+        position: absolute;
+        inset: 12% 18% 42%;
+        border-radius: inherit;
+        background: radial-gradient(circle, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0) 72%);
+      }
+
+      .dark .hero-spotlight {
+        background:
+          radial-gradient(circle at 50% 22%, rgba(111, 145, 226, 0.18), rgba(111, 145, 226, 0.08) 24%, rgba(111, 145, 226, 0.03) 44%, rgba(111, 145, 226, 0) 68%),
+          radial-gradient(circle at 50% 28%, rgba(36, 48, 80, 0.36), rgba(36, 48, 80, 0.16) 30%, rgba(36, 48, 80, 0.04) 46%, rgba(36, 48, 80, 0) 64%);
+        filter: blur(20px);
+        opacity: 0.68;
+      }
+
+      .dark .hero-spotlight::after {
+        background: radial-gradient(circle, rgba(148, 163, 184, 0.05), rgba(148, 163, 184, 0) 70%);
+      }
+
     </style>
   </head>
-  <body class="bg-white text-zinc-800 antialiased overflow-x-hidden">
-    <nav class="relative z-20">
+  <body class="overflow-x-hidden bg-white text-zinc-800 antialiased dark:bg-zinc-900 dark:text-zinc-200">
+    <nav class="relative z-20 border-b border-zinc-200/80 bg-white/85 backdrop-blur-sm transition-colors dark:border-zinc-800 dark:bg-zinc-900/85">
       <div class="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between text-sm">
-        <a href="/" class="flex items-center gap-2 text-zinc-950 font-medium hover:opacity-80 transition-opacity">
+        <a href="/" class="flex items-center gap-2 text-zinc-950 font-medium transition-opacity hover:opacity-80 dark:text-zinc-100">
           <Image
             src={councilNavLogo}
             alt=""
@@ -143,16 +257,31 @@ const examplePrompt = "review this migration plan";
           />
           council
         </a>
-        <div class="flex items-center gap-5 text-zinc-500">
-          <a href={docsUrl} class="hover:text-zinc-950 transition-colors">README</a>
-          <a href={npmUrl} class="hover:text-zinc-950 transition-colors">npm</a>
-          <a href={repoUrl} class="hover:text-zinc-950 transition-colors">GitHub</a>
+        <div class="flex items-center gap-5 text-zinc-500 dark:text-zinc-400">
+          <a href={docsUrl} class="transition-colors hover:text-zinc-950 dark:hover:text-zinc-100">README</a>
+          <a href={npmUrl} class="transition-colors hover:text-zinc-950 dark:hover:text-zinc-100">npm</a>
+          <a href={repoUrl} class="transition-colors hover:text-zinc-950 dark:hover:text-zinc-100">GitHub</a>
+          <button
+            type="button"
+            onclick="toggleDarkMode()"
+            aria-label="Toggle dark mode"
+            class="relative flex h-8 w-8 items-center justify-center text-zinc-500 transition-colors duration-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+          >
+            <svg class="absolute h-4 w-4 rotate-90 scale-0 opacity-0 transition-all duration-300 dark:rotate-0 dark:scale-100 dark:opacity-100" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="5"></circle>
+              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+            </svg>
+            <svg class="absolute h-4 w-4 rotate-0 scale-100 opacity-100 transition-all duration-300 dark:rotate-90 dark:scale-0 dark:opacity-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"></path>
+            </svg>
+          </button>
         </div>
       </div>
     </nav>
 
     <main class="relative">
-      <section class="relative pt-16 pb-6 md:pb-16">
+      <section class="relative overflow-hidden pt-16 pb-6 md:pb-16">
+        <div class="hero-spotlight" aria-hidden="true"></div>
         <div class="relative max-w-4xl mx-auto px-6 text-center">
           <Image
             src={councilHeroLogo}
@@ -161,17 +290,17 @@ const examplePrompt = "review this migration plan";
             fetchpriority="high"
             class="size-20 mx-auto mb-8 [filter:drop-shadow(0_12px_24px_rgb(36_48_80/0.25))_drop-shadow(0_4px_8px_rgb(15_23_42/0.15))]"
           />
-          <h1 class="text-4xl sm:text-5xl font-medium tracking-tight leading-[1.08] text-zinc-950 text-balance max-w-[18ch] mx-auto">
-            Ask your agents the same question.
+          <h1 class="text-4xl sm:text-5xl font-medium tracking-tight leading-[1.08] text-zinc-950 text-balance max-w-[18ch] mx-auto dark:text-zinc-100">
+            Ask multiple agents the same question.
             <span class="block mt-3 sm:mt-4">Get one answer back.</span>
           </h1>
-          <p class="mt-6 text-lg text-zinc-600 text-pretty max-w-[56ch] mx-auto">
-            Council runs your local CLIs in parallel and synthesizes their answers &mdash; no accounts, no API keys.
+          <p class="mt-6 text-lg text-zinc-600 text-pretty max-w-[56ch] mx-auto dark:text-zinc-400">
+            Council runs your local CLIs in parallel and synthesizes their answers &mdash; using your existing subscription.
           </p>
-          <p class="mt-4 text-xs font-mono uppercase tracking-[0.2em] text-zinc-400">
+          <p class="mt-4 text-xs font-mono uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">
             Works with
           </p>
-          <div class="agent-chip-row mt-2 text-zinc-950 font-medium" aria-label="Supported agents">
+          <div class="agent-chip-row mt-2 text-zinc-950 font-medium dark:text-zinc-100" aria-label="Supported agents">
             <span class="agent-chip">
               <img src="/agent-logos/codex.png" alt="" aria-hidden="true" class="agent-chip-codex-logo" />
               Codex
@@ -212,11 +341,11 @@ const examplePrompt = "review this migration plan";
                 </button>
               </div>
             </div>
-            <div class="mt-4 flex flex-col items-center justify-between gap-3 text-sm text-zinc-500 sm:flex-row">
+            <div class="mt-4 flex flex-col items-center justify-between gap-3 text-sm text-zinc-500 dark:text-zinc-400 sm:flex-row">
               <p>Free and open source. MIT licensed.</p>
               <a
                 href={repoUrl}
-                class="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-zinc-600 transition-colors hover:text-zinc-950"
+                class="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-zinc-600 transition-colors hover:text-zinc-950 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:text-zinc-100"
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true" class="size-4 fill-current">
                   <path d="M12 .297a12 12 0 0 0-3.79 23.39c.6.11.82-.258.82-.577v-2.234c-3.338.726-4.042-1.61-4.042-1.61a3.182 3.182 0 0 0-1.338-1.756c-1.093-.747.084-.732.084-.732a2.52 2.52 0 0 1 1.84 1.237 2.554 2.554 0 0 0 3.49.996 2.553 2.553 0 0 1 .762-1.6c-2.665-.304-5.466-1.334-5.466-5.932a4.64 4.64 0 0 1 1.235-3.22 4.31 4.31 0 0 1 .117-3.176s1.008-.322 3.3 1.23a11.46 11.46 0 0 1 6.006 0c2.292-1.552 3.297-1.23 3.297-1.23a4.31 4.31 0 0 1 .12 3.176 4.63 4.63 0 0 1 1.233 3.22c0 4.61-2.805 5.625-5.478 5.922a2.862 2.862 0 0 1 .814 2.222v3.293c0 .321.216.694.825.576A12 12 0 0 0 12 .297" />
@@ -231,27 +360,27 @@ const examplePrompt = "review this migration plan";
       <section class="py-20">
         <div class="max-w-3xl mx-auto px-6">
           <div>
-            <h2 class="font-mono text-xs tracking-wide uppercase text-zinc-500 mb-6">Features</h2>
+            <h2 class="font-mono text-xs tracking-wide uppercase text-zinc-500 mb-6 dark:text-zinc-500">Features</h2>
             <dl class="space-y-5 text-sm">
               <div>
-                <dt class="font-medium text-zinc-950">Uses whichever CLIs you have</dt>
-                <dd class="mt-1 text-zinc-600">Skips any of <code>codex</code>, <code>claude</code>, or <code>gemini</code> that aren&rsquo;t installed. Override binary paths with <code>COUNCIL_*_BIN</code> env vars.</dd>
+                <dt class="font-medium text-zinc-950 dark:text-zinc-100">Uses whichever CLIs you have</dt>
+                <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Skips any of <code>codex</code>, <code>claude</code>, or <code>gemini</code> that aren&rsquo;t installed. Override binary paths with <code>COUNCIL_*_BIN</code> env vars.</dd>
               </div>
               <div>
-                <dt class="font-medium text-zinc-950">Read-only by default</dt>
-                <dd class="mt-1 text-zinc-600">Each tool runs in its plan or read-only mode. Council won&rsquo;t touch your files unless you tell it to.</dd>
+                <dt class="font-medium text-zinc-950 dark:text-zinc-100">Read-only by default</dt>
+                <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Each tool runs in its plan or read-only mode. Council won&rsquo;t touch your files unless you tell it to.</dd>
               </div>
               <div>
-                <dt class="font-medium text-zinc-950">Synthesizes, won&rsquo;t fake consensus</dt>
-                <dd class="mt-1 text-zinc-600">One final answer drawing from each model&rsquo;s response, with disagreements called out instead of papered over. Falls back to the next summarizer if the first one fails.</dd>
+                <dt class="font-medium text-zinc-950 dark:text-zinc-100">Synthesizes, won&rsquo;t fake consensus</dt>
+                <dd class="mt-1 text-zinc-600 dark:text-zinc-400">One final answer drawing from each model&rsquo;s response, with disagreements called out instead of papered over. Falls back to the next summarizer if the first one fails.</dd>
               </div>
               <div>
-                <dt class="font-medium text-zinc-950">Live dashboard with follow-ups</dt>
-                <dd class="mt-1 text-zinc-600">Each model updates in place with a heartbeat for slow runs. Press a number to expand a full answer. Type to ask a follow-up &mdash; the next turn sees the prior context.</dd>
+                <dt class="font-medium text-zinc-950 dark:text-zinc-100">Live dashboard with follow-ups</dt>
+                <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Each model updates in place with a heartbeat for slow runs. Press a number to expand a full answer. Type to ask a follow-up &mdash; the next turn sees the prior context.</dd>
               </div>
               <div>
-                <dt class="font-medium text-zinc-950">Pipes, JSON, Node API</dt>
-                <dd class="mt-1 text-zinc-600"><code>echo "..." | council</code>, <code>--json</code>, <code>--json-stream</code>, <code>--headless</code>, or <code>runCouncil()</code> in Node.</dd>
+                <dt class="font-medium text-zinc-950 dark:text-zinc-100">Pipes, JSON, Node API</dt>
+                <dd class="mt-1 text-zinc-600 dark:text-zinc-400"><code>echo "..." | council</code>, <code>--json</code>, <code>--json-stream</code>, <code>--headless</code>, or <code>runCouncil()</code> in Node.</dd>
               </div>
             </dl>
           </div>
@@ -259,14 +388,14 @@ const examplePrompt = "review this migration plan";
       </section>
     </main>
 
-    <footer class="pb-12 pt-8 border-t border-zinc-200">
-      <div class="max-w-4xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-zinc-500">
+    <footer class="pb-12 pt-8 border-t border-zinc-200 transition-colors dark:border-zinc-800">
+      <div class="max-w-4xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-zinc-500 dark:text-zinc-400">
         <span>&copy; 2026 Colin Armstrong</span>
         <div class="flex items-center gap-6">
-          <a href={repoUrl} class="hover:text-zinc-950 transition-colors">GitHub</a>
-          <a href={docsUrl} class="hover:text-zinc-950 transition-colors">README</a>
-          <a href={licenseUrl} class="hover:text-zinc-950 transition-colors">License</a>
-          <a href={xUrl} class="hover:text-zinc-950 transition-colors">@colinarms</a>
+          <a href={repoUrl} class="transition-colors hover:text-zinc-950 dark:hover:text-zinc-100">GitHub</a>
+          <a href={docsUrl} class="transition-colors hover:text-zinc-950 dark:hover:text-zinc-100">README</a>
+          <a href={licenseUrl} class="transition-colors hover:text-zinc-950 dark:hover:text-zinc-100">License</a>
+          <a href={xUrl} class="transition-colors hover:text-zinc-950 dark:hover:text-zinc-100">@colinarms</a>
         </div>
       </div>
     </footer>
@@ -304,6 +433,17 @@ const examplePrompt = "review this migration plan";
           target.addEventListener("click", copyCommand);
         });
       }
+    </script>
+
+    <script is:inline define:vars={{ GA_MEASUREMENT_ID }}>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag("js", new Date());
+      gtag("config", GA_MEASUREMENT_ID, { page_path: window.location.pathname });
+      var s = document.createElement("script");
+      s.src = "https://www.googletagmanager.com/gtag/js?id=" + GA_MEASUREMENT_ID;
+      s.async = true;
+      document.body.appendChild(s);
     </script>
   </body>
 </html>
