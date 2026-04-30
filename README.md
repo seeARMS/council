@@ -7,6 +7,14 @@ This repo holds two things:
 - [`cli/`](./cli) — the `council` CLI itself, published to npm
 - [`web/`](./web) — the landing page hosted at [council.armstr.ng](https://council.armstr.ng)
 
+## Prerequisites
+
+- Node `>=22` for local development
+- For the CLI itself: at least one supported upstream CLI installed and authenticated
+  Supported CLIs today: `codex`, `claude`, `gemini`
+
+If none of those CLIs are installed or authenticated, `council` cannot produce a real answer.
+
 ## Quick start
 
 ```bash
@@ -23,11 +31,13 @@ The two subprojects are independent — each has its own `package.json` and is i
 
 ```bash
 # CLI
-cd cli && npm install && npm test
+cd cli && npm install && npm run build && npm test
 
 # Site
 cd web && npm install && npm run dev
 ```
+
+If you are working on the CLI from a git checkout, run `npm run build` in `cli/` before invoking `./bin/council.js` directly so the launcher has a local `dist/` build to execute.
 
 ## License
 
@@ -36,3 +46,7 @@ cd web && npm install && npm run dev
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md).
+
+## Security
+
+See [SECURITY.md](./SECURITY.md).

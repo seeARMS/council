@@ -10,6 +10,14 @@ Today it supports:
 
 If one of them is not installed, `council` skips it and keeps going.
 
+## Prerequisites
+
+- Node `>=22`
+- At least one of `codex`, `claude`, or `gemini` installed locally
+- At least one installed CLI already authenticated in a normal terminal session
+
+If every configured CLI is missing or unauthenticated, `council` can still run but it will return a failure result rather than a synthesized answer.
+
 ## Why this exists
 
 Agent CLIs are useful, but each one has different strengths, safety controls, and output conventions. `council` gives you one wrapper that:
@@ -28,6 +36,14 @@ npx @armstrng/council "How should I structure this TypeScript CLI?"
 ```
 
 That matches the website examples and does not require a global install.
+
+If you are developing from a git checkout instead of using the published npm package:
+
+```bash
+npm install
+npm run build
+./bin/council.js "How should I structure this TypeScript CLI?"
+```
 
 ## Quick start
 
@@ -121,7 +137,7 @@ npx @armstrng/council --members codex,gemini "Compare these responses"
 `council` intentionally runs the upstream tools in consultation-oriented modes:
 
 - `codex`: `codex exec --skip-git-repo-check --sandbox read-only --ephemeral`
-- `claude`: `claude --bare -p --permission-mode plan --output-format json --no-session-persistence`
+- `claude`: `claude --bare -p --permission-mode plan --verbose --output-format stream-json --include-partial-messages --no-session-persistence`
 - `gemini`: `gemini -p "" --skip-trust --approval-mode plan --output-format json`
 
 That keeps the default behavior closer to analysis than autonomous mutation.
@@ -159,6 +175,18 @@ Run the tests:
 
 ```bash
 npm test
+```
+
+Build the distributable JS output:
+
+```bash
+npm run build
+```
+
+Run the TypeScript check:
+
+```bash
+npm run typecheck
 ```
 
 The suite uses fake `codex`, `claude`, and `gemini` binaries, so it does not require real vendor CLIs or credentials.

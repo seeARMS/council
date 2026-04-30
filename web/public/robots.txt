@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://council.armstr.ng/sitemap.xml

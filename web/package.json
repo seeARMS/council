@@ -2,7 +2,7 @@
   "name": "council-web",
   "version": "0.0.0",
   "private": true,
-  "description": "Landing page for council. Styling uses a vendored Tailwind browser runtime documented in public/vendor/README.md.",
+  "description": "Landing page for council.",
   "type": "module",
   "scripts": {
     "dev": "astro dev",
@@ -14,7 +14,9 @@
     "deploy": "npm run build && wrangler deploy"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.2.4",
     "astro": "^6.2.0",
+    "tailwindcss": "^4.2.4",
     "wrangler": "^4.86.0"
   },
   "dependencies": {
@@ -22,12 +24,5 @@
   },
   "overrides": {
     "vite": "^7"
-  },
-  "x-vendored-assets": {
-    "tailwind-browser-runtime": {
-      "path": "public/vendor/tailwindcss.js",
-      "sha256": "176e894661aa9cdc9a5cba6c720044cbbf7b8bd80d1c9a142a7c24b1b6c50d15",
-      "docs": "public/vendor/README.md"
-    }
   }
 }

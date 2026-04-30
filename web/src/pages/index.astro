@@ -3,20 +3,81 @@ import { Image } from "astro:assets";
 import cliPackage from "../../../cli/package.json";
 import councilNavLogo from "../assets/council-64.png";
 import councilHeroLogo from "../assets/council-256.png";
+import "../styles/global.css";
 
 const site = Astro.site?.toString().replace(/\/$/, "") ?? "";
-const pageUrl = site || "/";
-const metaImage = site ? `${site}/meta.jpg` : "/meta.jpg";
+const siteUrl = site || "https://council.armstr.ng";
+const pageUrl = `${siteUrl}/`;
+const metaImage = `${siteUrl}/meta.jpg`;
+const siteName = "Council";
+const authorName = "Colin Armstrong";
+const xHandle = "@colinarms";
 const repoUrl = cliPackage.repository.url.replace(/^git\+/, "").replace(/\.git$/, "");
 const docsUrl = `${repoUrl}/blob/main/cli/README.md`;
 const licenseUrl = `${repoUrl}/blob/main/LICENSE`;
 const npmUrl = `https://www.npmjs.com/package/${cliPackage.name}`;
 const xUrl = "https://x.com/colinarms";
-const title = "council — ask Codex, Claude, and Gemini the same question";
+const title = "Council: Compare Codex, Claude, and Gemini in One CLI";
 const description =
-  "Open-source CLI that runs your prompt through Codex, Claude, and Gemini in parallel and merges the answers into one.";
+  "Council is an open-source CLI that runs Codex, Claude, and Gemini in parallel on the same prompt, synthesizes one answer, and highlights disagreements.";
 const examplePrompt = "review this migration plan";
 const GA_MEASUREMENT_ID = "G-VLG18DVXN5";
+const robotsContent = "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1";
+const structuredData = JSON.stringify([
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: siteName,
+    url: siteUrl,
+    description,
+    inLanguage: "en-US",
+    publisher: {
+      "@type": "Person",
+      name: authorName,
+      url: xUrl,
+    },
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: siteName,
+    url: pageUrl,
+    description,
+    mainEntityOfPage: pageUrl,
+    applicationCategory: "DeveloperApplication",
+    applicationSubCategory: "Command-line interface",
+    softwareVersion: cliPackage.version,
+    downloadUrl: npmUrl,
+    installUrl: npmUrl,
+    softwareHelp: {
+      "@type": "CreativeWork",
+      url: docsUrl,
+    },
+    runtimePlatform: "Node.js >= 22",
+    softwareRequirements: "At least one authenticated Codex, Claude, or Gemini CLI installed locally",
+    license: licenseUrl,
+    image: metaImage,
+    screenshot: [
+      `${siteUrl}/screenshots/screenshot-1.jpg`,
+      `${siteUrl}/screenshots/screenshot-3.jpg`,
+    ],
+    author: {
+      "@type": "Person",
+      name: authorName,
+      url: xUrl,
+    },
+    isAccessibleForFree: true,
+    keywords: "Codex, Claude, Gemini, AI coding CLI, developer tools, multi-agent CLI",
+    featureList: [
+      "Runs Codex, Claude, and Gemini in parallel",
+      "Synthesizes one answer across multiple model outputs",
+      "Surfaces disagreements instead of hiding them",
+      "Supports interactive terminal, JSON, JSONL, and headless modes",
+      "Uses the subscriptions you already pay for",
+    ],
+    sameAs: [repoUrl, npmUrl, xUrl],
+  },
+]);
 ---
 
 <!DOCTYPE html>
@@ -29,44 +90,46 @@ const GA_MEASUREMENT_ID = "G-VLG18DVXN5";
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <meta name="apple-mobile-web-app-title" content="council" />
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#18181b" media="(prefers-color-scheme: dark)" />
+    <meta name="application-name" content={siteName} />
+    <meta name="apple-mobile-web-app-title" content={siteName} />
+    <meta name="author" content={authorName} />
+    <meta name="creator" content={authorName} />
+    <meta name="publisher" content={authorName} />
+    <meta name="robots" content={robotsContent} />
+    <meta name="googlebot" content={robotsContent} />
+    <link rel="canonical" href={pageUrl} />
+    <link rel="sitemap" type="application/xml" href={`${siteUrl}/sitemap.xml`} />
 
     <title>{title}</title>
     <meta name="description" content={description} />
+    <meta property="og:site_name" content={siteName} />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
+    <meta property="og:image:alt" content="Council CLI homepage for comparing Codex, Claude, and Gemini on the same prompt." />
     <meta property="og:image" content={metaImage} />
+    <meta property="og:image:secure_url" content={metaImage} />
+    <meta property="og:image:type" content="image/jpeg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="675" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content={pageUrl} />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content={xHandle} />
+    <meta name="twitter:creator" content={xHandle} />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={metaImage} />
+    <meta name="twitter:image:alt" content="Council CLI homepage for comparing Codex, Claude, and Gemini on the same prompt." />
 
     <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
     <link href="/fonts/inter/inter.css" rel="stylesheet" />
     <link href="/fonts/geist-mono/style.css" rel="stylesheet" />
+    <script type="application/ld+json" set:html={structuredData}></script>
 
-    <!-- Vendored Tailwind browser runtime. Provenance and refresh notes live in web/public/vendor/README.md in the repo. -->
-    <script is:inline src="/vendor/tailwindcss.js"></script>
-    <script is:inline>
-      tailwind.config = {
-        darkMode: "class",
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ["InterVariable", "Inter", "system-ui", "sans-serif"],
-              mono: ['"Geist Mono"', "ui-monospace", "monospace"],
-            },
-          },
-        },
-      };
-    </script>
     <script is:inline>
       const darkModeMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
       const THEME_TRANSITION_MS = 280;
@@ -246,7 +309,7 @@ const GA_MEASUREMENT_ID = "G-VLG18DVXN5";
     </style>
   </head>
   <body class="overflow-x-hidden bg-white text-zinc-800 antialiased dark:bg-zinc-900 dark:text-zinc-200">
-    <nav class="relative z-20 border-b border-zinc-200/80 bg-white/85 backdrop-blur-sm transition-colors dark:border-zinc-800 dark:bg-zinc-900/85">
+    <nav class="relative z-20 bg-white/85 backdrop-blur-sm transition-colors dark:bg-zinc-900/85">
       <div class="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between text-sm">
         <a href="/" class="flex items-center gap-2 text-zinc-950 font-medium transition-opacity hover:opacity-80 dark:text-zinc-100">
           <Image
@@ -255,7 +318,7 @@ const GA_MEASUREMENT_ID = "G-VLG18DVXN5";
             loading="eager"
             class="size-6 [filter:drop-shadow(0_2px_4px_rgb(15_23_42/0.18))]"
           />
-          council
+          Council
         </a>
         <div class="flex items-center gap-5 text-zinc-500 dark:text-zinc-400">
           <a href={docsUrl} class="transition-colors hover:text-zinc-950 dark:hover:text-zinc-100">README</a>
@@ -290,12 +353,12 @@ const GA_MEASUREMENT_ID = "G-VLG18DVXN5";
             fetchpriority="high"
             class="size-20 mx-auto mb-8 [filter:drop-shadow(0_12px_24px_rgb(36_48_80/0.25))_drop-shadow(0_4px_8px_rgb(15_23_42/0.15))]"
           />
-          <h1 class="text-4xl sm:text-5xl font-medium tracking-tight leading-[1.08] text-zinc-950 text-balance max-w-[18ch] mx-auto dark:text-zinc-100">
-            Ask multiple agents the same question.
-            <span class="block mt-3 sm:mt-4">Get one answer back.</span>
+          <h1 class="text-4xl sm:text-5xl font-semibold tracking-tight leading-[1.08] text-zinc-950 text-balance max-w-[18ch] mx-auto dark:text-zinc-100">
+            Ask three agents.
+            <span class="block mt-3 sm:mt-4">Get one answer.</span>
           </h1>
           <p class="mt-6 text-lg text-zinc-600 text-pretty max-w-[56ch] mx-auto dark:text-zinc-400">
-            Council runs your local CLIs in parallel and synthesizes their answers &mdash; using your existing subscription.
+            Council runs Codex, Claude, and Gemini in parallel against the same prompt and synthesizes their responses &mdash; using the subscriptions you already pay for.
           </p>
           <p class="mt-4 text-xs font-mono uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">
             Works with
@@ -360,27 +423,30 @@ const GA_MEASUREMENT_ID = "G-VLG18DVXN5";
       <section class="py-20">
         <div class="max-w-3xl mx-auto px-6">
           <div>
+            <p class="mb-4 text-base text-zinc-600 text-pretty dark:text-zinc-400">
+              Three models, three sets of blind spots. Council runs them in parallel and surfaces where they agree, where they don&apos;t, and where one of them is probably wrong.
+            </p>
             <h2 class="font-mono text-xs tracking-wide uppercase text-zinc-500 mb-6 dark:text-zinc-500">Features</h2>
             <dl class="space-y-5 text-sm">
               <div>
-                <dt class="font-medium text-zinc-950 dark:text-zinc-100">Uses whichever CLIs you have</dt>
-                <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Skips any of <code>codex</code>, <code>claude</code>, or <code>gemini</code> that aren&rsquo;t installed. Override binary paths with <code>COUNCIL_*_BIN</code> env vars.</dd>
+                <dt class="font-medium text-zinc-950 dark:text-zinc-100">Works with what you&apos;ve already got</dt>
+                <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Detects <code>codex</code>, <code>claude</code>, and <code>gemini</code> on your <code>PATH</code> and runs whichever subset is there. Override with <code>COUNCIL_*_BIN</code> if your binaries live somewhere unusual.</dd>
               </div>
               <div>
-                <dt class="font-medium text-zinc-950 dark:text-zinc-100">Read-only by default</dt>
-                <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Each tool runs in its plan or read-only mode. Council won&rsquo;t touch your files unless you tell it to.</dd>
+                <dt class="font-medium text-zinc-950 dark:text-zinc-100">Won&apos;t touch your code</dt>
+                <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Each CLI runs in its plan or read-only mode. Nothing on disk changes unless you opt in.</dd>
               </div>
               <div>
-                <dt class="font-medium text-zinc-950 dark:text-zinc-100">Synthesizes, won&rsquo;t fake consensus</dt>
-                <dd class="mt-1 text-zinc-600 dark:text-zinc-400">One final answer drawing from each model&rsquo;s response, with disagreements called out instead of papered over. Falls back to the next summarizer if the first one fails.</dd>
+                <dt class="font-medium text-zinc-950 dark:text-zinc-100">See where they disagree</dt>
+                <dd class="mt-1 text-zinc-600 dark:text-zinc-400">One answer drawn from all three responses, with real disagreements surfaced instead of averaged away. If the lead summarizer is down, the next one takes over.</dd>
               </div>
               <div>
-                <dt class="font-medium text-zinc-950 dark:text-zinc-100">Live dashboard with follow-ups</dt>
-                <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Each model updates in place with a heartbeat for slow runs. Press a number to expand a full answer. Type to ask a follow-up &mdash; the next turn sees the prior context.</dd>
+                <dt class="font-medium text-zinc-950 dark:text-zinc-100">Watch them think, ask follow-ups</dt>
+                <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Each model streams in place, with a heartbeat on the slow ones. Press a number to expand a full answer. Type to ask a follow-up &mdash; the next turn carries the prior context.</dd>
               </div>
               <div>
-                <dt class="font-medium text-zinc-950 dark:text-zinc-100">Pipes, JSON, Node API</dt>
-                <dd class="mt-1 text-zinc-600 dark:text-zinc-400"><code>echo "..." | council</code>, <code>--json</code>, <code>--json-stream</code>, <code>--headless</code>, or <code>runCouncil()</code> in Node.</dd>
+                <dt class="font-medium text-zinc-950 dark:text-zinc-100">Drops into any pipeline</dt>
+                <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Pipe stdin with <code>echo &quot;...&quot; | council</code>, get structured output with <code>--json</code> or <code>--json-stream</code>, skip the dashboard with <code>--headless</code>, or import <code>runCouncil()</code> directly in Node.</dd>
               </div>
             </dl>
           </div>
