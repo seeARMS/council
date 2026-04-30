@@ -506,10 +506,6 @@ function StaticBlock({ block }) {
     );
   }
 
-  if (block.kind === 'summary-row') {
-    return h(Text, { color: block.color }, block.text);
-  }
-
   if (block.kind === 'divider') {
     return h(
       Box,
@@ -519,32 +515,26 @@ function StaticBlock({ block }) {
     );
   }
 
-  if (block.kind === 'member') {
-    const member = block.member;
-    const color = colorForStatus(member.status);
-    const text = member.output || member.detail || '';
-    return h(
-      Box,
-      { flexDirection: 'column', marginTop: 1 },
-      h(
-        Text,
-        { color },
-        `=== ${member.name} (${formatDuration(member.durationMs)}) ===`
-      ),
-      text ? h(Text, null, text) : null
-    );
-  }
+  if (block.kind === 'result-row') {
+    const line = block.expanded
+      ? block.headerText
+      : block.previewText
+        ? `${block.headerText}: "${block.previewText}"`
+        : block.headerText;
 
-  if (block.kind === 'summary') {
-    const summary = block.summary;
-    const color = colorForSummaryStatus(summary?.status);
-    const label = summary?.name ? `synthesis via ${summary.name}` : 'synthesis';
-    const text = summary?.output || summary?.detail || '';
+    if (!block.expanded || !block.body) {
+      return h(Text, { color: block.color }, line);
+    }
+
     return h(
       Box,
-      { flexDirection: 'column', marginTop: 1 },
-      h(Text, { color }, `=== ${label} ===`),
-      text ? h(Text, null, text) : null
+      { flexDirection: 'column' },
+      h(Text, { color: block.color }, line),
+      h(
+        Box,
+        { paddingLeft: 4, flexDirection: 'column' },
+        h(Text, null, block.body)
+      )
     );
   }
 
@@ -593,12 +583,8 @@ function FollowUpPrompt({ value, onChange, onSubmit, onCancel }) {
   );
 }
 
-export function createInitialExpanded(result) {
-  const expanded = new Set();
-  if (result.summary?.output || result.summary?.detail) {
-    expanded.add('summary');
-  }
-  return expanded;
+export function createInitialExpanded() {
+  return new Set();
 }
 
 export function buildHotkeyParts(members, expanded = null) {
@@ -638,18 +624,13 @@ export function buildStaticBlocks(result, members, expanded) {
     if (!member) continue;
     blocks.push({
       id: `row:${member.name}`,
-      kind: 'summary-row',
+      kind: 'result-row',
       color: colorForStatus(member.status),
-      text: formatMemberRowLine(member, i + 1)
+      headerText: formatMemberRowHeader(member, i + 1),
+      previewText: formatPreviewText(member.output || member.detail || ''),
+      expanded: expanded.has(`member:${member.name}`),
+      body: member.output || member.detail || ''
     });
-
-    if (expanded.has(`member:${member.name}`)) {
-      blocks.push({
-        id: `member:${member.name}`,
-        kind: 'member',
-        member
-      });
-    }
   }
 
   blocks.push({
@@ -663,42 +644,39 @@ export function buildStaticBlocks(result, members, expanded) {
 
   blocks.push({
     id: 'row:summary',
-    kind: 'summary-row',
+    kind: 'result-row',
     color: colorForSummaryStatus(result.summary?.status),
-    text: formatSummaryRowLine(result.summary, members.length + 1)
+    headerText: formatSummaryRowHeader(result.summary, members.length + 1),
+    previewText: null,
+    expanded: expanded.has('summary'),
+    body: result.summary?.output || result.summary?.detail || ''
   });
-
-  if (expanded.has('summary')) {
-    blocks.push({
-      id: 'summary',
-      kind: 'summary',
-      summary: result.summary
-    });
-  }
 
   return blocks;
 }
 
-function formatMemberRowLine(member, hotkey) {
+function formatMemberRowHeader(member, hotkey) {
   const status = statusFromString(member.status);
   const elapsed = formatDuration(member.durationMs);
-  const preview = compactWhitespace(member.output || member.detail || '');
-  const head = `${hotkey}. ${status} ${member.name} (${elapsed})`;
-
-  if (!preview) {
-    return head;
-  }
-
-  const truncated =
-    preview.length > 120 ? `${preview.slice(0, 120).trimEnd()}...` : preview;
-  return `${head}: "${truncated}"`;
+  return `${hotkey}. ${status} ${member.name} (${elapsed})`;
 }
 
-function formatSummaryRowLine(summary, hotkey) {
+function formatSummaryRowHeader(summary, hotkey) {
   const status = statusFromString(summary?.status);
   const elapsed = formatDuration(summary?.durationMs);
   const label = summary?.name ? `synthesis via ${summary.name}` : 'synthesis';
   return `${hotkey}. ${status} ${label} (${elapsed})`;
+}
+
+function formatPreviewText(text) {
+  const preview = compactWhitespace(text);
+  if (!preview) {
+    return null;
+  }
+
+  return preview.length > 120
+    ? `${preview.slice(0, 120).trimEnd()}...`
+    : preview;
 }
 
 function statusFromString(status) {

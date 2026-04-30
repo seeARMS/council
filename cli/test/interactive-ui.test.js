@@ -108,10 +108,10 @@ test('shouldUseInteractiveDashboard is disabled in summary-only mode', () => {
   );
 });
 
-test('createInitialExpanded starts with the synthesis block expanded when text exists', () => {
-  const expanded = createInitialExpanded(createResultFixture());
+test('createInitialExpanded starts with all rows collapsed', () => {
+  const expanded = createInitialExpanded();
 
-  assert.equal(expanded.has('summary'), true);
+  assert.equal(expanded.size, 0);
 });
 
 test('toggleExpanded adds missing ids and removes existing ids', () => {
@@ -140,32 +140,14 @@ test('buildHotkeyParts marks expanded rows in the static hotkey legend', () => {
   ]);
 });
 
-test('buildStaticBlocks places expanded member output inline under its row', () => {
+test('buildStaticBlocks keeps member output on the row when expanded', () => {
   const result = createResultFixture();
-  const expanded = toggleExpanded(createInitialExpanded(result), 'member:codex');
+  const expanded = toggleExpanded(createInitialExpanded(), 'member:codex');
 
-  const ids = buildStaticBlocks(result, ['codex', 'claude'], expanded).map(
-    (block) => block.id
-  );
-
-  assert.deepEqual(ids, [
-    'header',
-    'row:codex',
-    'member:codex',
-    'row:claude',
-    'divider:summary',
-    'row:summary',
-    'summary'
-  ]);
-});
-
-test('buildStaticBlocks removes the synthesis body when the summary hotkey is toggled off', () => {
-  const result = createResultFixture();
-  const expanded = toggleExpanded(createInitialExpanded(result), 'summary');
-
-  const ids = buildStaticBlocks(result, ['codex', 'claude'], expanded).map(
-    (block) => block.id
-  );
+  const blocks = buildStaticBlocks(result, ['codex', 'claude'], expanded);
+  const ids = blocks.map((block) => block.id);
+  const codexRow = blocks.find((block) => block.id === 'row:codex');
+  const summaryRow = blocks.find((block) => block.id === 'row:summary');
 
   assert.deepEqual(ids, [
     'header',
@@ -174,4 +156,28 @@ test('buildStaticBlocks removes the synthesis body when the summary hotkey is to
     'divider:summary',
     'row:summary'
   ]);
+  assert.equal(codexRow?.expanded, true);
+  assert.equal(codexRow?.body, 'Codex member output');
+  assert.equal(codexRow?.previewText, 'Codex member output');
+  assert.equal(summaryRow?.expanded, false);
+});
+
+test('buildStaticBlocks expands synthesis on its own row without adding a duplicate block', () => {
+  const result = createResultFixture();
+  const expanded = toggleExpanded(createInitialExpanded(), 'summary');
+
+  const blocks = buildStaticBlocks(result, ['codex', 'claude'], expanded);
+  const ids = blocks.map((block) => block.id);
+  const summaryRow = blocks.find((block) => block.id === 'row:summary');
+
+  assert.deepEqual(ids, [
+    'header',
+    'row:codex',
+    'row:claude',
+    'divider:summary',
+    'row:summary'
+  ]);
+  assert.equal(summaryRow?.expanded, true);
+  assert.equal(summaryRow?.body, 'Synthesized answer');
+  assert.equal(summaryRow?.previewText, null);
 });
