@@ -9,6 +9,17 @@ test('parses help subcommand without treating it as a query', () => {
   assert.deepEqual(parsed.members, ['codex', 'claude', 'gemini']);
 });
 
+test('keeps help-like and version-like prompt text as prompt input', () => {
+  const helpPrompt = parseArgs(['help', 'me', 'debug']);
+  const versionPrompt = parseArgs(['version', 'mismatch', 'analysis']);
+
+  assert.equal(helpPrompt.help, false);
+  assert.deepEqual(helpPrompt.promptParts, ['help', 'me', 'debug']);
+
+  assert.equal(versionPrompt.version, false);
+  assert.deepEqual(versionPrompt.promptParts, ['version', 'mismatch', 'analysis']);
+});
+
 test('supports per-tool toggles and explicit summarizer selection', () => {
   const parsed = parseArgs([
     '--no-gemini',
@@ -46,10 +57,16 @@ test('supports headless automation flags and response caps', () => {
   assert.equal(parsed.maxMemberChars, 2048);
 });
 
-test('members list replaces previous tool toggles', () => {
+test('members list replaces previous tool toggles and preserves the requested order', () => {
   const parsed = parseArgs(['--no-codex', '--members', 'gemini,claude', 'question']);
 
-  assert.deepEqual(parsed.members, ['claude', 'gemini']);
+  assert.deepEqual(parsed.members, ['gemini', 'claude']);
+});
+
+test('later per-tool toggles append after an explicit members list', () => {
+  const parsed = parseArgs(['--members', 'gemini,claude', '--codex', 'question']);
+
+  assert.deepEqual(parsed.members, ['gemini', 'claude', 'codex']);
 });
 
 test('throws when all engines are disabled', () => {

@@ -21,38 +21,38 @@ Agent CLIs are useful, but each one has different strengths, safety controls, an
 
 ## Install
 
-For local development:
+Run it directly with `npx`:
 
 ```bash
-npm link
+npx @armstrng/council "How should I structure this TypeScript CLI?"
 ```
 
-That exposes `council` on your `PATH` from this checkout.
+That matches the website examples and does not require a global install.
 
 ## Quick start
 
 Ask all available tools and show the full council:
 
 ```bash
-council "How should I structure this TypeScript CLI?"
+npx @armstrng/council "How should I structure this TypeScript CLI?"
 ```
 
 Ask only a subset:
 
 ```bash
-council --no-gemini "Review this migration plan"
+npx @armstrng/council --no-gemini "Review this migration plan"
 ```
 
 Pick a specific summarizer:
 
 ```bash
-council --summarizer claude "Compare these two designs"
+npx @armstrng/council --summarizer claude "Compare these two designs"
 ```
 
 Run against another project directory:
 
 ```bash
-council --cwd ../my-repo "Review the current architecture"
+npx @armstrng/council --cwd ../my-repo "Review the current architecture"
 ```
 
 ## Output modes
@@ -60,31 +60,31 @@ council --cwd ../my-repo "Review the current architecture"
 Interactive human output:
 
 ```bash
-council "What is the cleanest implementation?"
+npx @armstrng/council "What is the cleanest implementation?"
 ```
 
 Summary-only output:
 
 ```bash
-council --summary-only "What should we do?"
+npx @armstrng/council --summary-only "What should we do?"
 ```
 
 Structured JSON:
 
 ```bash
-council --json "Explain the bug" | jq
+npx @armstrng/council --json "Explain the bug" | jq
 ```
 
 Streaming JSONL events for automation:
 
 ```bash
-council --json-stream "Compare these approaches"
+npx @armstrng/council --json-stream "Compare these approaches"
 ```
 
 Headless automation mode:
 
 ```bash
-council --headless "Summarize the tradeoffs"
+npx @armstrng/council --headless "Summarize the tradeoffs"
 ```
 
 `--headless` suppresses the banner and progress UI and defaults to summary-only text unless you also request `--json` or `--json-stream`.
@@ -105,14 +105,16 @@ In a real TTY, `council` uses a live dashboard:
 Enable or disable members individually:
 
 ```bash
-council --codex --claude --no-gemini "Review this plan"
+npx @armstrng/council --codex --claude --no-gemini "Review this plan"
 ```
 
 Or use an explicit member list:
 
 ```bash
-council --members codex,gemini "Compare these responses"
+npx @armstrng/council --members codex,gemini "Compare these responses"
 ```
+
+`--members` preserves the order you pass. If you later re-enable another member with a toggle such as `--claude`, it is appended after that explicit list.
 
 ## Safe defaults
 
@@ -148,6 +150,8 @@ const result = await runCouncil({
   query: 'Compare these two implementation strategies'
 });
 ```
+
+The package ships `d.ts` declarations for this API.
 
 ## Development
 

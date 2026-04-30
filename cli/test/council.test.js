@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import { runCouncil } from '../src/council.js';
 import { createFakeCouncilEnvironment } from '../test-support/fake-clis.js';
 
@@ -175,6 +176,73 @@ test('runCouncil surfaces gemini login errors without blocking synthesis', async
     assert.equal(result.summary.status, 'ok');
     assert.equal(result.summary.name, 'codex');
   } finally {
+    await fake.cleanup();
+  }
+});
+
+test('runCouncil degrades an unexpected member setup failure instead of aborting the run', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    claude: {
+      member: { output: 'claude member' },
+      summary: { output: 'summary via claude' }
+    }
+  });
+  const previousTmpDir = process.env.TMPDIR;
+  process.env.TMPDIR = path.join(process.cwd(), `.missing-codex-tmp-${Date.now()}`);
+
+  try {
+    const result = await runCouncil({
+      query: 'Keep going even if one engine breaks early',
+      cwd: process.cwd(),
+      members: ['codex', 'claude'],
+      summarizer: 'auto',
+      timeoutMs: 5_000,
+      env: fake.env
+    });
+
+    const codex = result.members.find((member) => member.name === 'codex');
+    assert.equal(codex?.status, 'error');
+    assert.match(codex?.detail || '', /mkdtemp|ENOENT|no such file/i);
+    assert.equal(result.summary.status, 'ok');
+    assert.equal(result.summary.name, 'claude');
+  } finally {
+    if (previousTmpDir === undefined) {
+      delete process.env.TMPDIR;
+    } else {
+      process.env.TMPDIR = previousTmpDir;
+    }
+    await fake.cleanup();
+  }
+});
+
+test('runCouncil turns an unexpected summarizer setup failure into a structured summary error', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    claude: {
+      member: { output: 'claude member' }
+    }
+  });
+  const previousTmpDir = process.env.TMPDIR;
+  process.env.TMPDIR = path.join(process.cwd(), `.missing-summary-tmp-${Date.now()}`);
+
+  try {
+    const result = await runCouncil({
+      query: 'Handle a thrown summarizer startup failure',
+      cwd: process.cwd(),
+      members: ['claude'],
+      summarizer: 'codex',
+      timeoutMs: 5_000,
+      env: fake.env
+    });
+
+    assert.equal(result.summary.status, 'error');
+    assert.equal(result.summary.name, 'codex');
+    assert.match(result.summary.detail || '', /mkdtemp|ENOENT|no such file/i);
+  } finally {
+    if (previousTmpDir === undefined) {
+      delete process.env.TMPDIR;
+    } else {
+      process.env.TMPDIR = previousTmpDir;
+    }
     await fake.cleanup();
   }
 });

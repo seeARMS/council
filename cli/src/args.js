@@ -23,7 +23,7 @@ export function usageText(version) {
     '  council --json-stream --codex --claude "Compare these designs"',
     '',
     'Selection:',
-    '  --members <list>          Comma-separated subset of codex,claude,gemini',
+    '  --members <list>          Ordered subset of codex,claude,gemini',
     '  --codex / --no-codex      Enable or disable Codex',
     '  --claude / --no-claude    Enable or disable Claude',
     '  --gemini / --no-gemini    Enable or disable Gemini',
@@ -75,18 +75,7 @@ export function parseArgs(argv) {
     promptParts: []
   };
   const enabledEngines = Object.fromEntries(ALL_ENGINES.map((engine) => [engine, true]));
-
-  if (hasTopLevelToken(argv, ['help']) || hasTopLevelToken(argv, ['-h', '--help'])) {
-    result.help = true;
-    result.members = [...ALL_ENGINES];
-    return result;
-  }
-
-  if (hasTopLevelToken(argv, ['version']) || hasTopLevelToken(argv, ['-v', '--version'])) {
-    result.version = true;
-    result.members = [...ALL_ENGINES];
-    return result;
-  }
+  let memberOrder = [...ALL_ENGINES];
 
   let positionalMode = false;
 
@@ -100,6 +89,16 @@ export function parseArgs(argv) {
 
     if (token === '--') {
       positionalMode = true;
+      continue;
+    }
+
+    if (token === '-h' || token === '--help') {
+      result.help = true;
+      continue;
+    }
+
+    if (token === '-v' || token === '--version') {
+      result.version = true;
       continue;
     }
 
@@ -160,13 +159,17 @@ export function parseArgs(argv) {
       if (!value) {
         throw new Error('--members requires a value.');
       }
-      applyEngineList(enabledEngines, parseEngineList(value, '--members'));
+      const members = parseEngineList(value, '--members');
+      applyEngineList(enabledEngines, members);
+      memberOrder = buildMemberOrder(members);
       index += 1;
       continue;
     }
 
     if (token.startsWith('--members=')) {
-      applyEngineList(enabledEngines, parseEngineList(token.slice('--members='.length), '--members'));
+      const members = parseEngineList(token.slice('--members='.length), '--members');
+      applyEngineList(enabledEngines, members);
+      memberOrder = buildMemberOrder(members);
       continue;
     }
 
@@ -260,7 +263,19 @@ export function parseArgs(argv) {
     result.promptParts.push(token);
   }
 
-  result.members = ALL_ENGINES.filter((engine) => enabledEngines[engine]);
+  if (result.help || isStandaloneSubcommand(argv, 'help')) {
+    result.help = true;
+    result.members = [...ALL_ENGINES];
+    return result;
+  }
+
+  if (result.version || isStandaloneSubcommand(argv, 'version')) {
+    result.version = true;
+    result.members = [...ALL_ENGINES];
+    return result;
+  }
+
+  result.members = memberOrder.filter((engine) => enabledEngines[engine]);
 
   if (result.members.length === 0) {
     throw new Error('At least one engine must be enabled.');
@@ -295,6 +310,10 @@ function applyEngineList(enabledEngines, members) {
   for (const member of members) {
     enabledEngines[member] = true;
   }
+}
+
+function buildMemberOrder(members) {
+  return [...members, ...ALL_ENGINES.filter((engine) => !members.includes(engine))];
 }
 
 function parseSummarizer(value) {
@@ -333,19 +352,18 @@ function parseColor(value) {
   throw new Error(`Unsupported color mode: ${value}`);
 }
 
-function hasTopLevelToken(argv, targets) {
-  let positionalMode = false;
+function isStandaloneSubcommand(argv, target) {
+  const positionalTokens = [];
 
   for (const token of argv) {
     if (token === '--') {
-      positionalMode = true;
-      continue;
+      return false;
     }
 
-    if (!positionalMode && targets.includes(token)) {
-      return true;
+    if (!token.startsWith('-')) {
+      positionalTokens.push(token);
     }
   }
 
-  return false;
+  return positionalTokens.length === 1 && positionalTokens[0] === target;
 }

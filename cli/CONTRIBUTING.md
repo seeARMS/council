@@ -1,9 +1,11 @@
 # Contributing
 
+This file mirrors the repo-root contributing guide so the published CLI package still includes contribution notes. In the repository, the canonical guide lives at [`../CONTRIBUTING.md`](../CONTRIBUTING.md).
+
 ## Setup
 
 ```bash
-npm link
+npm install
 npm test
 ```
 
@@ -15,6 +17,7 @@ npm test
 - Preserve safe defaults. `council` is a consultation wrapper, not an autonomous code mutation tool.
 - Add tests with every behavior change, especially around parsing, exit codes, output modes, and failure handling.
 - Avoid adding runtime dependencies unless they materially improve portability or maintainability.
+- Keep explicit member ordering stable. `--members gemini,claude` should stay in that order unless a later flag intentionally appends another member.
 
 ## Release checklist
 

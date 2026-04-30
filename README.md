@@ -10,12 +10,12 @@ This repo holds two things:
 ## Quick start
 
 ```bash
-cd cli
-npm link
-council "How should I structure this CLI?"
+npx @armstrng/council "How should I structure this CLI?"
 ```
 
 See [`cli/README.md`](./cli/README.md) for full usage, flags, and output modes.
+
+The landing page has its own notes in [`web/README.md`](./web/README.md), including how its vendored browser assets are tracked.
 
 ## Development
 
@@ -32,3 +32,7 @@ cd web && npm install && npm run dev
 ## License
 
 [MIT](./LICENSE)
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md).

@@ -43,28 +43,14 @@ export async function runCouncil({
     const candidateSummarizers = pickSummarizerCandidates(summarizer, successfulMembers);
 
     for (const candidate of candidateSummarizers) {
-      emitEvent(onEvent, 'summary_started', {
-        name: candidate
+      const attempt = await runSummaryAttempt(candidate, {
+        prompt: summaryPrompt,
+        cwd,
+        timeoutMs,
+        env,
+        onEvent
       });
-
-      const attempt = await runWithHeartbeat({
-        kind: 'summary',
-        name: candidate,
-        onEvent,
-        task: (onProgress) =>
-          runEngine(candidate, {
-            prompt: summaryPrompt,
-            cwd,
-            timeoutMs,
-            env,
-            onProgress
-          })
-      });
-
       summaryAttempts.push(attempt);
-      emitEvent(onEvent, 'summary_completed', {
-        result: attempt
-      });
 
       if (attempt.status === 'ok') {
         summary = attempt;
@@ -145,21 +131,39 @@ async function runMember(name, { prompt, cwd, timeoutMs, env, onEvent }) {
     name
   });
 
-  const result = await runWithHeartbeat({
+  const result = await runEngineTask({
     kind: 'member',
     name,
-    onEvent,
-    task: (onProgress) =>
-      runEngine(name, {
-        prompt,
-        cwd,
-        timeoutMs,
-        env,
-        onProgress
-      })
+    prompt,
+    cwd,
+    timeoutMs,
+    env,
+    onEvent
   });
 
   emitEvent(onEvent, 'member_completed', {
+    result
+  });
+
+  return result;
+}
+
+async function runSummaryAttempt(name, { prompt, cwd, timeoutMs, env, onEvent }) {
+  emitEvent(onEvent, 'summary_started', {
+    name
+  });
+
+  const result = await runEngineTask({
+    kind: 'summary',
+    name,
+    prompt,
+    cwd,
+    timeoutMs,
+    env,
+    onEvent
+  });
+
+  emitEvent(onEvent, 'summary_completed', {
     result
   });
 
@@ -196,4 +200,53 @@ async function runWithHeartbeat({ kind, name, onEvent, task }) {
   } finally {
     clearInterval(timer);
   }
+}
+
+async function runEngineTask({ kind, name, prompt, cwd, timeoutMs, env, onEvent }) {
+  const startedAt = Date.now();
+
+  try {
+    return await runWithHeartbeat({
+      kind,
+      name,
+      onEvent,
+      task: (onProgress) =>
+        runEngine(name, {
+          prompt,
+          cwd,
+          timeoutMs,
+          env,
+          onProgress
+        })
+    });
+  } catch (error) {
+    return unexpectedEngineFailure(name, error, Date.now() - startedAt);
+  }
+}
+
+function unexpectedEngineFailure(name, error, durationMs) {
+  return {
+    name,
+    bin: null,
+    status: 'error',
+    durationMs,
+    detail: formatUnexpectedError(error),
+    exitCode: null,
+    signal: null,
+    stdout: '',
+    stderr: '',
+    output: ''
+  };
+}
+
+function formatUnexpectedError(error) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === 'string' && error.trim()) {
+    return error;
+  }
+
+  return 'Unexpected runtime error.';
 }
