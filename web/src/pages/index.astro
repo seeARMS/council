@@ -1,8 +1,10 @@
 ---
-import { Image } from "astro:assets";
+import { Font, Image } from "astro:assets";
 import cliPackage from "../../../cli/package.json";
 import councilNavLogo from "../assets/council-64.png";
 import councilHeroLogo from "../assets/council-256.png";
+import codexLogo from "../assets/agent-logos/codex.png";
+import claudeLogo from "../assets/agent-logos/claude.png";
 import "../styles/global.css";
 
 const site = Astro.site?.toString().replace(/\/$/, "") ?? "";
@@ -126,8 +128,8 @@ const structuredData = JSON.stringify([
     <meta name="twitter:image:alt" content="Council CLI homepage for comparing Codex, Claude, and Gemini on the same prompt." />
 
     <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
-    <link href="/fonts/inter/inter.css" rel="stylesheet" />
-    <link href="/fonts/geist-mono/style.css" rel="stylesheet" />
+    <Font cssVariable="--font-inter" preload />
+    <Font cssVariable="--font-geist-mono" preload />
     <script type="application/ld+json" set:html={structuredData}></script>
 
     <script is:inline>
@@ -365,11 +367,11 @@ const structuredData = JSON.stringify([
           </p>
           <div class="agent-chip-row mt-2 text-zinc-950 font-medium dark:text-zinc-100" aria-label="Supported agents">
             <span class="agent-chip">
-              <img src="/agent-logos/codex.png" alt="" aria-hidden="true" class="agent-chip-codex-logo" />
+              <Image src={codexLogo} alt="" aria-hidden="true" width={36} height={36} class="agent-chip-codex-logo" />
               Codex
             </span>
             <span class="agent-chip">
-              <img src="/agent-logos/claude.png" alt="" aria-hidden="true" />
+              <Image src={claudeLogo} alt="" aria-hidden="true" width={32} height={32} />
               Claude
             </span>
             <span class="agent-chip">

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseArgs } from '../src/args.js';
+import { parseArgs, usageText } from '../src/args.js';
+import { DEFAULT_TIMEOUT_MS } from '../src/engines.js';
 
 test('parses help subcommand without treating it as a query', () => {
   const parsed = parseArgs(['help']);
@@ -36,6 +37,19 @@ test('supports per-tool toggles and explicit summarizer selection', () => {
   assert.equal(parsed.summarizer, 'claude');
   assert.equal(parsed.timeoutMs, 42_000);
   assert.deepEqual(parsed.promptParts, ['review', 'this']);
+});
+
+test('uses a 10 minute timeout by default', () => {
+  const parsed = parseArgs(['review', 'this']);
+
+  assert.equal(parsed.timeoutMs, DEFAULT_TIMEOUT_MS);
+  assert.equal(parsed.timeoutMs, 600_000);
+});
+
+test('help text documents the 10 minute default timeout', () => {
+  const help = usageText('0.0.0');
+
+  assert.match(help, /default: 600 \/ 10 minutes/);
 });
 
 test('supports headless automation flags and response caps', () => {

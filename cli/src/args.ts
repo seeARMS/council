@@ -31,6 +31,8 @@ const OPTIONS = {
 } as any;
 
 export function usageText(version) {
+  const defaultTimeoutSeconds = DEFAULT_TIMEOUT_MS / 1_000;
+
   return [
     `council v${version}`,
     '',
@@ -66,7 +68,7 @@ export function usageText(version) {
     '  --color <auto|always|never>',
     '',
     'Execution:',
-    '  --timeout <seconds>       Per-CLI timeout in seconds (default: 60)',
+    `  --timeout <seconds>       Per-CLI timeout in seconds (default: ${defaultTimeoutSeconds} / 10 minutes)`,
     `  --max-member-chars <n>    Cap each member response before summarization (default: ${DEFAULT_MAX_MEMBER_CHARS})`,
     '  --cwd <path>              Working directory for all upstream CLIs',
     '',

@@ -5,7 +5,7 @@ import { extractJsonObject, runCommand } from './process.js';
 
 export const ALL_ENGINES = ['codex', 'claude', 'gemini'];
 export const AUTO_SUMMARIZER = 'auto';
-export const DEFAULT_TIMEOUT_MS = 60_000;
+export const DEFAULT_TIMEOUT_MS = 600_000;
 export const DEFAULT_MAX_MEMBER_CHARS = 12_000;
 export const DEFAULT_SUMMARIZER_ORDER = ['codex', 'claude', 'gemini'];
 const GEMINI_LOGIN_DETAIL =
