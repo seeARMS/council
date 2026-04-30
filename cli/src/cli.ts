@@ -45,6 +45,11 @@ export async function main(argv = process.argv.slice(2)) {
     return;
   }
 
+  if (parsed.ack) {
+    process.stdout.write('ACK\n');
+    return;
+  }
+
   const ui = resolveUiOptions(parsed);
   const interactiveMode = shouldUseInteractiveDashboard(ui);
   const initialPrompt = await readPromptFromArgsAndStdin(parsed.promptParts);
@@ -72,6 +77,7 @@ export async function main(argv = process.argv.slice(2)) {
       timeoutMs: parsed.timeoutMs,
       maxMemberChars: parsed.maxMemberChars,
       cwd: resolvedCwd,
+      effort: parsed.effort,
       conversation: [],
       onEvent: undefined
     });
@@ -89,6 +95,7 @@ export async function main(argv = process.argv.slice(2)) {
     summarizer: parsed.summarizer,
     timeoutMs: parsed.timeoutMs,
     maxMemberChars: parsed.maxMemberChars,
+    effort: parsed.effort,
     conversation: [],
     onEvent: (event) => {
       if (ui.outputMode === 'json-stream') {
@@ -110,9 +117,7 @@ export async function main(argv = process.argv.slice(2)) {
   if (ui.outputMode === 'json') {
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   } else if (ui.outputMode === 'text') {
-    process.stdout.write(
-      `${renderHumanResult(result, { summaryOnly: ui.summaryOnly })}\n`
-    );
+    process.stdout.write(`${renderHumanResult(result, ui)}\n`);
   }
 
   process.exitCode = exitCodeForResult(result);

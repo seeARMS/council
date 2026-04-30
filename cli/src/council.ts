@@ -18,19 +18,21 @@ export async function runCouncil(options: any = {}) {
   maxMemberChars = DEFAULT_MAX_MEMBER_CHARS,
   conversation = [],
   env = process.env,
+  effort = null,
   onEvent = () => {}
   } = options;
   emitEvent(onEvent, 'run_started', {
     cwd,
     members: [...members],
-    summarizer
+    summarizer,
+    effort
   });
 
   const memberPrompt = buildMemberPrompt(query, {
     conversation
   });
   const memberRuns = await Promise.all(
-    members.map((name) => runMember(name, { prompt: memberPrompt, cwd, timeoutMs, env, onEvent }))
+    members.map((name) => runMember(name, { prompt: memberPrompt, cwd, timeoutMs, env, effort, onEvent }))
   );
   const successfulMembers = memberRuns.filter((result) => result.status === 'ok');
   const summaryAttempts = [];
@@ -49,6 +51,7 @@ export async function runCouncil(options: any = {}) {
         cwd,
         timeoutMs,
         env,
+        effort,
         onEvent
       });
       summaryAttempts.push(attempt);
@@ -84,6 +87,7 @@ export async function runCouncil(options: any = {}) {
     cwd,
     membersRequested: [...members],
     summarizerRequested: summarizer,
+    effort,
     members: memberRuns,
     summaryAttempts,
     summary,
@@ -127,7 +131,7 @@ function summarizeNoResponse(memberRuns) {
   return 'No council member produced a response.';
 }
 
-async function runMember(name, { prompt, cwd, timeoutMs, env, onEvent }) {
+async function runMember(name, { prompt, cwd, timeoutMs, env, effort, onEvent }) {
   emitEvent(onEvent, 'member_started', {
     name
   });
@@ -139,6 +143,7 @@ async function runMember(name, { prompt, cwd, timeoutMs, env, onEvent }) {
     cwd,
     timeoutMs,
     env,
+    effort,
     onEvent
   });
 
@@ -149,7 +154,7 @@ async function runMember(name, { prompt, cwd, timeoutMs, env, onEvent }) {
   return result;
 }
 
-async function runSummaryAttempt(name, { prompt, cwd, timeoutMs, env, onEvent }) {
+async function runSummaryAttempt(name, { prompt, cwd, timeoutMs, env, effort, onEvent }) {
   emitEvent(onEvent, 'summary_started', {
     name
   });
@@ -161,6 +166,7 @@ async function runSummaryAttempt(name, { prompt, cwd, timeoutMs, env, onEvent })
     cwd,
     timeoutMs,
     env,
+    effort,
     onEvent
   });
 
@@ -203,7 +209,7 @@ async function runWithHeartbeat({ kind, name, onEvent, task }) {
   }
 }
 
-async function runEngineTask({ kind, name, prompt, cwd, timeoutMs, env, onEvent }) {
+async function runEngineTask({ kind, name, prompt, cwd, timeoutMs, env, effort, onEvent }) {
   const startedAt = Date.now();
 
   try {
@@ -217,6 +223,7 @@ async function runEngineTask({ kind, name, prompt, cwd, timeoutMs, env, onEvent 
           cwd,
           timeoutMs,
           env,
+          effort,
           onProgress
         })
     });

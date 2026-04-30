@@ -2,6 +2,7 @@ export type EngineName = 'codex' | 'claude' | 'gemini';
 export type SummarizerName = 'auto' | EngineName;
 export type ColorMode = 'auto' | 'always' | 'never';
 export type EngineStatus = 'ok' | 'missing' | 'timeout' | 'error';
+export type EffortLevel = 'low' | 'medium' | 'high';
 
 export interface ConversationTurn {
   user: string;
@@ -15,11 +16,13 @@ export interface ParsedArgs {
   jsonStream: boolean;
   headless: boolean;
   plain: boolean;
+  verbose: boolean;
   quiet: boolean;
   summaryOnly: boolean;
   noBanner: boolean;
   color: ColorMode;
   summarizer: SummarizerName;
+  effort: EffortLevel | null;
   timeoutMs: number;
   maxMemberChars: number;
   cwd: string;
@@ -49,6 +52,7 @@ export interface RunEngineOptions {
   cwd?: string;
   timeoutMs?: number;
   env?: Record<string, string | undefined>;
+  effort?: EffortLevel | null;
   onProgress?: (progress: EngineProgress) => void;
 }
 
@@ -67,6 +71,7 @@ export interface RunCouncilOptions {
   summarizer?: SummarizerName;
   timeoutMs?: number;
   maxMemberChars?: number;
+  effort?: EffortLevel | null;
   conversation?: ConversationTurn[];
   env?: Record<string, string | undefined>;
   onEvent?: (event: CouncilEvent) => void;
@@ -77,6 +82,7 @@ export interface CouncilResult {
   cwd: string;
   membersRequested: EngineName[];
   summarizerRequested: SummarizerName;
+  effort: EffortLevel | null;
   members: CouncilEngineResult[];
   summaryAttempts: CouncilEngineResult[];
   summary: CouncilEngineResult;
@@ -85,6 +91,7 @@ export interface CouncilResult {
 
 export interface RenderHumanResultOptions {
   summaryOnly?: boolean;
+  verbose?: boolean;
 }
 
 export interface RunStartedEvent {
@@ -93,6 +100,7 @@ export interface RunStartedEvent {
   cwd: string;
   members: EngineName[];
   summarizer: SummarizerName;
+  effort: EffortLevel | null;
 }
 
 export interface MemberStartedEvent {
@@ -165,6 +173,7 @@ export function buildSummaryPrompt(
 ): string;
 export function exitCodeForResult(result: CouncilResult): number;
 export function renderHumanResult(result: CouncilResult, options?: RenderHumanResultOptions): string;
+export const EFFORT_LEVELS: readonly EffortLevel[];
 export const EXIT_CODES: {
   readonly OK: 0;
   readonly RUNTIME_ERROR: 1;

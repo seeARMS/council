@@ -64,3 +64,25 @@ test('renderHumanResult shows summary failure details in summary-only mode', () 
 
   assert.equal(output, 'Summary failed via gemini: API failure');
 });
+
+test('renderHumanResult uses actual newlines in text output', () => {
+  const output = renderHumanResult({
+    members: [
+      {
+        name: 'codex',
+        status: 'ok',
+        durationMs: 1_000,
+        output: 'member output'
+      }
+    ],
+    summary: {
+      name: 'codex',
+      status: 'ok',
+      durationMs: 2_000,
+      output: 'summary output'
+    }
+  });
+
+  assert.match(output, /\n=== codex \(1\.0s\) ===\nmember output/);
+  assert.match(output, /\n=== synthesis via codex \(2\.0s\) ===\nsummary output$/);
+});

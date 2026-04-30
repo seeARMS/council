@@ -1,6 +1,6 @@
 import { formatDuration, renderSummaryFailure } from './presentation.js';
 
-export function renderHumanResult(result, { summaryOnly = false } = {}) {
+export function renderHumanResult(result, { summaryOnly = false, verbose = false } = {}) {
   if (summaryOnly) {
     if (result.summary?.status === 'ok') {
       return result.summary.output;
@@ -11,14 +11,26 @@ export function renderHumanResult(result, { summaryOnly = false } = {}) {
 
   const lines = [];
   const successfulMembers = result.members.filter((member) => member.status === 'ok');
-  const nonSuccessfulMembers = result.members.filter((member) => member.status !== 'ok');
+  const nonSuccessfulMembers = result.members.filter(
+    (member) => member.status !== 'ok'
+  );
 
-  lines.push(`Members: ${successfulMembers.map((member) => member.name).join(', ') || 'none'}`);
+  lines.push(
+    `Members: ${successfulMembers.map((member) => member.name).join(', ') || 'none'}`
+  );
 
   if (nonSuccessfulMembers.length > 0) {
-    lines.push(
-      `Skipped: ${nonSuccessfulMembers.map((member) => `${member.name} (${member.detail})`).join(', ')}`
-    );
+    const skippedLine = `Skipped: ${nonSuccessfulMembers
+      .map((member) => `${member.name} (${member.detail})`)
+      .join(', ')}`;
+
+    if (verbose) {
+      lines.push(
+        `Skipped: ${nonSuccessfulMembers.map((member) => member.name).join(', ')}`
+      );
+    } else {
+      lines.push(skippedLine);
+    }
   }
 
   if (result.summary?.name) {
@@ -27,8 +39,20 @@ export function renderHumanResult(result, { summaryOnly = false } = {}) {
 
   for (const member of successfulMembers) {
     lines.push('');
-    lines.push(`=== ${member.name} (${formatDuration(member.durationMs)}) ===`);
+    lines.push(
+      `=== ${member.name} (${formatDuration(member.durationMs)}) ===`
+    );
     lines.push(member.output);
+  }
+
+  if (verbose) {
+    for (const member of nonSuccessfulMembers) {
+      lines.push('');
+      lines.push(
+        `=== ${member.name} (${member.status}: ${member.detail}) ===`
+      );
+      lines.push(member.output || '(no output)');
+    }
   }
 
   lines.push('');

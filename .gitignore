@@ -1,5 +1,6 @@
 node_modules/
 .DS_Store
+.claude/
 
 # Astro / web build output
 dist/

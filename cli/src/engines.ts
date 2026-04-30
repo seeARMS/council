@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { extractJsonObject, runCommand } from './process.js';
@@ -8,6 +8,13 @@ export const AUTO_SUMMARIZER = 'auto';
 export const DEFAULT_TIMEOUT_MS = 600_000;
 export const DEFAULT_MAX_MEMBER_CHARS = 12_000;
 export const DEFAULT_SUMMARIZER_ORDER = ['codex', 'claude', 'gemini'];
+export const EFFORT_LEVELS = ['low', 'medium', 'high'];
+
+const GEMINI_THINKING_BUDGETS = {
+  low: 1024,
+  medium: 8192,
+  high: 24576
+};
 const GEMINI_LOGIN_DETAIL =
   'Gemini CLI requires login. Run `gemini` in a normal terminal, complete authentication in your browser, then retry council.';
 
@@ -28,21 +35,21 @@ const ENGINE_BINS = {
 
 export async function runEngine(
   name,
-  { prompt, cwd, timeoutMs = DEFAULT_TIMEOUT_MS, env = process.env, onProgress = () => {} }
+  { prompt, cwd, timeoutMs = DEFAULT_TIMEOUT_MS, env = process.env, effort = null, onProgress = () => {} }
 ) {
   if (!ALL_ENGINES.includes(name)) {
     throw new Error(`Unknown engine: ${name}`);
   }
 
   if (name === 'codex') {
-    return runCodex({ prompt, cwd, timeoutMs, env, onProgress });
+    return runCodex({ prompt, cwd, timeoutMs, env, effort, onProgress });
   }
 
   if (name === 'claude') {
-    return runClaude({ prompt, cwd, timeoutMs, env, onProgress });
+    return runClaude({ prompt, cwd, timeoutMs, env, effort, onProgress });
   }
 
-  return runGemini({ prompt, cwd, timeoutMs, env, onProgress });
+  return runGemini({ prompt, cwd, timeoutMs, env, effort, onProgress });
 }
 
 export function buildMemberPrompt(query, { conversation = [] } = {}) {
@@ -145,7 +152,7 @@ export function parseGeminiOutput(stdout) {
   return trimmed;
 }
 
-async function runCodex({ prompt, cwd, timeoutMs, env, onProgress }) {
+async function runCodex({ prompt, cwd, timeoutMs, env, effort, onProgress }) {
   const bin = resolveBinary('codex', env);
   const tempDir = await mkdtemp(path.join(tmpdir(), 'council-codex-'));
   const outputPath = path.join(tempDir, 'last-message.txt');
@@ -160,11 +167,14 @@ async function runCodex({ prompt, cwd, timeoutMs, env, onProgress }) {
     onProgress(progress);
   });
 
+  const effortArgs = effort ? ['-c', `model_reasoning_effort=${effort}`] : [];
+
   try {
     const commandResult = await runCommand({
       command: bin,
       args: [
         'exec',
+        ...effortArgs,
         '--skip-git-repo-check',
         '--sandbox',
         'read-only',
@@ -198,7 +208,7 @@ async function runCodex({ prompt, cwd, timeoutMs, env, onProgress }) {
   }
 }
 
-async function runClaude({ prompt, cwd, timeoutMs, env, onProgress }) {
+async function runClaude({ prompt, cwd, timeoutMs, env, effort, onProgress }) {
   const bin = resolveBinary('claude', env);
   const startedAt = Date.now();
   let lastProgressDetail = '';
@@ -210,6 +220,7 @@ async function runClaude({ prompt, cwd, timeoutMs, env, onProgress }) {
     lastProgressDetail = progress.detail;
     onProgress(progress);
   });
+  const effortArgs = effort ? ['--effort', effort] : [];
   const commandResult = await runCommand({
     command: bin,
     args: [
@@ -221,7 +232,8 @@ async function runClaude({ prompt, cwd, timeoutMs, env, onProgress }) {
       '--output-format',
       'stream-json',
       '--include-partial-messages',
-      '--no-session-persistence'
+      '--no-session-persistence',
+      ...effortArgs
     ],
     cwd,
     env,
@@ -244,47 +256,100 @@ async function runClaude({ prompt, cwd, timeoutMs, env, onProgress }) {
   });
 }
 
-async function runGemini({ prompt, cwd, timeoutMs, env, onProgress }) {
+async function runGemini({ prompt, cwd, timeoutMs, env, effort, onProgress }) {
   const bin = resolveBinary('gemini', env);
   const startedAt = Date.now();
   let lastProgressDetail = '';
-  const commandResult = await runCommand({
-    command: bin,
-    args: [
-      '-p',
-      prompt,
-      '--skip-trust',
-      '--approval-mode',
-      'plan',
-      '--output-format',
-      'json'
-    ],
-    cwd,
-    env,
-    timeoutMs,
-    interruptWhen: detectGeminiLoginRequired,
-    onChunk: (context) => {
-      const progress = detectGeminiRetryProgress(context);
+  const effortContext = await prepareGeminiEffortSettings(effort, env);
+  const runEnv = effortContext
+    ? { ...env, GEMINI_CLI_SYSTEM_SETTINGS_PATH: effortContext.settingsPath }
+    : env;
 
-      if (!progress || progress.detail === lastProgressDetail) {
-        return;
+  try {
+    const commandResult = await runCommand({
+      command: bin,
+      args: [
+        '-p',
+        prompt,
+        '--skip-trust',
+        '--approval-mode',
+        'plan',
+        '--output-format',
+        'json'
+      ],
+      cwd,
+      env: runEnv,
+      timeoutMs,
+      interruptWhen: detectGeminiLoginRequired,
+      onChunk: (context) => {
+        const progress = detectGeminiRetryProgress(context);
+
+        if (!progress || progress.detail === lastProgressDetail) {
+          return;
+        }
+
+        lastProgressDetail = progress.detail;
+        onProgress(progress);
       }
+    });
 
-      lastProgressDetail = progress.detail;
-      onProgress(progress);
+    const authRequired = isGeminiLoginRequired(commandResult);
+    const output = authRequired ? '' : parseGeminiOutput(commandResult.stdout);
+    return finalizeResult({
+      name: 'gemini',
+      bin,
+      startedAt,
+      commandResult,
+      output,
+      detailOverride: authRequired ? GEMINI_LOGIN_DETAIL : ''
+    });
+  } finally {
+    if (effortContext) {
+      await rm(effortContext.dir, { recursive: true, force: true });
     }
-  });
+  }
+}
 
-  const authRequired = isGeminiLoginRequired(commandResult);
-  const output = authRequired ? '' : parseGeminiOutput(commandResult.stdout);
-  return finalizeResult({
-    name: 'gemini',
-    bin,
-    startedAt,
-    commandResult,
-    output,
-    detailOverride: authRequired ? GEMINI_LOGIN_DETAIL : ''
+async function prepareGeminiEffortSettings(effort, env) {
+  if (!effort || GEMINI_THINKING_BUDGETS[effort] === undefined) {
+    return null;
+  }
+
+  const dir = await mkdtemp(path.join(tmpdir(), 'council-gemini-effort-'));
+  const settingsPath = path.join(dir, 'settings.json');
+  const settings = await mergeGeminiSettings({
+    settingsPath: env.GEMINI_CLI_SYSTEM_SETTINGS_PATH,
+    thinkingBudget: GEMINI_THINKING_BUDGETS[effort]
   });
+  await writeFile(settingsPath, JSON.stringify(settings), 'utf8');
+  return { dir, settingsPath };
+}
+
+async function mergeGeminiSettings({ settingsPath, thinkingBudget }) {
+  const nextSettings = { thinkingBudget };
+
+  if (!settingsPath) {
+    return nextSettings;
+  }
+
+  try {
+    const existingSettings = JSON.parse(
+      await readFile(settingsPath, 'utf8')
+    );
+
+    if (
+      existingSettings &&
+      typeof existingSettings === 'object' &&
+      !Array.isArray(existingSettings)
+    ) {
+      return {
+        ...existingSettings,
+        thinkingBudget
+      };
+    }
+  } catch {}
+
+  return nextSettings;
 }
 
 function resolveBinary(name, env) {

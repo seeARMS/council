@@ -59,6 +59,7 @@ function SessionApp({
   timeoutMs,
   maxMemberChars,
   cwd,
+  effort = null,
   conversation = [],
   onEvent
 }) {
@@ -119,6 +120,7 @@ function SessionApp({
       timeoutMs,
       maxMemberChars,
       cwd,
+      effort,
       conversation: conversationRef.current,
       onEvent: (event) => {
         if (cancelled) return;
@@ -184,6 +186,7 @@ function SessionApp({
   }, [
     activeRun,
     cwd,
+    effort,
     maxMemberChars,
     members,
     onEvent,

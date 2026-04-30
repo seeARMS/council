@@ -11,6 +11,7 @@ test('CLI help prints examples and exits successfully', async () => {
   });
 
   assert.equal(result.code, 0);
+  assert.match(result.stdout, /\nExamples:\n/);
   assert.match(result.stdout, /Examples:/);
   assert.match(result.stdout, /--json-stream/);
 });
@@ -92,6 +93,33 @@ test('per-tool flags disable unselected tools', async () => {
     assert.deepEqual(parsed.membersRequested, ['codex']);
     assert.equal(parsed.members.length, 1);
     assert.equal(parsed.members[0].name, 'codex');
+  } finally {
+    await fake.cleanup();
+  }
+});
+
+test('verbose mode shows all member responses, including failures', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    codex: {
+      member: { output: 'codex member' },
+      summary: { output: 'summary via codex' }
+    },
+    claude: {
+      member: { mode: 'timeout' }
+    }
+  });
+
+  try {
+    const result = await runCli(['--verbose', '--timeout', '1', '--no-gemini', 'hello'], {
+      cwd,
+      env: fake.env
+    });
+
+    assert.equal(result.code, 0);
+    assert.match(result.stdout, /codex member/);
+    assert.match(result.stdout, /claude \(timeout: Timed out after 1s\.\)/);
+    assert.match(result.stdout, /\(no output\)/);
+    assert.match(result.stdout, /synthesis via codex/);
   } finally {
     await fake.cleanup();
   }

@@ -3,9 +3,9 @@ import {
   ALL_ENGINES,
   AUTO_SUMMARIZER,
   DEFAULT_MAX_MEMBER_CHARS,
-  DEFAULT_TIMEOUT_MS
+  DEFAULT_TIMEOUT_MS,
+  EFFORT_LEVELS
 } from './engines.js';
-
 const OPTIONS = {
   help: { type: 'boolean', short: 'h' },
   version: { type: 'boolean', short: 'v' },
@@ -17,12 +17,14 @@ const OPTIONS = {
   banner: { type: 'boolean', default: true },
   'summary-only': { type: 'boolean' },
   quiet: { type: 'boolean', short: 'q' },
+  verbose: { type: 'boolean', short: 'd' },
   all: { type: 'boolean' },
   codex: { type: 'boolean', default: true },
   claude: { type: 'boolean', default: true },
   gemini: { type: 'boolean', default: true },
   members: { type: 'string' },
   summarizer: { type: 'string' },
+  effort: { type: 'string' },
   timeout: { type: 'string' },
   'max-member-chars': { type: 'string' },
   cwd: { type: 'string' },
@@ -60,6 +62,7 @@ export function usageText(version) {
     'Output:',
     '  --summary-only            Print only the final synthesis',
     '  -q, --quiet               Alias for --summary-only',
+    '  -d, --verbose             Show all member responses, even if they fail',
     '  --json                    Print structured JSON',
     '  --json-stream             Stream JSONL lifecycle events',
     '  --headless                Automation mode: no banner, no progress, summary-only text by default',
@@ -71,6 +74,7 @@ export function usageText(version) {
     `  --timeout <seconds>       Per-CLI timeout in seconds (default: ${defaultTimeoutSeconds} / 10 minutes)`,
     `  --max-member-chars <n>    Cap each member response before summarization (default: ${DEFAULT_MAX_MEMBER_CHARS})`,
     '  --cwd <path>              Working directory for all upstream CLIs',
+    `  --effort <level>          Reasoning effort applied to every member: ${EFFORT_LEVELS.join(', ')}`,
     '',
     'Other:',
     '  -h, --help                Show help',
@@ -101,11 +105,14 @@ export function parseArgs(argv) {
     jsonStream: Boolean(values['json-stream'] || values.ndjson),
     headless: Boolean(values.headless),
     plain: Boolean(values.plain),
-    quiet: Boolean(values.quiet),
+    banner: Boolean(values.banner),
     summaryOnly: Boolean(values['summary-only']),
+    quiet: Boolean(values.quiet),
+    verbose: Boolean(values.verbose),
     noBanner: values.banner === false,
     color: values['no-color'] ? 'never' : parseColor(values.color ?? 'auto'),
     summarizer: parseSummarizer(values.summarizer ?? AUTO_SUMMARIZER),
+    effort: parseEffort(values.effort),
     timeoutMs: values.timeout
       ? parseTimeoutMs(values.timeout)
       : DEFAULT_TIMEOUT_MS,
@@ -209,6 +216,20 @@ function parseSummarizer(value) {
   }
 
   throw new Error(`Unsupported summarizer: ${value}`);
+}
+
+function parseEffort(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  if (EFFORT_LEVELS.includes(value)) {
+    return value;
+  }
+
+  throw new Error(
+    `Unsupported --effort value: ${value} (expected ${EFFORT_LEVELS.join(', ')})`
+  );
 }
 
 function parseTimeoutMs(value) {

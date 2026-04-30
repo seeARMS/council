@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import {
   buildMemberPrompt,
   buildSummaryPrompt,
@@ -163,6 +166,187 @@ test('runEngine passes the gemini prompt through -p instead of stdin', async () 
     const sources = JSON.parse(result.output);
     assert.equal(sources.promptArg, 'line one\nline two');
     assert.equal(sources.stdin, '');
+  } finally {
+    await fake.cleanup();
+  }
+});
+
+test('runEngine forwards --effort to codex via -c model_reasoning_effort', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    codex: { member: { mode: 'echo-argv' } }
+  });
+
+  try {
+    const result = await runEngine('codex', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: fake.env,
+      effort: 'high'
+    });
+
+    assert.equal(result.status, 'ok');
+    const argv = JSON.parse(result.output);
+    const idx = argv.indexOf('-c');
+    assert.ok(idx >= 0, 'codex did not receive -c');
+    assert.equal(argv[idx + 1], 'model_reasoning_effort=high');
+  } finally {
+    await fake.cleanup();
+  }
+});
+
+test('runEngine forwards --effort to claude via --effort', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    claude: { member: { mode: 'echo-argv' } }
+  });
+
+  try {
+    const result = await runEngine('claude', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: fake.env,
+      effort: 'medium'
+    });
+
+    assert.equal(result.status, 'ok');
+    const argv = JSON.parse(result.output);
+    const idx = argv.indexOf('--effort');
+    assert.ok(idx >= 0, 'claude did not receive --effort');
+    assert.equal(argv[idx + 1], 'medium');
+  } finally {
+    await fake.cleanup();
+  }
+});
+
+test('runEngine forwards --effort to gemini via thinkingBudget settings (no model swap)', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    gemini: { member: { mode: 'echo-env' } }
+  });
+
+  try {
+    const result = await runEngine('gemini', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: fake.env,
+      effort: 'medium'
+    });
+
+    assert.equal(result.status, 'ok');
+    const payload = JSON.parse(result.output);
+    assert.ok(payload.GEMINI_CLI_SYSTEM_SETTINGS_PATH, 'env var not set');
+    assert.ok(payload.settingsContent, 'settings file not readable from spawned process');
+    const settings = JSON.parse(payload.settingsContent);
+    assert.equal(settings.thinkingBudget, 8192);
+    // Should NOT have swapped the model.
+    assert.equal(payload.argv.includes('-m'), false);
+    assert.equal(payload.argv.includes('--model'), false);
+  } finally {
+    await fake.cleanup();
+  }
+});
+
+test('runEngine preserves existing gemini settings when adding thinkingBudget', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    gemini: { member: { mode: 'echo-env' } }
+  });
+  const settingsDir = await mkdtemp(path.join(tmpdir(), 'council-gemini-settings-'));
+  const existingSettingsPath = path.join(settingsDir, 'settings.json');
+  const existingSettings = {
+    model: 'gemini-2.5-pro',
+    proxy: 'http://localhost:8080'
+  };
+  await writeFile(existingSettingsPath, JSON.stringify(existingSettings), 'utf8');
+
+  try {
+    const result = await runEngine('gemini', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: {
+        ...fake.env,
+        GEMINI_CLI_SYSTEM_SETTINGS_PATH: existingSettingsPath
+      },
+      effort: 'low'
+    });
+
+    assert.equal(result.status, 'ok');
+    const payload = JSON.parse(result.output);
+    const mergedSettings = JSON.parse(payload.settingsContent);
+    assert.equal(mergedSettings.model, existingSettings.model);
+    assert.equal(mergedSettings.proxy, existingSettings.proxy);
+    assert.equal(mergedSettings.thinkingBudget, 1024);
+    assert.notEqual(payload.GEMINI_CLI_SYSTEM_SETTINGS_PATH, existingSettingsPath);
+
+    const originalSettings = JSON.parse(
+      await readFile(existingSettingsPath, 'utf8')
+    );
+    assert.deepEqual(originalSettings, existingSettings);
+  } finally {
+    await fake.cleanup();
+    await rm(settingsDir, { recursive: true, force: true });
+  }
+});
+
+test('runEngine omits gemini effort settings when no effort is set', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    gemini: { member: { mode: 'echo-env' } }
+  });
+
+  try {
+    const result = await runEngine('gemini', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: fake.env
+    });
+
+    assert.equal(result.status, 'ok');
+    const payload = JSON.parse(result.output);
+    assert.equal(payload.GEMINI_CLI_SYSTEM_SETTINGS_PATH, null);
+  } finally {
+    await fake.cleanup();
+  }
+});
+
+test('runEngine omits effort flags when no effort is set', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    codex: { member: { mode: 'echo-argv' } },
+    claude: { member: { mode: 'echo-argv' } },
+    gemini: { member: { mode: 'echo-argv' } }
+  });
+
+  try {
+    const codexResult = await runEngine('codex', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: fake.env
+    });
+    const codexArgv = JSON.parse(codexResult.output);
+    assert.equal(
+      codexArgv.includes('model_reasoning_effort=low'),
+      false
+    );
+
+    const claudeResult = await runEngine('claude', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: fake.env
+    });
+    const claudeArgv = JSON.parse(claudeResult.output);
+    assert.equal(claudeArgv.includes('--effort'), false);
+
+    const geminiResult = await runEngine('gemini', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: fake.env
+    });
+    const geminiArgv = JSON.parse(geminiResult.output);
+    assert.equal(geminiArgv.includes('-m'), false);
   } finally {
     await fake.cleanup();
   }

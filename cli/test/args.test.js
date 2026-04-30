@@ -49,6 +49,7 @@ test('uses a 10 minute timeout by default', () => {
 test('help text documents the 10 minute default timeout', () => {
   const help = usageText('0.0.0');
 
+  assert.match(help, /\nExamples:\n/);
   assert.match(help, /default: 600 \/ 10 minutes/);
 });
 
@@ -87,5 +88,17 @@ test('throws when all engines are disabled', () => {
   assert.throws(
     () => parseArgs(['--no-codex', '--no-claude', '--no-gemini', 'question']),
     /At least one engine must be enabled/
+  );
+});
+
+test('parses --effort and validates allowed values', () => {
+  assert.equal(parseArgs(['question']).effort, null);
+  assert.equal(parseArgs(['--effort', 'low', 'q']).effort, 'low');
+  assert.equal(parseArgs(['--effort', 'medium', 'q']).effort, 'medium');
+  assert.equal(parseArgs(['--effort', 'high', 'q']).effort, 'high');
+
+  assert.throws(
+    () => parseArgs(['--effort', 'turbo', 'q']),
+    /Unsupported --effort value/
   );
 });

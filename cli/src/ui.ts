@@ -16,10 +16,10 @@ export function resolveUiOptions(
   const autoHeadless = !stdoutIsTTY && !stderrIsTTY;
   const headless = parsed.headless || autoHeadless;
   const plain = parsed.plain || headless;
-  const summaryOnly = parsed.summaryOnly || parsed.quiet || headless;
+  const summaryOnly =
+    (parsed.summaryOnly || parsed.quiet || headless) && !parsed.verbose;
   const stdoutColor = shouldUseColor(parsed.color, stdoutIsTTY, env, plain);
   const stderrColor = shouldUseColor(parsed.color, stderrIsTTY, env, plain);
-
   return {
     outputMode,
     headless,
@@ -27,8 +27,18 @@ export function resolveUiOptions(
     summaryOnly,
     stdoutColor,
     stderrColor,
-    showBanner: outputMode === 'text' && stderrIsTTY && !headless && !parsed.noBanner && !plain,
-    showProgress: outputMode === 'text' && stderrIsTTY && !headless && !parsed.quiet
+    showBanner:
+      outputMode === 'text' &&
+      stderrIsTTY &&
+      !headless &&
+      !parsed.noBanner &&
+      !plain,
+    showProgress:
+      outputMode === 'text' &&
+      stderrIsTTY &&
+      (!headless || parsed.verbose) &&
+      !parsed.quiet,
+    verbose: parsed.verbose
   };
 }
 

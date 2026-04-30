@@ -146,6 +146,63 @@ process.stdin.on('data', (chunk) => {
       return;
     }
 
+    if (behavior.mode === 'echo-argv') {
+      const payload = JSON.stringify(process.argv.slice(2));
+
+      if (engine === 'codex') {
+        const outputIndex = process.argv.indexOf('-o');
+        const outputPath = outputIndex >= 0 ? process.argv[outputIndex + 1] : null;
+        if (outputPath) {
+          fs.writeFileSync(outputPath, payload, 'utf8');
+        }
+        process.exit(0);
+        return;
+      }
+
+      if (engine === 'claude') {
+        process.stdout.write(JSON.stringify({ result: payload }));
+        return;
+      }
+
+      process.stdout.write(JSON.stringify({ response: payload }));
+      return;
+    }
+
+    if (behavior.mode === 'echo-env') {
+      const settingsPath = process.env.GEMINI_CLI_SYSTEM_SETTINGS_PATH || null;
+      let settingsContent = null;
+      if (settingsPath) {
+        try {
+          settingsContent = fs.readFileSync(settingsPath, 'utf8');
+        } catch {
+          settingsContent = null;
+        }
+      }
+      const payload = JSON.stringify({
+        argv: process.argv.slice(2),
+        GEMINI_CLI_SYSTEM_SETTINGS_PATH: settingsPath,
+        settingsContent
+      });
+
+      if (engine === 'codex') {
+        const outputIndex = process.argv.indexOf('-o');
+        const outputPath = outputIndex >= 0 ? process.argv[outputIndex + 1] : null;
+        if (outputPath) {
+          fs.writeFileSync(outputPath, payload, 'utf8');
+        }
+        process.exit(0);
+        return;
+      }
+
+      if (engine === 'claude') {
+        process.stdout.write(JSON.stringify({ result: payload }));
+        return;
+      }
+
+      process.stdout.write(JSON.stringify({ response: payload }));
+      return;
+    }
+
     if (behavior.mode === 'echo-prompt-sources') {
       const payload = JSON.stringify({
         promptArg,
