@@ -3,10 +3,9 @@ import {
   Fragment,
   useEffect,
   useReducer,
-  useRef,
   useState
 } from 'react';
-import { Box, render, Static, Text, useInput, useStdin } from 'ink';
+import { Box, render, Text, useInput, useStdin } from 'ink';
 import TextInput from 'ink-text-input';
 import { runCouncil } from './council.js';
 
@@ -306,6 +305,11 @@ function LiveDashboard({ state, members }) {
     h(SummaryRow, {
       item: state.summaryItem,
       hotkey: members.length + 1
+    }),
+    h(HotkeyFooter, {
+      members,
+      detailText:
+        'These hotkeys toggle full output inline after completion. Ctrl-C to exit.'
     })
   );
 }
@@ -397,14 +401,12 @@ function runStaticPhase({ result, members }) {
 }
 
 function StaticPhase({ result, members, onAction }) {
-  const initialBlocks = useRef(buildInitialStaticBlocks(result, members));
-  const [extraBlocks, setExtraBlocks] = useState([]);
-  const expandedRef = useRef(new Set());
+  const [expanded, setExpanded] = useState(() => createInitialExpanded(result));
   const [followUpSeed, setFollowUpSeed] = useState(null);
   const [followUpValue, setFollowUpValue] = useState('');
   const { isRawModeSupported } = useStdin();
 
-  const allBlocks = [...initialBlocks.current, ...extraBlocks];
+  const allBlocks = buildStaticBlocks(result, members, expanded);
 
   useInput(
     (input, key) => {
@@ -427,23 +429,15 @@ function StaticPhase({ result, members, onAction }) {
         const idx = parseInt(input, 10);
         if (idx >= 1 && idx <= members.length) {
           const member = result.members[idx - 1];
-          if (member && !expandedRef.current.has(`member:${member.name}`)) {
-            expandedRef.current.add(`member:${member.name}`);
-            setExtraBlocks((blocks) => [
-              ...blocks,
-              { id: `member:${member.name}`, kind: 'member', member }
-            ]);
+          if (member) {
+            setExpanded((current) =>
+              toggleExpanded(current, `member:${member.name}`)
+            );
           }
           return;
         }
         if (idx === members.length + 1) {
-          if (!expandedRef.current.has('summary')) {
-            expandedRef.current.add('summary');
-            setExtraBlocks((blocks) => [
-              ...blocks,
-              { id: 'summary', kind: 'summary', summary: result.summary }
-            ]);
-          }
+          setExpanded((current) => toggleExpanded(current, 'summary'));
           return;
         }
       }
@@ -467,20 +461,20 @@ function StaticPhase({ result, members, onAction }) {
     Fragment,
     null,
     h(
-      Static,
-      { items: allBlocks },
-      (block) =>
+      Box,
+      { flexDirection: 'column' },
+      allBlocks.map((block) =>
         h(StaticBlock, {
           key: block.id,
           block
         })
+      )
     ),
     isRawModeSupported
       ? followUpSeed === null
         ? h(StaticFooter, {
             members,
-            summary: result.summary,
-            expanded: expandedRef.current
+            expanded
           })
         : h(FollowUpPrompt, {
             value: followUpValue,
@@ -516,20 +510,12 @@ function StaticBlock({ block }) {
     return h(Text, { color: block.color }, block.text);
   }
 
-  if (block.kind === 'synthesis') {
+  if (block.kind === 'divider') {
     return h(
       Box,
       { flexDirection: 'column' },
-      h(Text, null, ''),
-      h(Text, { color: 'gray' }, '----------- synthesis -----------'),
-      h(Text, { color: block.color }, block.headerText),
-      block.body
-        ? h(
-            Box,
-            { paddingLeft: 4, flexDirection: 'column' },
-            h(Text, { color: block.color }, block.body)
-          )
-        : null
+      h(Text, { color: 'gray' }, ''),
+      h(Text, { color: block.color }, block.text)
     );
   }
 
@@ -565,27 +551,26 @@ function StaticBlock({ block }) {
   return null;
 }
 
-function StaticFooter({ members, summary, expanded }) {
-  const parts = members.map((name, idx) => {
-    const used = expanded.has(`member:${name}`);
-    return `${idx + 1} ${name}${used ? ' (shown)' : ''}`;
-  });
-  const summaryHotkey = members.length + 1;
-  const summaryUsed = expanded.has('summary');
-  parts.push(
-    `${summaryHotkey} synthesis${summaryUsed ? ' (shown)' : ''}`
-  );
-
+function HotkeyFooter({ members, expanded = null, detailText }) {
   return h(
     Box,
     { flexDirection: 'column', marginTop: 1 },
-    h(Text, { color: 'gray' }, `Hotkeys: ${parts.join('  ')}`),
     h(
       Text,
       { color: 'gray' },
-      'Press a number to print full output. Type to start a follow-up. q or Esc to exit.'
-    )
+      `Hotkeys: ${buildHotkeyParts(members, expanded).join('  ')}`
+    ),
+    h(Text, { color: 'gray' }, detailText)
   );
+}
+
+function StaticFooter({ members, expanded }) {
+  return h(HotkeyFooter, {
+    members,
+    expanded,
+    detailText:
+      'Press a number to toggle full output inline. Type to start a follow-up. q or Esc to exit.'
+  });
 }
 
 function FollowUpPrompt({ value, onChange, onSubmit, onCancel }) {
@@ -608,7 +593,38 @@ function FollowUpPrompt({ value, onChange, onSubmit, onCancel }) {
   );
 }
 
-function buildInitialStaticBlocks(result, members) {
+export function createInitialExpanded(result) {
+  const expanded = new Set();
+  if (result.summary?.output || result.summary?.detail) {
+    expanded.add('summary');
+  }
+  return expanded;
+}
+
+export function buildHotkeyParts(members, expanded = null) {
+  const parts = members.map((name, idx) => {
+    const used = expanded?.has(`member:${name}`);
+    return `${idx + 1} ${name}${used ? ' (shown)' : ''}`;
+  });
+  const summaryHotkey = members.length + 1;
+  const summaryUsed = expanded?.has('summary');
+  parts.push(
+    `${summaryHotkey} synthesis${summaryUsed ? ' (shown)' : ''}`
+  );
+  return parts;
+}
+
+export function toggleExpanded(expanded, id) {
+  const next = new Set(expanded);
+  if (next.has(id)) {
+    next.delete(id);
+  } else {
+    next.add(id);
+  }
+  return next;
+}
+
+export function buildStaticBlocks(result, members, expanded) {
   const blocks = [];
 
   blocks.push({
@@ -626,15 +642,39 @@ function buildInitialStaticBlocks(result, members) {
       color: colorForStatus(member.status),
       text: formatMemberRowLine(member, i + 1)
     });
+
+    if (expanded.has(`member:${member.name}`)) {
+      blocks.push({
+        id: `member:${member.name}`,
+        kind: 'member',
+        member
+      });
+    }
   }
 
   blocks.push({
-    id: 'synthesis',
-    kind: 'synthesis',
-    color: colorForSummaryStatus(result.summary?.status),
-    headerText: formatSummaryRowLine(result.summary, members.length + 1),
-    body: result.summary?.output || result.summary?.detail || ''
+    id: 'divider:summary',
+    kind: 'divider',
+    color: summaryDividerColor({
+      status: result.summary?.status
+    }),
+    text: '----------- synthesis -----------'
   });
+
+  blocks.push({
+    id: 'row:summary',
+    kind: 'summary-row',
+    color: colorForSummaryStatus(result.summary?.status),
+    text: formatSummaryRowLine(result.summary, members.length + 1)
+  });
+
+  if (expanded.has('summary')) {
+    blocks.push({
+      id: 'summary',
+      kind: 'summary',
+      summary: result.summary
+    });
+  }
 
   return blocks;
 }
