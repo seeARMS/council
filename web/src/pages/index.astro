@@ -312,7 +312,7 @@ const structuredData = JSON.stringify([
   </head>
   <body class="overflow-x-hidden bg-white text-zinc-800 antialiased dark:bg-zinc-900 dark:text-zinc-200">
     <nav class="relative z-20 bg-white/85 backdrop-blur-sm transition-colors dark:bg-zinc-900/85">
-      <div class="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between text-sm">
+      <div class="stagger-fade-group max-w-4xl mx-auto px-6 py-4 flex items-center justify-between text-sm" style="--stagger-fade-base-delay: 20ms;">
         <a href="/" class="flex items-center gap-2 text-zinc-950 font-medium transition-opacity hover:opacity-80 dark:text-zinc-100">
           <Image
             src={councilNavLogo}
@@ -345,7 +345,7 @@ const structuredData = JSON.stringify([
     </nav>
 
     <main class="relative">
-      <section class="relative overflow-hidden pt-16 pb-6 md:pb-16">
+      <section class="relative pt-16 pb-6 md:pb-16">
         <div class="hero-spotlight" aria-hidden="true"></div>
         <div class="relative max-w-4xl mx-auto px-6 text-center">
           <Image
@@ -353,70 +353,75 @@ const structuredData = JSON.stringify([
             alt=""
             loading="eager"
             fetchpriority="high"
-            class="size-20 mx-auto mb-8 [filter:drop-shadow(0_12px_24px_rgb(36_48_80/0.25))_drop-shadow(0_4px_8px_rgb(15_23_42/0.15))]"
+            class="stagger-fade size-20 mx-auto mb-8 [filter:drop-shadow(0_12px_24px_rgb(36_48_80/0.25))_drop-shadow(0_4px_8px_rgb(15_23_42/0.15))]"
+            style="--stagger-fade-delay: 70ms;"
           />
-          <h1 class="text-4xl sm:text-5xl font-semibold tracking-tight leading-[1.08] text-zinc-950 text-balance max-w-[18ch] mx-auto dark:text-zinc-100">
+          <h1 class="stagger-fade text-4xl sm:text-5xl font-semibold tracking-tight leading-[1.08] text-zinc-950 text-balance max-w-[18ch] mx-auto dark:text-zinc-100" style="--stagger-fade-delay: 125ms;">
             Ask three agents.
             <span class="block mt-3 sm:mt-4">Get one answer.</span>
           </h1>
-          <p class="mt-6 text-lg text-zinc-600 text-pretty max-w-[56ch] mx-auto dark:text-zinc-400">
+          <p class="stagger-fade mt-6 text-lg text-zinc-600 text-pretty max-w-[56ch] mx-auto dark:text-zinc-400" style="--stagger-fade-delay: 180ms;">
             Council runs Codex, Claude, and Gemini in parallel against the same prompt and synthesizes their responses &mdash; using the subscriptions you already pay for.
           </p>
-          <p class="mt-4 text-xs font-mono uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">
-            Works with
-          </p>
-          <div class="agent-chip-row mt-2 text-zinc-950 font-medium dark:text-zinc-100" aria-label="Supported agents">
-            <span class="agent-chip">
-              <Image src={codexLogo} alt="" aria-hidden="true" width={36} height={36} class="agent-chip-codex-logo" />
-              Codex
-            </span>
-            <span class="agent-chip">
-              <Image src={claudeLogo} alt="" aria-hidden="true" width={32} height={32} />
-              Claude
-            </span>
-            <span class="agent-chip">
-              <img src="/agent-logos/gemini.svg" alt="" aria-hidden="true" />
-              Gemini
-            </span>
-          </div>
-          <div class="mt-10 max-w-2xl mx-auto">
-            <div
-              class="command-shell rounded-2xl border text-left"
-              data-command-box
-              data-copy-text={`npx ${cliPackage.name} ${examplePrompt}`}
-            >
-              <div class="relative z-10 flex items-center gap-3 px-5 py-4 sm:px-6 sm:py-5">
-                <code class="flex-1 min-w-0 font-mono text-sm sm:text-[0.95rem] leading-7 text-zinc-100 break-words">
-                  <span class="select-none text-zinc-600">$</span>
-                  <span class="text-zinc-500"> npx</span>
-                  <span class="text-zinc-300"> {cliPackage.name}</span>
-                  <span class="text-zinc-100"> {examplePrompt}</span>
-                </code>
-                <button
-                  type="button"
-                  class="shrink-0 inline-flex items-center gap-1.5 rounded-md bg-white/5 px-2.5 py-1.5 font-mono text-xs text-zinc-300 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-                  data-copy-command
-                  aria-label="Copy command"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="size-3.5">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                  </svg>
-                  <span data-copy-label>Copy</span>
-                </button>
+          <div class="stagger-fade mt-8 max-w-2xl mx-auto space-y-8" style="--stagger-fade-delay: 235ms;">
+            <div class="stagger-fade-group space-y-3" style="--stagger-fade-base-delay: 260ms;">
+              <p class="text-xs font-mono uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">
+                Works with
+              </p>
+              <div class="agent-chip-row text-zinc-950 font-medium dark:text-zinc-100" aria-label="Supported agents">
+                <span class="agent-chip">
+                  <Image src={codexLogo} alt="" aria-hidden="true" width={36} height={36} class="agent-chip-codex-logo" />
+                  Codex
+                </span>
+                <span class="agent-chip">
+                  <Image src={claudeLogo} alt="" aria-hidden="true" width={32} height={32} />
+                  Claude
+                </span>
+                <span class="agent-chip">
+                  <img src="/agent-logos/gemini.svg" alt="" aria-hidden="true" />
+                  Gemini
+                </span>
               </div>
             </div>
-            <div class="mt-4 flex flex-col items-center justify-between gap-3 text-sm text-zinc-500 dark:text-zinc-400 sm:flex-row">
-              <p>Free and open source. MIT licensed.</p>
-              <a
-                href={repoUrl}
-                class="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-zinc-600 transition-colors hover:text-zinc-950 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:text-zinc-100"
+            <div class="stagger-fade-group space-y-4" style="--stagger-fade-base-delay: 320ms;">
+              <div class="relative z-10 flex flex-col items-center justify-between gap-3 text-sm text-zinc-500 dark:text-zinc-400 sm:flex-row">
+                <p>Free and open source. MIT licensed.</p>
+                <a
+                  href={repoUrl}
+                  aria-label="GitHub"
+                  class="inline-flex items-center text-zinc-500 transition-colors hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-100"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" class="size-4 fill-current">
+                    <path d="M12 .297a12 12 0 0 0-3.79 23.39c.6.11.82-.258.82-.577v-2.234c-3.338.726-4.042-1.61-4.042-1.61a3.182 3.182 0 0 0-1.338-1.756c-1.093-.747.084-.732.084-.732a2.52 2.52 0 0 1 1.84 1.237 2.554 2.554 0 0 0 3.49.996 2.553 2.553 0 0 1 .762-1.6c-2.665-.304-5.466-1.334-5.466-5.932a4.64 4.64 0 0 1 1.235-3.22 4.31 4.31 0 0 1 .117-3.176s1.008-.322 3.3 1.23a11.46 11.46 0 0 1 6.006 0c2.292-1.552 3.297-1.23 3.297-1.23a4.31 4.31 0 0 1 .12 3.176 4.63 4.63 0 0 1 1.233 3.22c0 4.61-2.805 5.625-5.478 5.922a2.862 2.862 0 0 1 .814 2.222v3.293c0 .321.216.694.825.576A12 12 0 0 0 12 .297" />
+                  </svg>
+                </a>
+              </div>
+              <div
+                class="command-shell rounded-2xl border text-left"
+                data-command-box
+                data-copy-text={`npx ${cliPackage.name} ${examplePrompt}`}
               >
-                <svg viewBox="0 0 24 24" aria-hidden="true" class="size-4 fill-current">
-                  <path d="M12 .297a12 12 0 0 0-3.79 23.39c.6.11.82-.258.82-.577v-2.234c-3.338.726-4.042-1.61-4.042-1.61a3.182 3.182 0 0 0-1.338-1.756c-1.093-.747.084-.732.084-.732a2.52 2.52 0 0 1 1.84 1.237 2.554 2.554 0 0 0 3.49.996 2.553 2.553 0 0 1 .762-1.6c-2.665-.304-5.466-1.334-5.466-5.932a4.64 4.64 0 0 1 1.235-3.22 4.31 4.31 0 0 1 .117-3.176s1.008-.322 3.3 1.23a11.46 11.46 0 0 1 6.006 0c2.292-1.552 3.297-1.23 3.297-1.23a4.31 4.31 0 0 1 .12 3.176 4.63 4.63 0 0 1 1.233 3.22c0 4.61-2.805 5.625-5.478 5.922a2.862 2.862 0 0 1 .814 2.222v3.293c0 .321.216.694.825.576A12 12 0 0 0 12 .297" />
-                </svg>
-                GitHub
-              </a>
+                <div class="relative z-10 flex items-center gap-3 px-5 py-4 sm:px-6 sm:py-5">
+                  <code class="flex-1 min-w-0 font-mono text-sm sm:text-[0.95rem] leading-7 text-zinc-100 break-words">
+                    <span class="select-none text-zinc-600">$</span>
+                    <span class="text-zinc-500"> npx</span>
+                    <span class="text-zinc-300"> {cliPackage.name}</span>
+                    <span class="text-zinc-100"> {examplePrompt}</span>
+                  </code>
+                  <button
+                    type="button"
+                    class="shrink-0 inline-flex items-center gap-1.5 rounded-md bg-white/5 px-2.5 py-1.5 font-mono text-xs text-zinc-300 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+                    data-copy-command
+                    aria-label="Copy command"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="size-3.5">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    <span data-copy-label>Copy</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -424,12 +429,12 @@ const structuredData = JSON.stringify([
 
       <section class="py-20">
         <div class="max-w-3xl mx-auto px-6">
-          <div>
+          <div class="stagger-fade-group" style="--stagger-fade-base-delay: 420ms;">
             <p class="mb-4 text-base text-zinc-600 text-pretty dark:text-zinc-400">
               Three models, three sets of blind spots. Council runs them in parallel and surfaces where they agree, where they don&apos;t, and where one of them is probably wrong.
             </p>
             <h2 class="font-mono text-xs tracking-wide uppercase text-zinc-500 mb-6 dark:text-zinc-500">Features</h2>
-            <dl class="space-y-5 text-sm">
+            <dl class="stagger-fade-group space-y-5 text-sm" style="--stagger-fade-base-delay: 510ms;">
               <div>
                 <dt class="font-medium text-zinc-950 dark:text-zinc-100">Works with what you&apos;ve already got</dt>
                 <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Detects <code>codex</code>, <code>claude</code>, and <code>gemini</code> on your <code>PATH</code> and runs whichever subset is there. Override with <code>COUNCIL_*_BIN</code> if your binaries live somewhere unusual.</dd>
@@ -457,7 +462,7 @@ const structuredData = JSON.stringify([
     </main>
 
     <footer class="pb-12 pt-8 border-t border-zinc-200 transition-colors dark:border-zinc-800">
-      <div class="max-w-4xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-zinc-500 dark:text-zinc-400">
+      <div class="stagger-fade-group max-w-4xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-zinc-500 dark:text-zinc-400" style="--stagger-fade-base-delay: 620ms;">
         <span>&copy; 2026 Colin Armstrong</span>
         <div class="flex items-center gap-6">
           <a href={repoUrl} class="transition-colors hover:text-zinc-950 dark:hover:text-zinc-100">GitHub</a>
