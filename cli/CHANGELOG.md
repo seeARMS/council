@@ -5,6 +5,13 @@ All notable changes to `@armstrng/council` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [0.1.4](https://github.com/seeARMS/council/compare/v0.1.3...v0.1.4) (2026-04-30)
+
+
+### Bug Fixes
+
+* Add effort levels ([95af2a0](https://github.com/seeARMS/council/commit/95af2a08d8da93528f624c3e651670fdd0ae2c25))
+
 ## [0.1.3](https://github.com/seeARMS/council/compare/v0.1.2...v0.1.3) (2026-04-30)
 
 
