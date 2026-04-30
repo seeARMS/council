@@ -1,0 +1,40 @@
+<svg width="1024" height="1024" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="35%" r="80%">
+      <stop offset="0%" stop-color="#243050"></stop>
+      <stop offset="100%" stop-color="#080c1c"></stop>
+    </radialGradient>
+    <linearGradient id="sheen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18"></stop>
+      <stop offset="40%" stop-color="#ffffff" stop-opacity="0.04"></stop>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"></stop>
+    </linearGradient>
+    <linearGradient id="edge" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.3"></stop>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.05"></stop>
+    </linearGradient>
+    <radialGradient id="vig" cx="50%" cy="55%" r="65%">
+      <stop offset="60%" stop-color="#000000" stop-opacity="0"></stop>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.4"></stop>
+    </radialGradient>
+    <clipPath id="tile">
+      <path d="M 112 0 H 400 C 502.122 0, 512 9.878, 512 112 V 400 C 512 502.122, 502.122 512, 400 512 H 112 C 9.878 512, 0 502.122, 0 400 V 112 C 0 9.878, 9.878 0, 112 0 Z"></path>
+    </clipPath>
+  </defs>
+  
+  <path d="M 112 0 H 400 C 502.122 0, 512 9.878, 512 112 V 400 C 512 502.122, 502.122 512, 400 512 H 112 C 9.878 512, 0 502.122, 0 400 V 112 C 0 9.878, 9.878 0, 112 0 Z" fill="url(#bg)"></path>
+  <g clip-path="url(#tile)">
+    
+    <rect x="110" y="108" width="292" height="28" rx="14" fill="#e8edf8"></rect>
+    
+    <rect x="128" y="150" width="64" height="222" rx="32" fill="#e8edf8"></rect>
+    <rect x="220" y="150" width="64" height="222" rx="32" fill="#e8edf8"></rect>
+    <rect x="312" y="150" width="64" height="222" rx="32" fill="#e8edf8"></rect>
+    
+    <path d="M 112 0 H 400 C 502.122 0, 512 9.878, 512 112 V 400 C 512 502.122, 502.122 512, 400 512 H 112 C 9.878 512, 0 502.122, 0 400 V 112 C 0 9.878, 9.878 0, 112 0 Z" fill="url(#vig)"></path>
+    
+    <path d="M 30 0 H 482 V 180 C 399.36 230, 112.64 230, 30 180 Z" fill="url(#sheen)" opacity="0.85"></path>
+  </g>
+  
+  <path d="M 112 0 H 400 C 502.122 0, 512 9.878, 512 112 V 400 C 512 502.122, 502.122 512, 400 512 H 112 C 9.878 512, 0 502.122, 0 400 V 112 C 0 9.878, 9.878 0, 112 0 Z" fill="none" stroke="url(#edge)" stroke-width="1.5"></path>
+</svg>

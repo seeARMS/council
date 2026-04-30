@@ -1,0 +1,13 @@
+{
+  "name": "Council",
+  "short_name": "Council",
+  "description": "Ask Codex, Claude, and Gemini the same question. Get one answer back.",
+  "icons": [
+    { "src": "council-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "council-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "council-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "theme_color": "#243050",
+  "background_color": "#080c1c",
+  "display": "standalone"
+}

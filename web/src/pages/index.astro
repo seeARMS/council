@@ -1,0 +1,230 @@
+---
+import cliPackage from "../../../cli/package.json";
+
+const site = Astro.site?.toString().replace(/\/$/, "") ?? "";
+const pageUrl = site || "/";
+const metaImage = site ? `${site}/meta.jpg` : "/meta.jpg";
+const repoUrl = cliPackage.repository.url.replace(/^git\+/, "").replace(/\.git$/, "");
+const docsUrl = `${repoUrl}/blob/main/cli/README.md`;
+const licenseUrl = `${repoUrl}/blob/main/LICENSE`;
+const npmUrl = `https://www.npmjs.com/package/${cliPackage.name}`;
+const xUrl = "https://x.com/colinarms";
+const title = "council — ask Codex, Claude, and Gemini the same question";
+const description =
+  "Open-source CLI that runs your prompt through Codex, Claude, and Gemini in parallel and merges the answers into one.";
+const examplePrompt = "review this migration plan";
+---
+
+<!DOCTYPE html>
+<html lang="en" style="color-scheme: light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/council.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="council" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#243050" />
+
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={metaImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="675" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={pageUrl} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={metaImage} />
+
+    <link href="/fonts/inter/inter.css" rel="stylesheet" />
+    <link href="/fonts/geist-mono/style.css" rel="stylesheet" />
+
+    <script is:inline src="/vendor/tailwindcss.js"></script>
+    <script is:inline>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["InterVariable", "Inter", "system-ui", "sans-serif"],
+              mono: ['"Geist Mono"', "ui-monospace", "monospace"],
+            },
+          },
+        },
+      };
+    </script>
+    <style is:global>
+      html {
+        scroll-behavior: smooth;
+      }
+
+      :root {
+        font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+      }
+
+      .command-shell {
+        position: relative;
+        overflow: hidden;
+        background: #09090b;
+        border-color: rgba(24, 24, 27, 0.95);
+        box-shadow:
+          0 1px 2px rgba(0, 0, 0, 0.12),
+          0 8px 24px rgba(0, 0, 0, 0.12),
+          0 24px 60px rgba(0, 0, 0, 0.18),
+          inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      }
+
+      .command-shell::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(39, 39, 42, 0.22), rgba(9, 9, 11, 0));
+        pointer-events: none;
+      }
+
+    </style>
+  </head>
+  <body class="bg-white text-zinc-800 antialiased overflow-x-hidden">
+    <nav class="relative z-20">
+      <div class="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between text-sm">
+        <a href="/" class="flex items-center gap-2 text-zinc-950 font-medium hover:opacity-80 transition-opacity">
+          <img src="/council-64.png" alt="" class="size-6 [filter:drop-shadow(0_2px_4px_rgb(15_23_42/0.18))]" />
+          council
+        </a>
+        <div class="flex items-center gap-5 text-zinc-500">
+          <a href={docsUrl} class="hover:text-zinc-950 transition-colors">README</a>
+          <a href={npmUrl} class="hover:text-zinc-950 transition-colors">npm</a>
+          <a href={repoUrl} class="hover:text-zinc-950 transition-colors">GitHub</a>
+        </div>
+      </div>
+    </nav>
+
+    <main class="relative">
+      <section class="relative pt-16 pb-6 md:pb-16">
+        <div class="relative max-w-4xl mx-auto px-6 text-center">
+          <img src="/council-256.png" alt="" class="size-20 mx-auto mb-8 [filter:drop-shadow(0_12px_24px_rgb(36_48_80/0.25))_drop-shadow(0_4px_8px_rgb(15_23_42/0.15))]" />
+          <h1 class="text-4xl sm:text-5xl font-medium tracking-tight text-zinc-950 text-balance max-w-[30ch] mx-auto">
+            Ask Codex, Claude, and Gemini the same question. Get one answer back.
+          </h1>
+          <p class="mt-6 text-lg text-zinc-600 text-pretty max-w-[56ch] mx-auto">
+            Council runs your local CLIs in parallel and synthesizes their answers &mdash; no accounts, no API keys.
+          </p>
+          <p class="mt-2 text-base text-zinc-500 text-pretty max-w-[48ch] mx-auto">
+            Free and open source. MIT licensed.
+          </p>
+          <div class="mt-10 max-w-2xl mx-auto">
+            <div
+              class="command-shell rounded-2xl border text-left"
+              data-command-box
+              data-copy-text={`npx ${cliPackage.name} ${examplePrompt}`}
+            >
+              <div class="relative z-10 flex items-center gap-3 px-5 py-4 sm:px-6 sm:py-5">
+                <code class="flex-1 min-w-0 font-mono text-sm sm:text-[0.95rem] leading-7 text-zinc-100 break-words">
+                  <span class="select-none text-zinc-600">$</span>
+                  <span class="text-zinc-500"> npx</span>
+                  <span class="text-zinc-300"> {cliPackage.name}</span>
+                  <span class="text-zinc-100"> {examplePrompt}</span>
+                </code>
+                <button
+                  type="button"
+                  class="shrink-0 inline-flex items-center gap-1.5 rounded-md bg-white/5 px-2.5 py-1.5 font-mono text-xs text-zinc-300 transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+                  data-copy-command
+                  aria-label="Copy command"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="size-3.5">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                  <span data-copy-label>Copy</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="py-20">
+        <div class="max-w-3xl mx-auto px-6">
+          <div>
+            <h2 class="font-mono text-xs tracking-wide uppercase text-zinc-500 mb-6">Features</h2>
+            <dl class="space-y-5 text-sm">
+              <div>
+                <dt class="font-medium text-zinc-950">Uses whichever CLIs you have</dt>
+                <dd class="mt-1 text-zinc-600">Skips any of <code>codex</code>, <code>claude</code>, or <code>gemini</code> that aren&rsquo;t installed. Override binary paths with <code>COUNCIL_*_BIN</code> env vars.</dd>
+              </div>
+              <div>
+                <dt class="font-medium text-zinc-950">Read-only by default</dt>
+                <dd class="mt-1 text-zinc-600">Each tool runs in its plan or read-only mode. Council won&rsquo;t touch your files unless you tell it to.</dd>
+              </div>
+              <div>
+                <dt class="font-medium text-zinc-950">Synthesizes, won&rsquo;t fake consensus</dt>
+                <dd class="mt-1 text-zinc-600">One final answer drawing from each model&rsquo;s response, with disagreements called out instead of papered over. Falls back to the next summarizer if the first one fails.</dd>
+              </div>
+              <div>
+                <dt class="font-medium text-zinc-950">Live dashboard with follow-ups</dt>
+                <dd class="mt-1 text-zinc-600">Each model updates in place with a heartbeat for slow runs. Press a number to expand a full answer. Type to ask a follow-up &mdash; the next turn sees the prior context.</dd>
+              </div>
+              <div>
+                <dt class="font-medium text-zinc-950">Pipes, JSON, Node API</dt>
+                <dd class="mt-1 text-zinc-600"><code>echo "..." | council</code>, <code>--json</code>, <code>--json-stream</code>, <code>--headless</code>, or <code>runCouncil()</code> in Node.</dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="pb-12 pt-8 border-t border-zinc-200">
+      <div class="max-w-4xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-zinc-500">
+        <span>&copy; 2026 Colin Armstrong</span>
+        <div class="flex items-center gap-6">
+          <a href={repoUrl} class="hover:text-zinc-950 transition-colors">GitHub</a>
+          <a href={docsUrl} class="hover:text-zinc-950 transition-colors">README</a>
+          <a href={licenseUrl} class="hover:text-zinc-950 transition-colors">License</a>
+          <a href={xUrl} class="hover:text-zinc-950 transition-colors">@colinarms</a>
+        </div>
+      </div>
+    </footer>
+
+    <script is:inline>
+      const commandBox = document.querySelector("[data-command-box]");
+      const copyTargets = commandBox?.querySelectorAll("[data-copy-command]") ?? [];
+
+      if (commandBox) {
+        const copyText = commandBox.getAttribute("data-copy-text") || "";
+        const copyCommand = async () => {
+          try {
+            await navigator.clipboard.writeText(copyText);
+          } catch {
+            const input = document.createElement("input");
+            input.value = copyText;
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand("copy");
+            input.remove();
+          }
+
+          copyTargets.forEach((target) => {
+            const labelEl = target.querySelector("[data-copy-label]");
+            if (!labelEl) return;
+            const original = labelEl.textContent || "Copy";
+            labelEl.textContent = "Copied";
+            window.setTimeout(() => {
+              labelEl.textContent = original;
+            }, 1400);
+          });
+        };
+
+        copyTargets.forEach((target) => {
+          target.addEventListener("click", copyCommand);
+        });
+      }
+    </script>
+  </body>
+</html>

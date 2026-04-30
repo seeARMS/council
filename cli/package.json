@@ -1,0 +1,50 @@
+{
+  "name": "@armstrng/council",
+  "version": "0.1.1",
+  "description": "Consensus-oriented CLI that asks Codex, Claude, and Gemini in parallel and synthesizes their answers.",
+  "type": "module",
+  "bin": {
+    "council": "bin/council.js"
+  },
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE",
+    "CONTRIBUTING.md"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "prepublishOnly": "npm test"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "automation",
+    "cli",
+    "codex",
+    "claude",
+    "gemini",
+    "llm"
+  ],
+  "author": "Colin Armstrong",
+  "license": "MIT",
+  "homepage": "https://council.armstr.ng",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/seeARMS/council.git",
+    "directory": "cli"
+  },
+  "bugs": {
+    "url": "https://github.com/seeARMS/council/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
