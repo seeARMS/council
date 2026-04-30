@@ -4,6 +4,7 @@ node_modules/
 # Astro / web build output
 dist/
 .astro/
+web/.wrangler/
 
 # Logs
 *.log

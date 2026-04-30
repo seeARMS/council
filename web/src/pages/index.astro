@@ -91,6 +91,43 @@ const examplePrompt = "review this migration plan";
         pointer-events: none;
       }
 
+      .agent-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        margin: 0;
+        padding: 0.45rem 0.78rem;
+        border: 1px solid rgba(212, 212, 216, 0.9);
+        border-radius: 9999px;
+        background: rgba(255, 255, 255, 0.95);
+        box-shadow:
+          0 1px 2px rgba(15, 23, 42, 0.05),
+          0 10px 30px rgba(15, 23, 42, 0.06);
+        font-size: 0.95rem;
+        line-height: 1;
+      }
+
+      .agent-chip img {
+        width: 1rem;
+        height: 1rem;
+        flex-shrink: 0;
+        object-fit: contain;
+      }
+
+      .agent-chip .agent-chip-codex-logo {
+        width: 1.08rem;
+        height: 1.08rem;
+        border-radius: 0.3em;
+      }
+
+      .agent-chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+      }
+
     </style>
   </head>
   <body class="bg-white text-zinc-800 antialiased overflow-x-hidden">
@@ -123,15 +160,30 @@ const examplePrompt = "review this migration plan";
             fetchpriority="high"
             class="size-20 mx-auto mb-8 [filter:drop-shadow(0_12px_24px_rgb(36_48_80/0.25))_drop-shadow(0_4px_8px_rgb(15_23_42/0.15))]"
           />
-          <h1 class="text-4xl sm:text-5xl font-medium tracking-tight text-zinc-950 text-balance max-w-[30ch] mx-auto">
-            Ask Codex, Claude, and Gemini the same question. Get one answer back.
+          <h1 class="text-4xl sm:text-5xl font-medium tracking-tight leading-[1.08] text-zinc-950 text-balance max-w-[18ch] mx-auto">
+            Ask your agents the same question.
+            <span class="block mt-3 sm:mt-4">Get one answer back.</span>
           </h1>
           <p class="mt-6 text-lg text-zinc-600 text-pretty max-w-[56ch] mx-auto">
             Council runs your local CLIs in parallel and synthesizes their answers &mdash; no accounts, no API keys.
           </p>
-          <p class="mt-2 text-base text-zinc-500 text-pretty max-w-[48ch] mx-auto">
-            Free and open source. MIT licensed.
+          <p class="mt-4 text-xs font-mono uppercase tracking-[0.2em] text-zinc-400">
+            Works with
           </p>
+          <div class="agent-chip-row mt-2 text-zinc-950 font-medium" aria-label="Supported agents">
+            <span class="agent-chip">
+              <img src="/agent-logos/codex.png" alt="" aria-hidden="true" class="agent-chip-codex-logo" />
+              Codex
+            </span>
+            <span class="agent-chip">
+              <img src="/agent-logos/claude.png" alt="" aria-hidden="true" />
+              Claude
+            </span>
+            <span class="agent-chip">
+              <img src="/agent-logos/gemini.svg" alt="" aria-hidden="true" />
+              Gemini
+            </span>
+          </div>
           <div class="mt-10 max-w-2xl mx-auto">
             <div
               class="command-shell rounded-2xl border text-left"
@@ -158,6 +210,18 @@ const examplePrompt = "review this migration plan";
                   <span data-copy-label>Copy</span>
                 </button>
               </div>
+            </div>
+            <div class="mt-4 flex flex-col items-center justify-between gap-3 text-sm text-zinc-500 sm:flex-row">
+              <p>Free and open source. MIT licensed.</p>
+              <a
+                href={repoUrl}
+                class="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-zinc-600 transition-colors hover:text-zinc-950"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="size-4 fill-current">
+                  <path d="M12 .297a12 12 0 0 0-3.79 23.39c.6.11.82-.258.82-.577v-2.234c-3.338.726-4.042-1.61-4.042-1.61a3.182 3.182 0 0 0-1.338-1.756c-1.093-.747.084-.732.084-.732a2.52 2.52 0 0 1 1.84 1.237 2.554 2.554 0 0 0 3.49.996 2.553 2.553 0 0 1 .762-1.6c-2.665-.304-5.466-1.334-5.466-5.932a4.64 4.64 0 0 1 1.235-3.22 4.31 4.31 0 0 1 .117-3.176s1.008-.322 3.3 1.23a11.46 11.46 0 0 1 6.006 0c2.292-1.552 3.297-1.23 3.297-1.23a4.31 4.31 0 0 1 .12 3.176 4.63 4.63 0 0 1 1.233 3.22c0 4.61-2.805 5.625-5.478 5.922a2.862 2.862 0 0 1 .814 2.222v3.293c0 .321.216.694.825.576A12 12 0 0 0 12 .297" />
+                </svg>
+                GitHub
+              </a>
             </div>
           </div>
         </div>
