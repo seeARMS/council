@@ -1,5 +1,8 @@
 ---
+import { Image } from "astro:assets";
 import cliPackage from "../../../cli/package.json";
+import councilNavLogo from "../assets/council-64.png";
+import councilHeroLogo from "../assets/council-256.png";
 
 const site = Astro.site?.toString().replace(/\/$/, "") ?? "";
 const pageUrl = site || "/";
@@ -94,7 +97,12 @@ const examplePrompt = "review this migration plan";
     <nav class="relative z-20">
       <div class="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between text-sm">
         <a href="/" class="flex items-center gap-2 text-zinc-950 font-medium hover:opacity-80 transition-opacity">
-          <img src="/council-64.png" alt="" class="size-6 [filter:drop-shadow(0_2px_4px_rgb(15_23_42/0.18))]" />
+          <Image
+            src={councilNavLogo}
+            alt=""
+            loading="eager"
+            class="size-6 [filter:drop-shadow(0_2px_4px_rgb(15_23_42/0.18))]"
+          />
           council
         </a>
         <div class="flex items-center gap-5 text-zinc-500">
@@ -108,7 +116,13 @@ const examplePrompt = "review this migration plan";
     <main class="relative">
       <section class="relative pt-16 pb-6 md:pb-16">
         <div class="relative max-w-4xl mx-auto px-6 text-center">
-          <img src="/council-256.png" alt="" class="size-20 mx-auto mb-8 [filter:drop-shadow(0_12px_24px_rgb(36_48_80/0.25))_drop-shadow(0_4px_8px_rgb(15_23_42/0.15))]" />
+          <Image
+            src={councilHeroLogo}
+            alt=""
+            loading="eager"
+            fetchpriority="high"
+            class="size-20 mx-auto mb-8 [filter:drop-shadow(0_12px_24px_rgb(36_48_80/0.25))_drop-shadow(0_4px_8px_rgb(15_23_42/0.15))]"
+          />
           <h1 class="text-4xl sm:text-5xl font-medium tracking-tight text-zinc-950 text-balance max-w-[30ch] mx-auto">
             Ask Codex, Claude, and Gemini the same question. Get one answer back.
           </h1>

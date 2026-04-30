@@ -55,6 +55,17 @@ test('parseClaudeOutput extracts the final result from JSON', () => {
   assert.equal(output, 'claude answer');
 });
 
+test('parseClaudeOutput extracts the final result from stream-json output', () => {
+  const output = parseClaudeOutput(
+    [
+      '{"type":"system","subtype":"status","status":"requesting"}',
+      '{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"text_delta","text":"hello"}}}',
+      '{"type":"result","result":"claude streamed answer"}'
+    ].join('\n')
+  );
+  assert.equal(output, 'claude streamed answer');
+});
+
 test('parseGeminiOutput extracts JSON even with noisy prefixes', () => {
   const output = parseGeminiOutput(
     'Ripgrep is not available. Falling back to GrepTool.\\n{"response":"gemini answer"}'

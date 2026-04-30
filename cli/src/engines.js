@@ -35,11 +35,11 @@ export async function runEngine(
   }
 
   if (name === 'codex') {
-    return runCodex({ prompt, cwd, timeoutMs, env });
+    return runCodex({ prompt, cwd, timeoutMs, env, onProgress });
   }
 
   if (name === 'claude') {
-    return runClaude({ prompt, cwd, timeoutMs, env });
+    return runClaude({ prompt, cwd, timeoutMs, env, onProgress });
   }
 
   return runGemini({ prompt, cwd, timeoutMs, env, onProgress });
@@ -108,6 +108,26 @@ export function parseClaudeOutput(stdout) {
     return parsed.result.trim();
   }
 
+  const events = parseJsonLines(trimmed);
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index];
+
+    if (event?.type === 'result' && typeof event.result === 'string') {
+      return event.result.trim();
+    }
+
+    if (event?.type === 'assistant' && Array.isArray(event.message?.content)) {
+      const text = event.message.content
+        .filter((block) => block?.type === 'text' && typeof block.text === 'string')
+        .map((block) => block.text)
+        .join('');
+
+      if (text.trim()) {
+        return text.trim();
+      }
+    }
+  }
+
   return trimmed;
 }
 
@@ -125,11 +145,20 @@ export function parseGeminiOutput(stdout) {
   return trimmed;
 }
 
-async function runCodex({ prompt, cwd, timeoutMs, env }) {
+async function runCodex({ prompt, cwd, timeoutMs, env, onProgress }) {
   const bin = resolveBinary('codex', env);
   const tempDir = await mkdtemp(path.join(tmpdir(), 'council-codex-'));
   const outputPath = path.join(tempDir, 'last-message.txt');
   const startedAt = Date.now();
+  let lastProgressDetail = '';
+  const codexProgress = createCodexProgressTracker((progress) => {
+    if (progress.detail === lastProgressDetail) {
+      return;
+    }
+
+    lastProgressDetail = progress.detail;
+    onProgress(progress);
+  });
 
   try {
     const commandResult = await runCommand({
@@ -140,6 +169,7 @@ async function runCodex({ prompt, cwd, timeoutMs, env }) {
         '--sandbox',
         'read-only',
         '--ephemeral',
+        '--json',
         '-o',
         outputPath,
         '-'
@@ -147,7 +177,12 @@ async function runCodex({ prompt, cwd, timeoutMs, env }) {
       cwd,
       env,
       stdinText: prompt,
-      timeoutMs
+      timeoutMs,
+      onChunk: (context) => {
+        if (context.source === 'stdout') {
+          codexProgress(context.chunk);
+        }
+      }
     });
 
     const output = (await safeReadFile(outputPath)).trim();
@@ -163,9 +198,18 @@ async function runCodex({ prompt, cwd, timeoutMs, env }) {
   }
 }
 
-async function runClaude({ prompt, cwd, timeoutMs, env }) {
+async function runClaude({ prompt, cwd, timeoutMs, env, onProgress }) {
   const bin = resolveBinary('claude', env);
   const startedAt = Date.now();
+  let lastProgressDetail = '';
+  const claudeProgress = createClaudeProgressTracker((progress) => {
+    if (!progress?.detail || progress.detail === lastProgressDetail) {
+      return;
+    }
+
+    lastProgressDetail = progress.detail;
+    onProgress(progress);
+  });
   const commandResult = await runCommand({
     command: bin,
     args: [
@@ -173,14 +217,21 @@ async function runClaude({ prompt, cwd, timeoutMs, env }) {
       '-p',
       '--permission-mode',
       'plan',
+      '--verbose',
       '--output-format',
-      'json',
+      'stream-json',
+      '--include-partial-messages',
       '--no-session-persistence'
     ],
     cwd,
     env,
     stdinText: prompt,
-    timeoutMs
+    timeoutMs,
+    onChunk: (context) => {
+      if (context.source === 'stdout') {
+        claudeProgress(context.chunk);
+      }
+    }
   });
 
   const output = parseClaudeOutput(commandResult.stdout);
@@ -398,6 +449,192 @@ function detectGeminiRetryProgress({ source, stderr }) {
       ? `Attempt ${attempt} failed: model capacity exhausted (${status}). Retrying with backoff...`
       : `Attempt ${attempt} failed with status ${status}. Retrying with backoff...`
   };
+}
+
+function createCodexProgressTracker(onProgress) {
+  return createJsonlStreamConsumer((event) => {
+    if (event?.type !== 'item.started') {
+      return;
+    }
+
+    if (event.item?.type === 'command_execution' && typeof event.item.command === 'string') {
+      onProgress({
+        detail: `running shell: ${summarizeCommand(event.item.command)}`
+      });
+    }
+  });
+}
+
+function createClaudeProgressTracker(onProgress) {
+  let thinking = '';
+  let toolInput = '';
+  let currentToolName = '';
+  let draftText = '';
+
+  return createJsonlStreamConsumer((event) => {
+    if (event?.type === 'system' && event.subtype === 'status' && event.status === 'requesting') {
+      onProgress({
+        detail: 'thinking...'
+      });
+      return;
+    }
+
+    if (event?.type === 'stream_event') {
+      const streamEvent = event.event;
+
+      if (streamEvent?.type === 'content_block_delta') {
+        if (streamEvent.delta?.type === 'thinking_delta' && typeof streamEvent.delta.thinking === 'string') {
+          thinking += streamEvent.delta.thinking;
+          onProgress({
+            detail: `thinking: ${truncateProgressDetail(compactWhitespace(thinking))}`
+          });
+          return;
+        }
+
+        if (streamEvent.delta?.type === 'input_json_delta' && typeof streamEvent.delta.partial_json === 'string') {
+          toolInput += streamEvent.delta.partial_json;
+          const toolDetail = describeClaudeTool(currentToolName, toolInput);
+
+          if (toolDetail) {
+            onProgress({
+              detail: toolDetail
+            });
+          }
+          return;
+        }
+
+        if (streamEvent.delta?.type === 'text_delta' && typeof streamEvent.delta.text === 'string') {
+          draftText += streamEvent.delta.text;
+          onProgress({
+            detail: `drafting answer: ${truncateProgressDetail(compactWhitespace(draftText))}`
+          });
+        }
+
+        return;
+      }
+
+      if (streamEvent?.type === 'content_block_start') {
+        if (streamEvent.content_block?.type === 'thinking') {
+          thinking = '';
+          draftText = '';
+          return;
+        }
+
+        if (streamEvent.content_block?.type === 'tool_use') {
+          currentToolName = streamEvent.content_block.name || 'tool';
+          toolInput = '';
+          onProgress({
+            detail: `${currentToolName}: preparing tool input...`
+          });
+        }
+      }
+
+      return;
+    }
+
+    if (event?.type === 'assistant' && Array.isArray(event.message?.content)) {
+      const toolUseBlock = event.message.content.find((block) => block?.type === 'tool_use');
+
+      if (toolUseBlock) {
+        currentToolName = toolUseBlock.name || currentToolName;
+        const toolDetail = describeClaudeTool(currentToolName, JSON.stringify(toolUseBlock.input || {}));
+        if (toolDetail) {
+          onProgress({
+            detail: toolDetail
+          });
+        }
+      }
+    }
+  });
+}
+
+function describeClaudeTool(toolName, partialJson) {
+  if (!toolName) {
+    return null;
+  }
+
+  const parsed = extractJsonObject(partialJson);
+  const description =
+    typeof parsed?.description === 'string' && parsed.description.trim()
+      ? compactWhitespace(parsed.description)
+      : '';
+  const command =
+    typeof parsed?.command === 'string' && parsed.command.trim()
+      ? summarizeCommand(parsed.command)
+      : '';
+
+  if (description && command) {
+    return `${toolName}: ${truncateProgressDetail(`${description} (${command})`)}`;
+  }
+
+  if (description) {
+    return `${toolName}: ${truncateProgressDetail(description)}`;
+  }
+
+  if (command) {
+    return `${toolName}: ${truncateProgressDetail(command)}`;
+  }
+
+  return `${toolName}: preparing tool input...`;
+}
+
+function createJsonlStreamConsumer(onEvent) {
+  let buffer = '';
+
+  return (chunk) => {
+    buffer += chunk;
+
+    while (true) {
+      const newlineIndex = buffer.indexOf('\n');
+      if (newlineIndex === -1) {
+        break;
+      }
+
+      const line = buffer.slice(0, newlineIndex).trim();
+      buffer = buffer.slice(newlineIndex + 1);
+
+      if (!line) {
+        continue;
+      }
+
+      try {
+        onEvent(JSON.parse(line));
+      } catch {
+        // Ignore non-JSON lines in mixed stdout streams.
+      }
+    }
+  };
+}
+
+function parseJsonLines(text) {
+  return String(text)
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .flatMap((line) => {
+      try {
+        return [JSON.parse(line)];
+      } catch {
+        return [];
+      }
+    });
+}
+
+function summarizeCommand(command) {
+  const compact = compactWhitespace(String(command));
+  return truncateProgressDetail(compact);
+}
+
+function compactWhitespace(text) {
+  return String(text).replace(/\s+/g, ' ').trim();
+}
+
+function truncateProgressDetail(text, maxLength = 120) {
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  return `${text.slice(0, Math.max(maxLength - 3, 1)).trimEnd()}...`;
 }
 
 async function safeReadFile(filePath) {

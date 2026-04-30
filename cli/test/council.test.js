@@ -242,3 +242,78 @@ test('runCouncil emits gemini retry progress while the member is still running',
     await fake.cleanup();
   }
 });
+
+test('runCouncil emits codex shell progress while the member is still running', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    codex: {
+      member: {
+        delayMs: 50,
+        stdoutPrefix:
+          '{"type":"item.started","item":{"type":"command_execution","command":"/bin/zsh -lc \\"rg --files cli/src | wc -l\\""}}\n',
+        output: '10'
+      }
+    }
+  });
+  const events = [];
+
+  try {
+    await runCouncil({
+      query: 'Hello',
+      cwd: process.cwd(),
+      members: ['codex'],
+      summarizer: 'auto',
+      timeoutMs: 5_000,
+      env: fake.env,
+      onEvent: (event) => {
+        events.push(event);
+      }
+    });
+
+    const progressEvent = events.find((event) => event.type === 'member_progress');
+    assert.ok(progressEvent);
+    assert.equal(progressEvent?.name, 'codex');
+    assert.match(progressEvent?.detail || '', /running shell:/i);
+    assert.match(progressEvent?.detail || '', /rg --files cli\/src \| wc -l/);
+  } finally {
+    await fake.cleanup();
+  }
+});
+
+test('runCouncil emits claude thinking progress while the member is still running', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    claude: {
+      member: {
+        stdoutPrefix:
+          '{"type":"stream_event","event":{"type":"content_block_start","content_block":{"type":"thinking"}}}\n' +
+          '{"type":"stream_event","event":{"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"Let me inspect the inputs first."}}}\n',
+        output: 'done'
+      },
+      summary: {
+        output: 'summary via claude'
+      }
+    }
+  });
+  const events = [];
+
+  try {
+    await runCouncil({
+      query: 'Hello',
+      cwd: process.cwd(),
+      members: ['claude'],
+      summarizer: 'auto',
+      timeoutMs: 5_000,
+      env: fake.env,
+      onEvent: (event) => {
+        events.push(event);
+      }
+    });
+
+    const progressEvent = events.find((event) => event.type === 'member_progress');
+    assert.ok(progressEvent);
+    assert.equal(progressEvent?.name, 'claude');
+    assert.match(progressEvent?.detail || '', /thinking:/i);
+    assert.match(progressEvent?.detail || '', /inspect the inputs first/i);
+  } finally {
+    await fake.cleanup();
+  }
+});

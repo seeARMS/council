@@ -48,7 +48,7 @@ export function renderProgressEvent(event, { colorEnabled = false } = {}) {
     case 'run_started':
       return style(`Council is consulting: ${event.members.join(', ')}`, '36', colorEnabled);
     case 'member_started':
-      return style(`[run] ${event.name}...`, '36', colorEnabled);
+      return style(`[run] ${event.name}: thinking...`, '36', colorEnabled);
     case 'member_completed':
       return renderStatusLine(event.result, colorEnabled);
     case 'member_progress':
@@ -56,7 +56,7 @@ export function renderProgressEvent(event, { colorEnabled = false } = {}) {
     case 'member_heartbeat':
       return style(`[wait] ${event.name} still running (${formatDuration(event.elapsedMs)})`, '90', colorEnabled);
     case 'summary_started':
-      return style(`[sum] ${event.name}...`, '33', colorEnabled);
+      return style(`[sum] ${event.name}: synthesizing...`, '33', colorEnabled);
     case 'summary_progress':
       return style(`[wait] synthesis via ${event.name}: ${event.detail}`, '90', colorEnabled);
     case 'summary_heartbeat':

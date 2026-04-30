@@ -5,5 +5,7 @@ import cloudflare from '@astrojs/cloudflare';
 export default defineConfig({
   site: 'https://council.armstr.ng',
   integrations: [],
-  adapter: cloudflare()
+  adapter: cloudflare({
+    imageService: { build: 'compile', runtime: 'cloudflare-binding' }
+  })
 });

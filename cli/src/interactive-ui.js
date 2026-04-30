@@ -10,7 +10,7 @@ export function createInteractiveState(members) {
   return {
     members: [...members],
     items: members.map((name, index) => createMemberItem(name, index + 1)),
-    summaryItem: null,
+    summaryItem: createSummaryItem(members.length + 1),
     completed: false,
     footerMode: 'running'
   };
@@ -24,7 +24,7 @@ export function applyInteractiveEvent(state, event) {
       const item = getMemberItem(state, event.name);
       item.status = 'running';
       item.startedAt = timestamp(event.at);
-      item.progressDetail = '';
+      item.progressDetail = 'thinking...';
       return;
     }
     case 'member_progress': {
@@ -42,22 +42,19 @@ export function applyInteractiveEvent(state, event) {
       return;
     }
     case 'summary_started': {
-      state.summaryItem = state.summaryItem ?? createSummaryItem(state.members.length + 1);
       state.summaryItem.status = 'running';
       state.summaryItem.summarizerName = event.name;
       state.summaryItem.startedAt = timestamp(event.at);
       state.summaryItem.completedAt = null;
       state.summaryItem.result = null;
-      state.summaryItem.progressDetail = '';
+      state.summaryItem.progressDetail = 'synthesizing...';
       return;
     }
     case 'summary_progress': {
-      state.summaryItem = state.summaryItem ?? createSummaryItem(state.members.length + 1);
       state.summaryItem.progressDetail = event.detail;
       return;
     }
     case 'summary_completed': {
-      state.summaryItem = state.summaryItem ?? createSummaryItem(state.members.length + 1);
       state.summaryItem.status = event.result.status;
       state.summaryItem.summarizerName = event.result.name;
       state.summaryItem.startedAt ??= timestamp(event.at);
@@ -85,7 +82,7 @@ export function toggleInteractiveItem(state, hotkey) {
   return true;
 }
 
-export function renderInteractiveSnapshot(state, { width = 100, colorEnabled = false } = {}) {
+export function renderInteractiveSnapshot(state, { width = 100, rows, colorEnabled = false } = {}) {
   const clampedWidth = Math.max(width, 60);
   const lines = [];
 
@@ -96,13 +93,29 @@ export function renderInteractiveSnapshot(state, { width = 100, colorEnabled = f
   }
 
   if (state.summaryItem) {
+    lines.push('');
+    lines.push(style('----------- synthesis -----------', summaryDividerColor(state.summaryItem), colorEnabled));
     lines.push(...renderItem(state.summaryItem, { width: clampedWidth, colorEnabled }));
   }
 
   lines.push('');
   lines.push(...renderFooter(state, { width: clampedWidth, colorEnabled }));
 
-  return lines;
+  return fitToHeight(lines, rows, colorEnabled);
+}
+
+function fitToHeight(lines, rows, colorEnabled) {
+  if (!Number.isFinite(rows) || rows <= 0 || lines.length <= rows) {
+    return lines;
+  }
+
+  if (rows < 3) {
+    return lines.slice(-rows);
+  }
+
+  const ellipsis = style('...', '90', colorEnabled);
+  const tailCount = rows - 2;
+  return [lines[0], ellipsis, ...lines.slice(-tailCount)];
 }
 
 export function createInteractiveDashboard({
@@ -113,8 +126,13 @@ export function createInteractiveDashboard({
 } = {}) {
   const state = createInteractiveState(members);
   let blockHeight = 0;
+  let lastFrame = null;
   let timer = null;
   let disposed = false;
+  let actionResolver = null;
+  let pendingAction = null;
+  let inputListener = null;
+  let previousRawMode = input.isRaw;
 
   return {
     start() {
@@ -126,6 +144,7 @@ export function createInteractiveDashboard({
         render();
       }, 1_000);
       timer.unref?.();
+      attachInput();
       render();
     },
     handleEvent(event) {
@@ -147,52 +166,15 @@ export function createInteractiveDashboard({
       }
 
       render();
-
-      const previousRawMode = input.isRaw;
+      if (pendingAction) {
+        const action = pendingAction;
+        pendingAction = null;
+        detachInput();
+        return action;
+      }
 
       return await new Promise((resolve) => {
-        const onData = (buffer) => {
-          const key = buffer.toString('utf8');
-
-          if (key === '\u0003') {
-            cleanup();
-            process.exitCode = 130;
-            resolve({ type: 'quit', seed: '' });
-            return;
-          }
-
-          if (key === 'q' || key === '\u001b') {
-            cleanup();
-            resolve({ type: 'quit', seed: '' });
-            return;
-          }
-
-          if (key === 'f' || key === 'c' || key === '\r' || key === '\n') {
-            cleanup();
-            resolve({ type: 'continue', seed: '' });
-            return;
-          }
-
-          if (toggleInteractiveItem(state, key)) {
-            render();
-            return;
-          }
-
-          if (isPrintableKey(key)) {
-            cleanup();
-            resolve({ type: 'continue', seed: key });
-          }
-        };
-
-        const cleanup = () => {
-          input.off('data', onData);
-          input.setRawMode(previousRawMode);
-          input.pause();
-        };
-
-        input.setRawMode(true);
-        input.resume();
-        input.on('data', onData);
+        actionResolver = resolve;
       });
     },
     dispose() {
@@ -201,22 +183,104 @@ export function createInteractiveDashboard({
         clearInterval(timer);
         timer = null;
       }
+      if (actionResolver) {
+        actionResolver({ type: 'quit', seed: '' });
+        actionResolver = null;
+      }
+      detachInput();
     }
   };
 
   function render() {
     const lines = renderInteractiveSnapshot(state, {
       width: stream.columns ?? 100,
+      rows: stream.rows,
       colorEnabled
     });
     const frame = lines.join('\n');
 
-    if (blockHeight > 0) {
-      stream.write(`\u001b[${blockHeight}F\u001b[J`);
+    if (frame === lastFrame) {
+      return;
     }
 
-    stream.write(`${frame}\n`);
+    if (blockHeight > 0) {
+      if (blockHeight > 1) {
+        stream.write(`\u001b[${blockHeight - 1}F\u001b[J`);
+      } else {
+        stream.write('\r\u001b[J');
+      }
+    }
+
+    stream.write(frame);
     blockHeight = lines.length;
+    lastFrame = frame;
+  }
+
+  function attachInput() {
+    if (inputListener || !input.isTTY || !input.setRawMode) {
+      return;
+    }
+
+    previousRawMode = input.isRaw;
+    inputListener = (buffer) => {
+      const key = buffer.toString('utf8');
+
+      if (toggleInteractiveItem(state, key)) {
+        render();
+        return;
+      }
+
+      if (!state.completed) {
+        return;
+      }
+
+      if (key === '\u0003') {
+        process.exitCode = 130;
+        settleAction({ type: 'quit', seed: '' });
+        return;
+      }
+
+      if (key === 'q' || key === '\u001b') {
+        settleAction({ type: 'quit', seed: '' });
+        return;
+      }
+
+      if (key === 'f' || key === 'c' || key === '\r' || key === '\n') {
+        settleAction({ type: 'continue', seed: '' });
+        return;
+      }
+
+      if (isPrintableKey(key)) {
+        settleAction({ type: 'continue', seed: key });
+      }
+    };
+
+    input.setRawMode(true);
+    input.resume();
+    input.on('data', inputListener);
+  }
+
+  function detachInput() {
+    if (!inputListener || !input.setRawMode) {
+      return;
+    }
+
+    input.off('data', inputListener);
+    input.setRawMode(previousRawMode);
+    input.pause();
+    inputListener = null;
+  }
+
+  function settleAction(action) {
+    if (actionResolver) {
+      const resolve = actionResolver;
+      actionResolver = null;
+      detachInput();
+      resolve(action);
+      return;
+    }
+
+    pendingAction = action;
   }
 }
 
@@ -247,7 +311,7 @@ function createSummaryItem(hotkeyNumber) {
     completedAt: null,
     result: null,
     progressDetail: '',
-    expanded: false
+    expanded: true
   };
 }
 
@@ -268,8 +332,12 @@ function getExpandableItems(state) {
 }
 
 function renderItem(item, { width, colorEnabled }) {
-  if (item.status === 'pending') {
+  if (item.status === 'pending' && item.kind !== 'summary') {
     return [];
+  }
+
+  if (item.status === 'pending') {
+    return renderPendingItem(item, { colorEnabled });
   }
 
   if (item.expanded) {
@@ -286,34 +354,52 @@ function renderCollapsedItem(item, { width, colorEnabled }) {
   });
 
   if (!text) {
-    return [style(prefix.trimEnd(), colorForStatus(item.status), colorEnabled)];
+    return [style(prefix.trimEnd(), colorForItem(item), colorEnabled)];
   }
 
   const wrappedLines = wrapPreviewWithPrefix(prefix, `"${compactWhitespace(text)}"`, width, 2);
-  return wrappedLines.map((line) => style(line, colorForStatus(item.status), colorEnabled));
+  return wrappedLines.map((line) => style(line, colorForItem(item), colorEnabled));
 }
 
 function renderExpandedItem(item, { width, colorEnabled }) {
   const lines = [
-    style(`${buildExpandedPrefix(item)} [expanded]`, colorForStatus(item.status), colorEnabled)
+    style(`${buildExpandedPrefix(item)} [expanded]`, colorForItem(item), colorEnabled)
   ];
   const wrappedBody = wrapMultilineText(getPrimaryText(item), Math.max(width - 4, 20));
 
   for (const line of wrappedBody) {
-    lines.push(style(`    ${line}`, colorForStatus(item.status), colorEnabled));
+    lines.push(style(`    ${line}`, colorForItem(item), colorEnabled));
   }
 
   return lines;
 }
 
-function renderFooter(state, { colorEnabled }) {
+function renderPendingItem(item, { colorEnabled }) {
+  return [style(`${item.hotkey}. ${statusToken(item)} ${itemLabel(item)}`, colorForItem(item), colorEnabled)];
+}
+
+function renderFooter(state, { width, colorEnabled }) {
+  const expandableItems = getExpandableItems(state);
+  const styledLines = (text) =>
+    wrapMultilineText(text, width).map((line) => style(line, '90', colorEnabled));
+
   if (!state.completed) {
-    return [style('Waiting for council members to finish...', '90', colorEnabled)];
+    if (expandableItems.length === 0) {
+      return styledLines('Waiting for council members to finish...');
+    }
+
+    const mapping = expandableItems
+      .map((item) => `${item.hotkey} ${describeFooterItem(item)}`)
+      .join('  ');
+
+    return [
+      ...styledLines(`Hotkeys: ${mapping}`),
+      ...styledLines('Waiting for council members to finish. Press a number to expand or collapse available results.')
+    ];
   }
 
-  const expandableItems = getExpandableItems(state);
   if (expandableItems.length === 0) {
-    return [style('Type a follow-up, or press q or Esc to exit.', '90', colorEnabled)];
+    return styledLines('Type a follow-up, or press q or Esc to exit.');
   }
 
   const mapping = expandableItems
@@ -321,8 +407,8 @@ function renderFooter(state, { colorEnabled }) {
     .join('  ');
 
   return [
-    style(`Hotkeys: ${mapping}`, '90', colorEnabled),
-    style('Press a number to expand or collapse a result. Type a follow-up, or press q or Esc to exit.', '90', colorEnabled)
+    ...styledLines(`Hotkeys: ${mapping}`),
+    ...styledLines('Press a number to expand or collapse a result. Type a follow-up, or press q or Esc to exit.')
   ];
 }
 
@@ -337,6 +423,14 @@ function buildExpandedPrefix(item) {
 }
 
 function statusToken(item) {
+  if (item.kind === 'summary' && item.status === 'pending') {
+    return '[sum]';
+  }
+
+  if (item.kind === 'summary' && item.status === 'running') {
+    return '[sum]';
+  }
+
   switch (item.status) {
     case 'running':
       return '[run]';
@@ -357,6 +451,22 @@ function itemLabel(item) {
   }
 
   return item.name;
+}
+
+function colorForItem(item) {
+  if (item.kind === 'summary') {
+    if (item.status === 'timeout' || item.status === 'error') {
+      return '31';
+    }
+
+    return '33';
+  }
+
+  return colorForStatus(item.status);
+}
+
+function summaryDividerColor(item) {
+  return item.status === 'timeout' || item.status === 'error' ? '31' : '90';
 }
 
 function describeFooterItem(item) {
@@ -471,11 +581,13 @@ function consumeWrappedLine(tokens, width) {
 }
 
 function appendEllipsis(line, width) {
-  if (line.length >= width) {
-    return `${line.slice(0, Math.max(width - 1, 1)).trimEnd()}...`;
+  const trimmed = line.trimEnd();
+  if (trimmed.length + 3 <= width) {
+    return `${trimmed}...`;
   }
 
-  return `${line.trimEnd()}...`;
+  const room = Math.max(width - 3, 1);
+  return `${trimmed.slice(0, room).trimEnd()}...`;
 }
 
 function wrapMultilineText(text, width) {

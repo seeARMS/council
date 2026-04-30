@@ -188,6 +188,14 @@ process.stdin.on('data', (chunk) => {
       if (behavior.stdoutPrefix) {
         process.stdout.write(behavior.stdoutPrefix);
       }
+      const outputFormatIndex = process.argv.indexOf('--output-format');
+      const outputFormat = outputFormatIndex >= 0 ? process.argv[outputFormatIndex + 1] : '';
+
+      if (outputFormat === 'stream-json') {
+        process.stdout.write(JSON.stringify({ type: 'result', result: behavior.output }) + '\\n');
+        return;
+      }
+
       process.stdout.write(JSON.stringify({ result: behavior.output }));
       return;
     }
