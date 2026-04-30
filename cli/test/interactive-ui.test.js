@@ -109,10 +109,16 @@ test('shouldUseInteractiveDashboard is disabled in summary-only mode', () => {
   );
 });
 
-test('createInitialExpanded starts with all rows collapsed', () => {
+test('createInitialExpanded starts with all rows collapsed when there is no synthesis body', () => {
   const expanded = createInitialExpanded();
 
   assert.equal(expanded.size, 0);
+});
+
+test('createInitialExpanded expands synthesis when review content exists', () => {
+  const expanded = createInitialExpanded('Synthesized answer');
+
+  assert.equal(expanded.has('summary'), true);
 });
 
 test('toggleExpanded adds missing ids and removes existing ids', () => {

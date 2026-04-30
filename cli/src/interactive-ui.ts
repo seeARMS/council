@@ -139,7 +139,9 @@ function SessionApp({
           }
         ]);
         setSessionState(hydrateSessionStateFromResult(result, members));
-        setExpanded(createInitialExpanded());
+        setExpanded(
+          createInitialExpanded(result.summary?.output || result.summary?.detail)
+        );
         setIsEditingFollowUp(false);
         setFollowUpValue('');
         setPhase('review');
@@ -166,7 +168,11 @@ function SessionApp({
           }
         ]);
         setSessionState(hydrateSessionStateFromResult(fallback, members));
-        setExpanded(createInitialExpanded());
+        setExpanded(
+          createInitialExpanded(
+            fallback.summary?.output || fallback.summary?.detail
+          )
+        );
         setIsEditingFollowUp(false);
         setFollowUpValue('');
         setPhase('review');
@@ -418,8 +424,14 @@ function toggleExpandedForHotkey(input, members, setExpanded) {
   }
 }
 
-export function createInitialExpanded() {
-  return new Set();
+export function createInitialExpanded(summaryText = '') {
+  const expanded = new Set();
+
+  if (summaryText) {
+    expanded.add('summary');
+  }
+
+  return expanded;
 }
 
 export function toggleExpanded(expanded, id) {

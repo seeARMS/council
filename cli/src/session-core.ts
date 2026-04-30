@@ -28,7 +28,8 @@ export function createCouncilRuntimeFailureResult({
     summary: {
       name: null,
       status: 'error',
-      detail: error instanceof Error ? error.message : String(error)
+      detail: error instanceof Error ? error.message : String(error),
+      output: ''
     },
     summaryContextLimit: maxMemberChars
   };
