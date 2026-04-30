@@ -194,3 +194,9 @@ The suite uses fake `codex`, `claude`, and `gemini` binaries, so it does not req
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md).
+
+## Releases
+
+`@armstrng/council` releases are automated with `release-please`. The release workflow watches commits merged to `main`, updates [`CHANGELOG.md`](./CHANGELOG.md), bumps [`package.json`](./package.json), creates the GitHub release tag, and publishes the package from GitHub Actions.
+
+Before the first automated publish, configure npm trusted publishing for the `seeARMS/council` repository and the `.github/workflows/release-please.yml` workflow.

@@ -1,0 +1,62 @@
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  release-please:
+    name: Release Please
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare release PR or publish release
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - name: Checkout
+        if: ${{ steps.release.outputs['cli--release_created'] }}
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        if: ${{ steps.release.outputs['cli--release_created'] }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: cli/package-lock.json
+
+      - name: Install CLI deps
+        if: ${{ steps.release.outputs['cli--release_created'] }}
+        working-directory: cli
+        run: npm ci
+
+      - name: Build CLI
+        if: ${{ steps.release.outputs['cli--release_created'] }}
+        working-directory: cli
+        run: npm run build
+
+      - name: Test CLI
+        if: ${{ steps.release.outputs['cli--release_created'] }}
+        working-directory: cli
+        run: npm test
+
+      - name: Typecheck CLI
+        if: ${{ steps.release.outputs['cli--release_created'] }}
+        working-directory: cli
+        run: npm run typecheck
+
+      - name: Publish CLI to npm
+        if: ${{ steps.release.outputs['cli--release_created'] }}
+        working-directory: cli
+        run: npm publish

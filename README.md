@@ -50,3 +50,9 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md).
 ## Security
 
 See [SECURITY.md](./SECURITY.md).
+
+## Releases
+
+The published npm package lives in [`cli/`](./cli). Releases are managed by `release-please`, which opens a release PR from commits on `main`, updates [`cli/CHANGELOG.md`](./cli/CHANGELOG.md), bumps the package version, tags the release, and publishes `@armstrng/council` from GitHub Actions.
+
+One-time maintainer setup is still required on npm: configure a trusted publisher for the `seeARMS/council` repository and the `.github/workflows/release-please.yml` workflow, then restrict token-based publishing once that flow is verified.

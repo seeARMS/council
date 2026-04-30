@@ -12,6 +12,7 @@ CLI:
 ```bash
 cd cli
 npm install
+npm run build
 npm test
 ```
 
@@ -31,21 +32,20 @@ npm run build
 - Keep dependency provenance explicit. If the web app vendors browser assets, document their source and checksum under `web/public/vendor/`.
 - Avoid runtime dependencies unless they materially improve portability or maintainability.
 
-## Release checklist
+## Releases
 
-CLI:
+The published npm artifact is `cli/`.
 
-```bash
-cd cli
-npm test
-node bin/council.js --help
-```
+- Versioning, changelog updates, Git tags, and GitHub releases are managed by `release-please`.
+- The release workflow is defined in [release-please.yml](./.github/workflows/release-please.yml).
+- The release metadata files live at [release-please-config.json](./release-please-config.json) and [.release-please-manifest.json](./.release-please-manifest.json).
+- Changelog entries are written to [cli/CHANGELOG.md](./cli/CHANGELOG.md).
+- Release notes are derived from Conventional Commit messages, so squash-merge titles and direct commits to `main` should follow that format when possible.
+- npm publishing assumes npm trusted publishing has been configured for `.github/workflows/release-please.yml`.
 
-Web:
+Before merging release-affecting changes, confirm:
 
-```bash
-cd web
-npm run build
-```
-
-Before publishing or deploying, confirm package metadata, README examples, and any vendored asset documentation still match what is in the repo.
+- CLI tests still pass with `cd cli && npm test`
+- the CLI still builds with `cd cli && npm run build`
+- the web app still builds with `cd web && npm run build`
+- README examples and package metadata still match the current implementation
