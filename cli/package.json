@@ -22,10 +22,11 @@
   ],
   "scripts": {
     "test": "node --test",
-    "prepublishOnly": "npm test"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm test && npm run typecheck"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.0.0"
   },
   "keywords": [
     "ai",
@@ -52,8 +53,12 @@
     "access": "public"
   },
   "dependencies": {
-    "ink": "^6.8.0",
-    "ink-text-input": "^6.0.0",
+    "@inkjs/ui": "^2.0.0",
+    "ink": "^7.0.1",
     "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "typescript": "^6.0.3"
   }
 }

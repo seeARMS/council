@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  buildHotkeyParts,
-  buildStaticBlocks,
+  buildInteractiveBlocks,
   createInitialExpanded,
   shouldUseInteractiveDashboard,
   toggleExpanded
 } from '../src/interactive-ui.js';
+import { buildHotkeyParts } from '../src/presentation.js';
+import { hydrateSessionStateFromResult } from '../src/session-core.js';
 
 function createResultFixture() {
   return {
@@ -140,11 +141,17 @@ test('buildHotkeyParts marks expanded rows in the static hotkey legend', () => {
   ]);
 });
 
-test('buildStaticBlocks keeps member output on the row when expanded', () => {
+test('buildInteractiveBlocks keeps member output on the row when expanded', () => {
   const result = createResultFixture();
+  const state = hydrateSessionStateFromResult(result, ['codex', 'claude']);
   const expanded = toggleExpanded(createInitialExpanded(), 'member:codex');
 
-  const blocks = buildStaticBlocks(result, ['codex', 'claude'], expanded);
+  const blocks = buildInteractiveBlocks({
+    phase: 'review',
+    state,
+    members: ['codex', 'claude'],
+    expanded
+  });
   const ids = blocks.map((block) => block.id);
   const codexRow = blocks.find((block) => block.id === 'row:codex');
   const summaryRow = blocks.find((block) => block.id === 'row:summary');
@@ -162,11 +169,17 @@ test('buildStaticBlocks keeps member output on the row when expanded', () => {
   assert.equal(summaryRow?.expanded, false);
 });
 
-test('buildStaticBlocks expands synthesis on its own row without adding a duplicate block', () => {
+test('buildInteractiveBlocks expands synthesis on its own row without adding a duplicate block', () => {
   const result = createResultFixture();
+  const state = hydrateSessionStateFromResult(result, ['codex', 'claude']);
   const expanded = toggleExpanded(createInitialExpanded(), 'summary');
 
-  const blocks = buildStaticBlocks(result, ['codex', 'claude'], expanded);
+  const blocks = buildInteractiveBlocks({
+    phase: 'review',
+    state,
+    members: ['codex', 'claude'],
+    expanded
+  });
   const ids = blocks.map((block) => block.id);
   const summaryRow = blocks.find((block) => block.id === 'row:summary');
 
