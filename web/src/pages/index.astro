@@ -223,10 +223,11 @@ const structuredData = JSON.stringify([
         background: #09090b;
         border-color: rgba(24, 24, 27, 0.95);
         box-shadow:
-          0 1px 2px rgba(0, 0, 0, 0.12),
-          0 8px 24px rgba(0, 0, 0, 0.12),
-          0 24px 60px rgba(0, 0, 0, 0.18),
+          0 1px 2px rgba(0, 0, 0, 0.14),
+          0 10px 28px rgba(15, 23, 42, 0.16),
+          0 28px 64px rgba(15, 23, 42, 0.18),
           inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        transition: box-shadow 320ms cubic-bezier(0.22, 1, 0.36, 1);
       }
 
       .command-shell::before {
@@ -237,24 +238,43 @@ const structuredData = JSON.stringify([
         pointer-events: none;
       }
 
+      .command-shell:hover {
+        box-shadow:
+          0 1px 2px rgba(0, 0, 0, 0.14),
+          0 14px 36px rgba(15, 23, 42, 0.20),
+          0 32px 72px rgba(15, 23, 42, 0.22),
+          inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      }
+
       .agent-chip {
         display: inline-flex;
         align-items: center;
-        gap: 0.45rem;
+        gap: 0.5rem;
         margin: 0;
-        padding: 0.45rem 0.78rem;
-        border: 1px solid rgba(212, 212, 216, 0.9);
+        padding: 0.5rem 0.85rem;
+        border: 1px solid rgba(228, 228, 231, 1);
         border-radius: 9999px;
-        background: rgba(255, 255, 255, 0.95);
+        background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
         box-shadow:
-          0 1px 2px rgba(15, 23, 42, 0.05),
-          0 10px 30px rgba(15, 23, 42, 0.06);
+          inset 0 1px 0 rgba(255, 255, 255, 0.95),
+          0 1px 2px rgba(15, 23, 42, 0.06),
+          0 10px 24px rgba(15, 23, 42, 0.06);
         font-size: 0.95rem;
         line-height: 1;
         transition:
+          transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
           border-color 200ms ease,
-          background-color 200ms ease,
-          box-shadow 200ms ease;
+          background 200ms ease,
+          box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1);
+      }
+
+      .agent-chip:hover {
+        transform: translateY(-1px);
+        border-color: rgba(212, 212, 216, 1);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 1),
+          0 2px 4px rgba(15, 23, 42, 0.07),
+          0 16px 32px rgba(15, 23, 42, 0.10);
       }
 
       .agent-chip img {
@@ -279,47 +299,55 @@ const structuredData = JSON.stringify([
 
       .dark .agent-chip {
         border-color: rgba(63, 63, 70, 0.95);
-        background: rgba(39, 39, 42, 0.9);
+        background: linear-gradient(180deg, rgba(39, 39, 42, 0.95) 0%, rgba(24, 24, 27, 0.95) 100%);
         box-shadow:
-          0 1px 2px rgba(0, 0, 0, 0.22),
-          0 10px 30px rgba(0, 0, 0, 0.2),
-          inset 0 1px 0 rgba(255, 255, 255, 0.04);
+          inset 0 1px 0 rgba(255, 255, 255, 0.06),
+          0 1px 2px rgba(0, 0, 0, 0.30),
+          0 10px 24px rgba(0, 0, 0, 0.24);
+      }
+
+      .dark .agent-chip:hover {
+        border-color: rgba(82, 82, 91, 1);
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.08),
+          0 2px 4px rgba(0, 0, 0, 0.32),
+          0 16px 32px rgba(0, 0, 0, 0.32);
       }
 
       .hero-spotlight {
         position: absolute;
         left: 50%;
-        top: 1.5rem;
-        width: min(42rem, 78vw);
-        height: 24rem;
+        top: 1rem;
+        width: min(48rem, 88vw);
+        height: 28rem;
         transform: translateX(-50%);
         pointer-events: none;
         border-radius: 9999px;
         background:
-          radial-gradient(circle at 50% 22%, rgba(84, 111, 181, 0.2), rgba(84, 111, 181, 0.08) 24%, rgba(84, 111, 181, 0.02) 46%, rgba(84, 111, 181, 0) 68%),
-          radial-gradient(circle at 50% 30%, rgba(36, 48, 80, 0.12), rgba(36, 48, 80, 0.04) 32%, rgba(36, 48, 80, 0) 60%);
-        filter: blur(18px);
-        opacity: 0.72;
+          radial-gradient(circle at 50% 22%, rgba(99, 132, 220, 0.30), rgba(99, 132, 220, 0.10) 24%, rgba(99, 132, 220, 0.02) 48%, rgba(99, 132, 220, 0) 70%),
+          radial-gradient(circle at 50% 30%, rgba(36, 48, 80, 0.14), rgba(36, 48, 80, 0.05) 32%, rgba(36, 48, 80, 0) 62%);
+        filter: blur(22px);
+        opacity: 0.85;
       }
 
       .hero-spotlight::after {
         content: "";
         position: absolute;
-        inset: 12% 18% 42%;
+        inset: 10% 16% 40%;
         border-radius: inherit;
-        background: radial-gradient(circle, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0) 72%);
+        background: radial-gradient(circle, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0) 72%);
       }
 
       .dark .hero-spotlight {
         background:
-          radial-gradient(circle at 50% 22%, rgba(111, 145, 226, 0.18), rgba(111, 145, 226, 0.08) 24%, rgba(111, 145, 226, 0.03) 44%, rgba(111, 145, 226, 0) 68%),
-          radial-gradient(circle at 50% 28%, rgba(36, 48, 80, 0.36), rgba(36, 48, 80, 0.16) 30%, rgba(36, 48, 80, 0.04) 46%, rgba(36, 48, 80, 0) 64%);
-        filter: blur(20px);
-        opacity: 0.68;
+          radial-gradient(circle at 50% 22%, rgba(125, 158, 240, 0.24), rgba(125, 158, 240, 0.10) 24%, rgba(125, 158, 240, 0.03) 46%, rgba(125, 158, 240, 0) 70%),
+          radial-gradient(circle at 50% 28%, rgba(40, 56, 96, 0.42), rgba(40, 56, 96, 0.18) 30%, rgba(40, 56, 96, 0.04) 48%, rgba(40, 56, 96, 0) 66%);
+        filter: blur(24px);
+        opacity: 0.78;
       }
 
       .dark .hero-spotlight::after {
-        background: radial-gradient(circle, rgba(148, 163, 184, 0.05), rgba(148, 163, 184, 0) 70%);
+        background: radial-gradient(circle, rgba(148, 163, 184, 0.06), rgba(148, 163, 184, 0) 70%);
       }
 
       @media (min-width: 768px) {
@@ -328,10 +356,46 @@ const structuredData = JSON.stringify([
         }
       }
 
+      .video-glow {
+        position: absolute;
+        inset: -8% -4% -4% -4%;
+        border-radius: 9999px;
+        pointer-events: none;
+        background:
+          radial-gradient(50% 60% at 50% 40%, rgba(99, 132, 220, 0.18), rgba(99, 132, 220, 0.04) 50%, rgba(99, 132, 220, 0) 75%);
+        filter: blur(28px);
+        opacity: 0.75;
+        z-index: 0;
+      }
+
+      .dark .video-glow {
+        background:
+          radial-gradient(50% 60% at 50% 40%, rgba(125, 158, 240, 0.20), rgba(125, 158, 240, 0.05) 50%, rgba(125, 158, 240, 0) 75%);
+        opacity: 0.65;
+      }
+
       .hero-video {
         position: relative;
         width: 100%;
         max-width: 32rem;
+        border-radius: 1.25rem;
+        overflow: hidden;
+        border: 1px solid rgba(228, 228, 231, 0.95);
+        background: linear-gradient(180deg, #ffffff, #f7f7f8);
+        box-shadow:
+          0 1px 2px rgba(15, 23, 42, 0.06),
+          0 12px 28px rgba(15, 23, 42, 0.08),
+          0 32px 64px rgba(15, 23, 42, 0.10);
+        z-index: 1;
+      }
+
+      .dark .hero-video {
+        border-color: rgba(63, 63, 70, 0.7);
+        background: linear-gradient(180deg, #18181b, #0c0d10);
+        box-shadow:
+          0 1px 2px rgba(0, 0, 0, 0.32),
+          0 12px 28px rgba(0, 0, 0, 0.32),
+          0 32px 64px rgba(0, 0, 0, 0.42);
       }
 
       .hero-video > video {
@@ -340,10 +404,70 @@ const structuredData = JSON.stringify([
         height: auto;
       }
 
+      .section-divider {
+        height: 1px;
+        max-width: 36rem;
+        margin: 0 auto;
+        background: linear-gradient(90deg, transparent, rgba(24, 24, 27, 0.10), transparent);
+      }
+
+      .dark .section-divider {
+        background: linear-gradient(90deg, transparent, rgba(244, 244, 245, 0.08), transparent);
+      }
+
+      .features-dl > div {
+        position: relative;
+      }
+
+      .features-dl dt {
+        position: relative;
+        padding-left: 1.4rem;
+      }
+
+      .features-dl dt::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0.42rem;
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 9999px;
+        background: linear-gradient(135deg, #7d9ef0 0%, #4c5fa3 100%);
+        box-shadow:
+          0 0 0 4px rgba(99, 132, 220, 0.10),
+          0 1px 2px rgba(76, 95, 163, 0.30);
+      }
+
+      .features-dl dd {
+        padding-left: 1.4rem;
+      }
+
+      .features-dl dd code {
+        padding: 0.08rem 0.32rem;
+        border-radius: 0.32rem;
+        background: rgba(244, 244, 245, 1);
+        border: 1px solid rgba(228, 228, 231, 1);
+        color: #18181b;
+        font-size: 0.85em;
+      }
+
+      .dark .features-dl dd code {
+        background: rgba(39, 39, 42, 0.7);
+        border-color: rgba(63, 63, 70, 0.7);
+        color: #e4e4e7;
+      }
+
+      .dark .features-dl dt::before {
+        background: linear-gradient(135deg, #a3bcf5 0%, #6680c5 100%);
+        box-shadow:
+          0 0 0 4px rgba(125, 158, 240, 0.12),
+          0 1px 2px rgba(0, 0, 0, 0.30);
+      }
+
     </style>
   </head>
-  <body class="overflow-x-hidden bg-white text-zinc-800 antialiased dark:bg-zinc-900 dark:text-zinc-200">
-    <nav class="relative z-20 bg-white/85 backdrop-blur-sm transition-colors dark:bg-zinc-900/85">
+  <body class="overflow-x-hidden bg-white text-zinc-800 antialiased dark:bg-[#0b0d12] dark:text-zinc-200">
+    <nav class="relative z-20 bg-white/85 backdrop-blur-sm transition-colors dark:bg-[#0b0d12]/85">
       <div class="stagger-fade-group max-w-6xl mx-auto px-6 py-4 flex items-center justify-between text-sm" style="--stagger-fade-base-delay: 20ms;">
         <a href="/" class="flex items-center gap-2 text-zinc-950 font-medium transition-opacity hover:opacity-80 dark:text-zinc-100">
           <Image
@@ -388,11 +512,11 @@ const structuredData = JSON.stringify([
                 class="stagger-fade size-16 mx-auto md:mx-0 mb-6 [filter:drop-shadow(0_12px_24px_rgb(36_48_80/0.25))_drop-shadow(0_4px_8px_rgb(15_23_42/0.15))]"
                 style="--stagger-fade-delay: 70ms;"
               />
-              <h1 class="stagger-fade text-4xl sm:text-5xl font-semibold tracking-tight leading-[1.08] text-zinc-950 text-balance max-w-[18ch] mx-auto md:mx-0 dark:text-zinc-100" style="--stagger-fade-delay: 125ms;">
+              <h1 class="stagger-fade text-4xl sm:text-5xl md:text-[3.5rem] lg:text-6xl font-semibold tracking-[-0.025em] leading-[1.04] text-zinc-950 text-balance max-w-[18ch] mx-auto md:mx-0 dark:text-zinc-50" style="--stagger-fade-delay: 125ms;">
                 Ask three agents.
-                <span class="block mt-3 sm:mt-4">Get one answer.</span>
+                <span class="block mt-2 sm:mt-3 bg-gradient-to-br from-zinc-900 to-zinc-600 bg-clip-text text-transparent dark:from-zinc-100 dark:to-zinc-400">Get one answer.</span>
               </h1>
-              <p class="stagger-fade mt-6 text-lg text-zinc-600 text-pretty max-w-[48ch] mx-auto md:mx-0 dark:text-zinc-400" style="--stagger-fade-delay: 180ms;">
+              <p class="stagger-fade mt-6 text-lg leading-[1.55] text-zinc-600 text-pretty max-w-[48ch] mx-auto md:mx-0 dark:text-zinc-400" style="--stagger-fade-delay: 180ms;">
                 Council runs Codex, Claude, and Gemini in parallel against the same prompt and synthesizes their responses &mdash; using the subscriptions you already pay for.
               </p>
               <div class="stagger-fade mt-8 space-y-8" style="--stagger-fade-delay: 235ms;">
@@ -459,8 +583,9 @@ const structuredData = JSON.stringify([
                 </div>
               </div>
             </div>
-            <div class="stagger-fade" style="--stagger-fade-delay: 320ms;">
-              <div class="hero-video mx-auto md:ml-auto md:mr-0 rounded-2xl overflow-hidden">
+            <div class="stagger-fade relative" style="--stagger-fade-delay: 320ms;">
+              <div class="video-glow" aria-hidden="true"></div>
+              <div class="hero-video mx-auto md:ml-auto md:mr-0">
                 <video
                   autoplay
                   muted
@@ -481,34 +606,36 @@ const structuredData = JSON.stringify([
         </div>
       </section>
 
-      <section class="pt-6 pb-24 md:pt-8 md:pb-28">
+      <div class="max-w-6xl mx-auto px-6"><div class="section-divider" aria-hidden="true"></div></div>
+
+      <section class="pt-12 pb-24 md:pt-16 md:pb-28">
         <div class="max-w-6xl mx-auto px-6">
           <div class="stagger-fade-group" style="--stagger-fade-base-delay: 420ms;">
             <p class="mx-auto max-w-3xl text-center text-lg leading-8 text-zinc-700 text-balance dark:text-zinc-300">
               Three models, three sets of blind spots. Council runs them in parallel and surfaces where they agree, where they don&apos;t, and where one of them is probably wrong.
             </p>
             <div class="mt-16 max-w-3xl mx-auto md:mt-20">
-              <h2 class="font-mono text-xs tracking-wide uppercase text-zinc-500 mb-6 dark:text-zinc-500">Features</h2>
-              <dl class="stagger-fade-group space-y-5 text-sm" style="--stagger-fade-base-delay: 510ms;">
+              <h2 class="font-mono text-xs tracking-[0.18em] uppercase text-zinc-500 mb-6 dark:text-zinc-500">Features</h2>
+              <dl class="features-dl stagger-fade-group space-y-6 text-sm" style="--stagger-fade-base-delay: 510ms;">
                 <div>
-                  <dt class="font-medium text-zinc-950 dark:text-zinc-100">Works with what you&apos;ve already got</dt>
-                  <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Detects <code>codex</code>, <code>claude</code>, and <code>gemini</code> on your <code>PATH</code> and runs whichever subset is there. Override with <code>COUNCIL_*_BIN</code> if your binaries live somewhere unusual.</dd>
+                  <dt class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Works with what you&apos;ve already got</dt>
+                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Detects <code>codex</code>, <code>claude</code>, and <code>gemini</code> on your <code>PATH</code> and runs whichever subset is there. Override with <code>COUNCIL_*_BIN</code> if your binaries live somewhere unusual.</dd>
                 </div>
                 <div>
-                  <dt class="font-medium text-zinc-950 dark:text-zinc-100">Won&apos;t touch your code</dt>
-                  <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Each CLI runs in its plan or read-only mode. Nothing on disk changes unless you opt in.</dd>
+                  <dt class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Won&apos;t touch your code</dt>
+                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Each CLI runs in its plan or read-only mode. Nothing on disk changes unless you opt in.</dd>
                 </div>
                 <div>
-                  <dt class="font-medium text-zinc-950 dark:text-zinc-100">See where they disagree</dt>
-                  <dd class="mt-1 text-zinc-600 dark:text-zinc-400">One answer drawn from all three responses, with real disagreements surfaced instead of averaged away. If the lead summarizer is down, the next one takes over.</dd>
+                  <dt class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">See where they disagree</dt>
+                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">One answer drawn from all three responses, with real disagreements surfaced instead of averaged away. If the lead summarizer is down, the next one takes over.</dd>
                 </div>
                 <div>
-                  <dt class="font-medium text-zinc-950 dark:text-zinc-100">Watch them think, ask follow-ups</dt>
-                  <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Each model streams in place, with a heartbeat on the slow ones. Press a number to expand a full answer. Type to ask a follow-up &mdash; the next turn carries the prior context.</dd>
+                  <dt class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Watch them think, ask follow-ups</dt>
+                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Each model streams in place, with a heartbeat on the slow ones. Press a number to expand a full answer. Type to ask a follow-up &mdash; the next turn carries the prior context.</dd>
                 </div>
                 <div>
-                  <dt class="font-medium text-zinc-950 dark:text-zinc-100">Drops into any pipeline</dt>
-                  <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Pipe stdin with <code>echo &quot;...&quot; | council</code>, get structured output with <code>--json</code> or <code>--json-stream</code>, skip the dashboard with <code>--headless</code>, or import <code>runCouncil()</code> directly in Node.</dd>
+                  <dt class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Drops into any pipeline</dt>
+                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Pipe stdin with <code>echo &quot;...&quot; | council</code>, get structured output with <code>--json</code> or <code>--json-stream</code>, skip the dashboard with <code>--headless</code>, or import <code>runCouncil()</code> directly in Node.</dd>
                 </div>
               </dl>
             </div>
