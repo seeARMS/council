@@ -347,7 +347,9 @@ async function mergeGeminiSettings({ settingsPath, thinkingBudget }) {
         thinkingBudget
       };
     }
-  } catch {}
+  } catch {
+    // Existing settings file is missing or unparseable; proceed with defaults.
+  }
 
   return nextSettings;
 }
@@ -680,6 +682,7 @@ function parseJsonLines(text) {
       try {
         return [JSON.parse(line)];
       } catch {
+        // Skip non-JSON lines.
         return [];
       }
     });
