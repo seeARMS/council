@@ -308,6 +308,17 @@ const structuredData = JSON.stringify([
         background: radial-gradient(circle, rgba(148, 163, 184, 0.05), rgba(148, 163, 184, 0) 70%);
       }
 
+      .hero-video {
+        position: relative;
+        max-width: 40rem;
+      }
+
+      .hero-video > video {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
     </style>
   </head>
   <body class="overflow-x-hidden bg-white text-zinc-800 antialiased dark:bg-zinc-900 dark:text-zinc-200">
@@ -345,7 +356,7 @@ const structuredData = JSON.stringify([
     </nav>
 
     <main class="relative">
-      <section class="relative pt-16 pb-6 md:pb-16">
+      <section class="relative pt-16 pb-2 md:pb-4">
         <div class="hero-spotlight" aria-hidden="true"></div>
         <div class="relative max-w-4xl mx-auto px-6 text-center">
           <Image
@@ -384,18 +395,6 @@ const structuredData = JSON.stringify([
               </div>
             </div>
             <div class="stagger-fade-group space-y-4" style="--stagger-fade-base-delay: 320ms;">
-              <div class="relative z-10 flex flex-col items-center justify-between gap-3 text-sm text-zinc-500 dark:text-zinc-400 sm:flex-row">
-                <p>Free and open source. MIT licensed.</p>
-                <a
-                  href={repoUrl}
-                  aria-label="GitHub"
-                  class="inline-flex items-center text-zinc-500 transition-colors hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-100"
-                >
-                  <svg viewBox="0 0 24 24" aria-hidden="true" class="size-4 fill-current">
-                    <path d="M12 .297a12 12 0 0 0-3.79 23.39c.6.11.82-.258.82-.577v-2.234c-3.338.726-4.042-1.61-4.042-1.61a3.182 3.182 0 0 0-1.338-1.756c-1.093-.747.084-.732.084-.732a2.52 2.52 0 0 1 1.84 1.237 2.554 2.554 0 0 0 3.49.996 2.553 2.553 0 0 1 .762-1.6c-2.665-.304-5.466-1.334-5.466-5.932a4.64 4.64 0 0 1 1.235-3.22 4.31 4.31 0 0 1 .117-3.176s1.008-.322 3.3 1.23a11.46 11.46 0 0 1 6.006 0c2.292-1.552 3.297-1.23 3.297-1.23a4.31 4.31 0 0 1 .12 3.176 4.63 4.63 0 0 1 1.233 3.22c0 4.61-2.805 5.625-5.478 5.922a2.862 2.862 0 0 1 .814 2.222v3.293c0 .321.216.694.825.576A12 12 0 0 0 12 .297" />
-                  </svg>
-                </a>
-              </div>
               <div
                 class="command-shell rounded-2xl border text-left"
                 data-command-box
@@ -422,40 +421,72 @@ const structuredData = JSON.stringify([
                   </button>
                 </div>
               </div>
+              <div class="relative z-10 flex flex-col items-center justify-between gap-3 text-sm text-zinc-500 dark:text-zinc-400 sm:flex-row">
+                <p>Free and open source. MIT licensed.</p>
+                <a
+                  href={repoUrl}
+                  aria-label="GitHub"
+                  class="inline-flex items-center text-zinc-500 transition-colors hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-100"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true" class="size-4 fill-current">
+                    <path d="M12 .297a12 12 0 0 0-3.79 23.39c.6.11.82-.258.82-.577v-2.234c-3.338.726-4.042-1.61-4.042-1.61a3.182 3.182 0 0 0-1.338-1.756c-1.093-.747.084-.732.084-.732a2.52 2.52 0 0 1 1.84 1.237 2.554 2.554 0 0 0 3.49.996 2.553 2.553 0 0 1 .762-1.6c-2.665-.304-5.466-1.334-5.466-5.932a4.64 4.64 0 0 1 1.235-3.22 4.31 4.31 0 0 1 .117-3.176s1.008-.322 3.3 1.23a11.46 11.46 0 0 1 6.006 0c2.292-1.552 3.297-1.23 3.297-1.23a4.31 4.31 0 0 1 .12 3.176 4.63 4.63 0 0 1 1.233 3.22c0 4.61-2.805 5.625-5.478 5.922a2.862 2.862 0 0 1 .814 2.222v3.293c0 .321.216.694.825.576A12 12 0 0 0 12 .297" />
+                  </svg>
+                </a>
+              </div>
+            </div>
+          </div>
+          <div class="stagger-fade mt-14 md:mt-16" style="--stagger-fade-delay: 380ms;">
+            <div class="hero-video mx-auto rounded-2xl overflow-hidden">
+              <video
+                autoplay
+                muted
+                loop
+                playsinline
+                preload="metadata"
+                poster="/hero/council-hero.jpg"
+                aria-hidden="true"
+                tabindex="-1"
+                data-hero-video
+              >
+                <source src="/hero/council-hero.av1.mp4" type='video/mp4; codecs="av01.0.08M.08"' />
+                <source src="/hero/council-hero.mp4" type='video/mp4; codecs="avc1.640029"' />
+              </video>
             </div>
           </div>
         </div>
       </section>
 
-      <section class="py-20">
-        <div class="max-w-3xl mx-auto px-6">
+      <section class="pt-6 pb-24 md:pt-8 md:pb-28">
+        <div class="max-w-4xl mx-auto px-6">
           <div class="stagger-fade-group" style="--stagger-fade-base-delay: 420ms;">
-            <p class="mb-4 text-base text-zinc-600 text-pretty dark:text-zinc-400">
+            <p class="mx-auto max-w-3xl text-center text-lg leading-8 text-zinc-700 text-balance dark:text-zinc-300">
               Three models, three sets of blind spots. Council runs them in parallel and surfaces where they agree, where they don&apos;t, and where one of them is probably wrong.
             </p>
-            <h2 class="font-mono text-xs tracking-wide uppercase text-zinc-500 mb-6 dark:text-zinc-500">Features</h2>
-            <dl class="stagger-fade-group space-y-5 text-sm" style="--stagger-fade-base-delay: 510ms;">
-              <div>
-                <dt class="font-medium text-zinc-950 dark:text-zinc-100">Works with what you&apos;ve already got</dt>
-                <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Detects <code>codex</code>, <code>claude</code>, and <code>gemini</code> on your <code>PATH</code> and runs whichever subset is there. Override with <code>COUNCIL_*_BIN</code> if your binaries live somewhere unusual.</dd>
-              </div>
-              <div>
-                <dt class="font-medium text-zinc-950 dark:text-zinc-100">Won&apos;t touch your code</dt>
-                <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Each CLI runs in its plan or read-only mode. Nothing on disk changes unless you opt in.</dd>
-              </div>
-              <div>
-                <dt class="font-medium text-zinc-950 dark:text-zinc-100">See where they disagree</dt>
-                <dd class="mt-1 text-zinc-600 dark:text-zinc-400">One answer drawn from all three responses, with real disagreements surfaced instead of averaged away. If the lead summarizer is down, the next one takes over.</dd>
-              </div>
-              <div>
-                <dt class="font-medium text-zinc-950 dark:text-zinc-100">Watch them think, ask follow-ups</dt>
-                <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Each model streams in place, with a heartbeat on the slow ones. Press a number to expand a full answer. Type to ask a follow-up &mdash; the next turn carries the prior context.</dd>
-              </div>
-              <div>
-                <dt class="font-medium text-zinc-950 dark:text-zinc-100">Drops into any pipeline</dt>
-                <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Pipe stdin with <code>echo &quot;...&quot; | council</code>, get structured output with <code>--json</code> or <code>--json-stream</code>, skip the dashboard with <code>--headless</code>, or import <code>runCouncil()</code> directly in Node.</dd>
-              </div>
-            </dl>
+            <div class="mt-16 max-w-3xl mx-auto md:mt-20">
+              <h2 class="font-mono text-xs tracking-wide uppercase text-zinc-500 mb-6 dark:text-zinc-500">Features</h2>
+              <dl class="stagger-fade-group space-y-5 text-sm" style="--stagger-fade-base-delay: 510ms;">
+                <div>
+                  <dt class="font-medium text-zinc-950 dark:text-zinc-100">Works with what you&apos;ve already got</dt>
+                  <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Detects <code>codex</code>, <code>claude</code>, and <code>gemini</code> on your <code>PATH</code> and runs whichever subset is there. Override with <code>COUNCIL_*_BIN</code> if your binaries live somewhere unusual.</dd>
+                </div>
+                <div>
+                  <dt class="font-medium text-zinc-950 dark:text-zinc-100">Won&apos;t touch your code</dt>
+                  <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Each CLI runs in its plan or read-only mode. Nothing on disk changes unless you opt in.</dd>
+                </div>
+                <div>
+                  <dt class="font-medium text-zinc-950 dark:text-zinc-100">See where they disagree</dt>
+                  <dd class="mt-1 text-zinc-600 dark:text-zinc-400">One answer drawn from all three responses, with real disagreements surfaced instead of averaged away. If the lead summarizer is down, the next one takes over.</dd>
+                </div>
+                <div>
+                  <dt class="font-medium text-zinc-950 dark:text-zinc-100">Watch them think, ask follow-ups</dt>
+                  <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Each model streams in place, with a heartbeat on the slow ones. Press a number to expand a full answer. Type to ask a follow-up &mdash; the next turn carries the prior context.</dd>
+                </div>
+                <div>
+                  <dt class="font-medium text-zinc-950 dark:text-zinc-100">Drops into any pipeline</dt>
+                  <dd class="mt-1 text-zinc-600 dark:text-zinc-400">Pipe stdin with <code>echo &quot;...&quot; | council</code>, get structured output with <code>--json</code> or <code>--json-stream</code>, skip the dashboard with <code>--headless</code>, or import <code>runCouncil()</code> directly in Node.</dd>
+                </div>
+              </dl>
+            </div>
           </div>
         </div>
       </section>
@@ -504,6 +535,14 @@ const structuredData = JSON.stringify([
 
         copyTargets.forEach((target) => {
           target.addEventListener("click", copyCommand);
+        });
+      }
+
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        document.querySelectorAll("video[data-hero-video]").forEach((video) => {
+          video.removeAttribute("autoplay");
+          video.removeAttribute("loop");
+          video.pause();
         });
       }
     </script>
