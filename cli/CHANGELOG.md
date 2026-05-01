@@ -5,6 +5,14 @@ All notable changes to `@armstrng/council` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project aims to follow [Semantic Versioning](https://semver.org/).
 
+## [0.1.5](https://github.com/seeARMS/council/compare/v0.1.4...v0.1.5) (2026-05-01)
+
+
+### Bug Fixes
+
+* Allow pasting ([a75356b](https://github.com/seeARMS/council/commit/a75356b7598facdf55ec7b165b846959265fad1e))
+* Remove unneeded file ([7cef9ca](https://github.com/seeARMS/council/commit/7cef9cad612c6eee1dcf76e3c3f8f536974239e1))
+
 ## [0.1.4](https://github.com/seeARMS/council/compare/v0.1.3...v0.1.4) (2026-04-30)
 
 
