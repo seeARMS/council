@@ -1,6 +1,6 @@
 # council
 
-`council` is a small, open-source CLI that asks multiple AI coding CLIs the same question and then synthesizes their answers into one final response.
+`council` is a tiny CLI that asks multiple coding CLIs the same question and then synthesizes their answers into one final response.
 
 Today it supports:
 
@@ -29,13 +29,20 @@ Agent CLIs are useful, but each one has different strengths, safety controls, an
 
 ## Install
 
-Run it directly with `npx`:
+Install globally to get a `council` command on your `PATH`:
+
+```bash
+npm install -g @armstrng/council
+council "How should I structure this TypeScript CLI?"
+```
+
+Or run it directly without installing via npx:
 
 ```bash
 npx @armstrng/council "How should I structure this TypeScript CLI?"
 ```
 
-That matches the website examples and does not require a global install.
+The rest of this README uses the bare `council` command. If you prefer not to install globally, swap any example for `npx @armstrng/council`.
 
 If you are developing from a git checkout instead of using the published npm package:
 
@@ -50,25 +57,25 @@ npm run build
 Ask all available tools and show the full council:
 
 ```bash
-npx @armstrng/council "How should I structure this TypeScript CLI?"
+council "How should I structure this TypeScript CLI?"
 ```
 
 Ask only a subset:
 
 ```bash
-npx @armstrng/council --no-gemini "Review this migration plan"
+council --no-gemini "Review this migration plan"
 ```
 
 Pick a specific summarizer:
 
 ```bash
-npx @armstrng/council --summarizer claude "Compare these two designs"
+council --summarizer claude "Compare these two designs"
 ```
 
 Run against another project directory:
 
 ```bash
-npx @armstrng/council --cwd ../my-repo "Review the current architecture"
+council --cwd ../my-repo "Review the current architecture"
 ```
 
 ## Output modes
@@ -76,31 +83,31 @@ npx @armstrng/council --cwd ../my-repo "Review the current architecture"
 Interactive human output:
 
 ```bash
-npx @armstrng/council "What is the cleanest implementation?"
+council "What is the cleanest implementation?"
 ```
 
 Summary-only output:
 
 ```bash
-npx @armstrng/council --summary-only "What should we do?"
+council --summary-only "What should we do?"
 ```
 
 Structured JSON:
 
 ```bash
-npx @armstrng/council --json "Explain the bug" | jq
+council --json "Explain the bug" | jq
 ```
 
 Streaming JSONL events for automation:
 
 ```bash
-npx @armstrng/council --json-stream "Compare these approaches"
+council --json-stream "Compare these approaches"
 ```
 
 Headless automation mode:
 
 ```bash
-npx @armstrng/council --headless "Summarize the tradeoffs"
+council --headless "Summarize the tradeoffs"
 ```
 
 `--headless` suppresses the banner and progress UI and defaults to summary-only text unless you also request `--json` or `--json-stream`.
@@ -121,13 +128,13 @@ In a real TTY, `council` uses a live dashboard:
 Enable or disable members individually:
 
 ```bash
-npx @armstrng/council --codex --claude --no-gemini "Review this plan"
+council --codex --claude --no-gemini "Review this plan"
 ```
 
 Or use an explicit member list:
 
 ```bash
-npx @armstrng/council --members codex,gemini "Compare these responses"
+council --members codex,gemini "Compare these responses"
 ```
 
 `--members` preserves the order you pass. If you later re-enable another member with a toggle such as `--claude`, it is appended after that explicit list.
