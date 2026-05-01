@@ -2,6 +2,7 @@ import {
   createElement as h,
   Fragment,
   useEffect,
+  useMemo,
   useRef,
   useState
 } from 'react';
@@ -14,7 +15,6 @@ import {
   usePaste,
   useStdin
 } from 'ink';
-import { TextInput } from '@inkjs/ui';
 import { runCouncil } from './council.js';
 import {
   buildHotkeyParts,
@@ -75,6 +75,7 @@ function SessionApp({
   const [promptValue, setPromptValue] = useState('');
   const [followUpValue, setFollowUpValue] = useState('');
   const [isEditingFollowUp, setIsEditingFollowUp] = useState(false);
+  const isEditingFollowUpRef = useRef(false);
   const [expanded, setExpanded] = useState(createInitialExpanded);
   const [sessionState, setSessionState] = useState(() =>
     createSessionState(members)
@@ -89,6 +90,17 @@ function SessionApp({
   useEffect(() => {
     conversationRef.current = conversationState;
   }, [conversationState]);
+
+  const updateFollowUpValue = (nextValue) => {
+    setFollowUpValue((current) =>
+      typeof nextValue === 'function' ? nextValue(current) : nextValue
+    );
+  };
+
+  const updateIsEditingFollowUp = (nextValue) => {
+    isEditingFollowUpRef.current = nextValue;
+    setIsEditingFollowUp(nextValue);
+  };
 
   useEffect(() => {
     if (!isRawModeSupported) {
@@ -144,8 +156,8 @@ function SessionApp({
         setExpanded(
           createInitialExpanded(result.summary?.output || result.summary?.detail)
         );
-        setIsEditingFollowUp(false);
-        setFollowUpValue('');
+        updateIsEditingFollowUp(false);
+        updateFollowUpValue('');
         setPhase('review');
       })
       .catch((error) => {
@@ -175,8 +187,8 @@ function SessionApp({
             fallback.summary?.output || fallback.summary?.detail
           )
         );
-        setIsEditingFollowUp(false);
-        setFollowUpValue('');
+        updateIsEditingFollowUp(false);
+        updateFollowUpValue('');
         setPhase('review');
       });
 
@@ -221,6 +233,14 @@ function SessionApp({
         return;
       }
 
+      if (isEditingFollowUpRef.current) {
+        const chunk = sanitizeImmediateFollowUpChunk(input);
+        if (chunk) {
+          updateFollowUpValue((current) => `${current}${chunk}`);
+        }
+        return;
+      }
+
       if (input === 'q' || key.escape) {
         exit(lastResult);
         return;
@@ -231,32 +251,11 @@ function SessionApp({
         return;
       }
 
-      if (input && input.length === 1 && input >= ' ') {
-        setIsEditingFollowUp(true);
-        setFollowUpValue(input);
+      const chunk = sanitizeImmediateFollowUpChunk(input);
+      if (chunk) {
+        updateIsEditingFollowUp(true);
+        updateFollowUpValue((current) => `${current}${chunk}`);
       }
-    },
-    { isActive: isRawModeSupported }
-  );
-
-  usePaste(
-    (text) => {
-      if (phase === 'prompt') {
-        setPromptValue((current) => `${current}${text}`);
-        return;
-      }
-
-      if (phase !== 'review') {
-        return;
-      }
-
-      if (isEditingFollowUp) {
-        setFollowUpValue((current) => `${current}${text}`);
-        return;
-      }
-
-      setIsEditingFollowUp(true);
-      setFollowUpValue(text);
     },
     { isActive: isRawModeSupported }
   );
@@ -267,16 +266,16 @@ function SessionApp({
       if (phase === 'prompt') {
         exit(null);
       } else {
-        setIsEditingFollowUp(false);
-        setFollowUpValue('');
+        updateIsEditingFollowUp(false);
+        updateFollowUpValue('');
       }
       return;
     }
 
     setSessionState(createSessionState(members));
     setExpanded(createInitialExpanded());
-    setIsEditingFollowUp(false);
-    setFollowUpValue('');
+    updateIsEditingFollowUp(false);
+    updateFollowUpValue('');
     setPhase('running');
     setRunSequence((current) => {
       const next = current + 1;
@@ -287,7 +286,7 @@ function SessionApp({
 
   if (phase === 'prompt') {
     return h(PromptComposer, {
-      value: promptValue,
+      defaultValue: promptValue,
       onChange: setPromptValue,
       onSubmit: startRun
     });
@@ -315,12 +314,12 @@ function SessionApp({
     ),
     phase === 'review' && isEditingFollowUp
       ? h(PromptComposer, {
-          value: followUpValue,
-          onChange: setFollowUpValue,
+          defaultValue: followUpValue,
+          onChange: updateFollowUpValue,
           onSubmit: startRun,
           onCancel: () => {
-            setIsEditingFollowUp(false);
-            setFollowUpValue('');
+            updateIsEditingFollowUp(false);
+            updateFollowUpValue('');
           }
         })
       : h(HotkeyFooter, {
@@ -334,25 +333,114 @@ function SessionApp({
   );
 }
 
-function PromptComposer({ value, onChange, onSubmit, onCancel = null }) {
+function PromptComposer({
+  defaultValue = '',
+  onChange,
+  onSubmit,
+  onCancel = null
+}) {
+  const [value, setValue] = useState(defaultValue);
+  const [cursorOffset, setCursorOffset] = useState(defaultValue.length);
+
+  const updateValue = (nextValue, nextCursorOffset = nextValue.length) => {
+    setValue(nextValue);
+    setCursorOffset(nextCursorOffset);
+    onChange?.(nextValue);
+  };
+
+  const insertText = (text) => {
+    const sanitized = sanitizeImmediateFollowUpChunk(text);
+    if (!sanitized) {
+      return;
+    }
+
+    const nextValue =
+      value.slice(0, cursorOffset) + sanitized + value.slice(cursorOffset);
+    updateValue(nextValue, cursorOffset + sanitized.length);
+  };
+
   useInput(
     (input, key) => {
       if (key.escape && onCancel) {
         onCancel();
+        return;
       }
+
+      if (key.return) {
+        onSubmit(value);
+        return;
+      }
+
+      if (key.leftArrow) {
+        setCursorOffset((current) => Math.max(0, current - 1));
+        return;
+      }
+
+      if (key.rightArrow) {
+        setCursorOffset((current) => Math.min(value.length, current + 1));
+        return;
+      }
+
+      if (key.backspace) {
+        if (cursorOffset === 0) {
+          return;
+        }
+
+        const nextCursorOffset = cursorOffset - 1;
+        const nextValue =
+          value.slice(0, nextCursorOffset) + value.slice(cursorOffset);
+        updateValue(nextValue, nextCursorOffset);
+        return;
+      }
+
+      if (key.delete) {
+        if (cursorOffset >= value.length) {
+          return;
+        }
+
+        const nextValue =
+          value.slice(0, cursorOffset) + value.slice(cursorOffset + 1);
+        updateValue(nextValue, cursorOffset);
+        return;
+      }
+
+      if (
+        key.upArrow ||
+        key.downArrow ||
+        key.tab ||
+        (key.shift && key.tab) ||
+        (key.ctrl && input === 'c')
+      ) {
+        return;
+      }
+
+      insertText(input);
     },
-    { isActive: Boolean(onCancel) }
+    { isActive: true }
   );
+
+  usePaste(
+    (text) => {
+      insertText(text);
+    },
+    { isActive: true }
+  );
+
+  const renderedValue = useMemo(() => {
+    const cursor = '|';
+
+    if (value.length === 0) {
+      return cursor;
+    }
+
+    return `${value.slice(0, cursorOffset)}${cursor}${value.slice(cursorOffset)}`;
+  }, [cursorOffset, value]);
 
   return h(
     Box,
     { marginTop: 1 },
     h(Text, { color: 'cyan' }, 'you> '),
-    h(TextInput, {
-      value,
-      onChange,
-      onSubmit
-    })
+    h(Text, null, renderedValue)
   );
 }
 
@@ -411,6 +499,13 @@ function HotkeyFooter({ members, expanded, detailText }) {
     ),
     h(Text, { color: 'gray' }, detailText)
   );
+}
+
+export function sanitizeImmediateFollowUpChunk(input) {
+  return Array.from(input || '')
+    .filter((char) => char === '\n' || char === '\r' || char === '\t' || char >= ' ')
+    .filter((char) => char !== '\u007f' && char !== '\u001b')
+    .join('');
 }
 
 function toggleExpandedForHotkey(input, members, setExpanded) {

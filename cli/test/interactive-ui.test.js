@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   buildInteractiveBlocks,
   createInitialExpanded,
+  sanitizeImmediateFollowUpChunk,
   shouldUseInteractiveDashboard,
   toggleExpanded
 } from '../src/interactive-ui.js';
@@ -127,6 +128,12 @@ test('toggleExpanded adds missing ids and removes existing ids', () => {
 
   const twice = toggleExpanded(once, 'member:codex');
   assert.equal(twice.has('member:codex'), false);
+});
+
+test('sanitizeImmediateFollowUpChunk keeps printable text from raw follow-up input chunks', () => {
+  assert.equal(sanitizeImmediateFollowUpChunk('paste this'), 'paste this');
+  assert.equal(sanitizeImmediateFollowUpChunk('multi\nline\ttext'), 'multi\nline\ttext');
+  assert.equal(sanitizeImmediateFollowUpChunk('\u0007beep'), 'beep');
 });
 
 test('buildHotkeyParts includes synthesis in the live hotkey legend', () => {
