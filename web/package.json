@@ -5,9 +5,10 @@
   "description": "Landing page for council.",
   "type": "module",
   "scripts": {
-    "dev": "astro dev",
-    "start": "astro dev",
-    "build": "astro build",
+    "generate-og": "node scripts/generate-og.mjs",
+    "dev": "npm run generate-og && astro dev",
+    "start": "npm run generate-og && astro dev",
+    "build": "npm run generate-og && astro build",
     "preview": "npm run build && wrangler dev",
     "astro": "astro",
     "generate-types": "wrangler types",
@@ -20,7 +21,9 @@
     "wrangler": "^4.86.0"
   },
   "dependencies": {
-    "@astrojs/cloudflare": "^13.3.0"
+    "@astrojs/cloudflare": "^13.3.0",
+    "@resvg/resvg-js": "^2.6.2",
+    "satori": "^0.26.0"
   },
   "overrides": {
     "vite": "^7"

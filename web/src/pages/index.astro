@@ -5,24 +5,27 @@ import councilNavLogo from "../assets/council-64.png";
 import councilHeroLogo from "../assets/council-256.png";
 import codexLogo from "../assets/agent-logos/codex.png";
 import claudeLogo from "../assets/agent-logos/claude.png";
+import {
+  authorName,
+  defaultSiteUrl,
+  description,
+  examplePrompt,
+  ogImageAlt,
+  ogImagePath,
+  siteName,
+  title,
+  xHandle,
+} from "../site-meta.js";
 import "../styles/global.css";
 
-const site = Astro.site?.toString().replace(/\/$/, "") ?? "";
-const siteUrl = site || "https://council.armstr.ng";
+const siteUrl = Astro.site?.toString().replace(/\/$/, "") ?? defaultSiteUrl;
 const pageUrl = `${siteUrl}/`;
-const metaImage = `${siteUrl}/meta.jpg`;
-const siteName = "Council";
-const authorName = "Colin Armstrong";
-const xHandle = "@colinarms";
+const metaImage = `${siteUrl}${ogImagePath}`;
 const repoUrl = cliPackage.repository.url.replace(/^git\+/, "").replace(/\.git$/, "");
 const docsUrl = `${repoUrl}/blob/main/cli/README.md`;
 const licenseUrl = `${repoUrl}/blob/main/LICENSE`;
 const npmUrl = `https://www.npmjs.com/package/${cliPackage.name}`;
 const xUrl = "https://x.com/colinarms";
-const title = "Council: Compare Codex, Claude, and Gemini in One CLI";
-const description =
-  "Council is an open-source CLI that runs Codex, Claude, and Gemini in parallel on the same prompt, synthesizes one answer, and highlights disagreements.";
-const examplePrompt = "review this migration plan";
 const GA_MEASUREMENT_ID = "G-VLG18DVXN5";
 const robotsContent = "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1";
 const structuredData = JSON.stringify([
@@ -111,12 +114,12 @@ const structuredData = JSON.stringify([
     <meta property="og:locale" content="en_US" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
-    <meta property="og:image:alt" content="Council CLI homepage for comparing Codex, Claude, and Gemini on the same prompt." />
+    <meta property="og:image:alt" content={ogImageAlt} />
     <meta property="og:image" content={metaImage} />
     <meta property="og:image:secure_url" content={metaImage} />
-    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="675" />
+    <meta property="og:image:height" content="630" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content={pageUrl} />
     <meta name="twitter:card" content="summary_large_image" />
@@ -125,7 +128,7 @@ const structuredData = JSON.stringify([
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={metaImage} />
-    <meta name="twitter:image:alt" content="Council CLI homepage for comparing Codex, Claude, and Gemini on the same prompt." />
+    <meta name="twitter:image:alt" content={ogImageAlt} />
 
     <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
     <Font cssVariable="--font-inter" preload />
