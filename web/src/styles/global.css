@@ -28,12 +28,18 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .stagger-fade,
-  .stagger-fade-group > * {
+  .motion-pending .stagger-fade,
+  .motion-pending .stagger-fade-group > * {
+    opacity: 0;
+    transform: translateY(var(--stagger-fade-y, 10px));
+    filter: blur(var(--stagger-fade-blur, 4px));
+  }
+
+  .motion-ready .stagger-fade,
+  .motion-ready .stagger-fade-group > * {
     animation: stagger-fade-enter var(--stagger-fade-duration)
       var(--stagger-fade-ease) both;
     animation-delay: var(--stagger-fade-delay, 0ms);
-    opacity: 0;
     will-change: opacity, transform, filter;
   }
 

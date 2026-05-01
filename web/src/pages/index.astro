@@ -133,9 +133,21 @@ const structuredData = JSON.stringify([
     <script type="application/ld+json" set:html={structuredData}></script>
 
     <script is:inline>
+      const root = document.documentElement;
       const darkModeMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
       const THEME_TRANSITION_MS = 280;
       let themeTransitionTimeout;
+
+      // Start entrance motion only after the first paint so production and dev behave the same.
+      if (window.matchMedia("(prefers-reduced-motion: no-preference)").matches) {
+        root.classList.add("motion-pending");
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            root.classList.remove("motion-pending");
+            root.classList.add("motion-ready");
+          });
+        });
+      }
 
       updateMode();
       darkModeMediaQuery.addEventListener("change", () => {
@@ -154,20 +166,20 @@ const structuredData = JSON.stringify([
         const saved = localStorage.getItem("theme");
         const isDark = saved === "dark" || (!saved && darkModeMediaQuery.matches);
 
-        document.documentElement.classList.toggle("dark", isDark);
-        document.documentElement.style.colorScheme = isDark ? "dark" : "light";
+        root.classList.toggle("dark", isDark);
+        root.style.colorScheme = isDark ? "dark" : "light";
       }
 
       function startThemeTransition() {
-        document.documentElement.classList.add("theme-switching");
+        root.classList.add("theme-switching");
         window.clearTimeout(themeTransitionTimeout);
         themeTransitionTimeout = window.setTimeout(() => {
-          document.documentElement.classList.remove("theme-switching");
+          root.classList.remove("theme-switching");
         }, THEME_TRANSITION_MS);
       }
 
       window.toggleDarkMode = function () {
-        const isDark = document.documentElement.classList.contains("dark");
+        const isDark = root.classList.contains("dark");
         localStorage.setItem("theme", isDark ? "light" : "dark");
         startThemeTransition();
         window.requestAnimationFrame(() => {
