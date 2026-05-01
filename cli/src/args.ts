@@ -50,6 +50,7 @@ export function usageText(version) {
     '  council --no-gemini --summarizer claude "Review this plan"',
     '  council --headless --json "Summarize the implementation options"',
     '  council --json-stream --codex --claude "Compare these designs"',
+    '  council --effort high "Analyze the tradeoffs for this architecture"',
     '',
     'Selection:',
     '  --members <list>          Ordered subset of codex,claude,gemini',
