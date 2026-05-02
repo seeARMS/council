@@ -2,6 +2,8 @@ import { parseArgs as parseNodeArgs } from 'node:util';
 import {
   ALL_ENGINES,
   AUTO_SUMMARIZER,
+  CLAUDE_PERMISSION_MODES,
+  CODEX_SANDBOX_MODES,
   DEFAULT_MAX_MEMBER_CHARS,
   DEFAULT_TIMEOUT_MS,
   EFFORT_LEVELS,
@@ -32,6 +34,8 @@ const OPTIONS = {
   'codex-effort': { type: 'string' },
   'claude-effort': { type: 'string' },
   'gemini-effort': { type: 'string' },
+  'codex-sandbox': { type: 'string' },
+  'claude-permission-mode': { type: 'string' },
   timeout: { type: 'string' },
   'max-member-chars': { type: 'string' },
   cwd: { type: 'string' },
@@ -89,6 +93,9 @@ export function usageText(version) {
     `  --codex-effort <level>    Codex effort: ${PROVIDER_EFFORT_LEVELS.codex.join(', ')}`,
     `  --claude-effort <level>   Claude effort: ${PROVIDER_EFFORT_LEVELS.claude.join(', ')}`,
     `  --gemini-effort <level>   Gemini effort: ${PROVIDER_EFFORT_LEVELS.gemini.join(', ')}`,
+    `  --codex-sandbox <mode>    Codex sandbox: ${CODEX_SANDBOX_MODES.join(', ')}`,
+    `  --claude-permission-mode <mode>`,
+    `                            Claude permission mode: ${CLAUDE_PERMISSION_MODES.join(', ')}`,
     '',
     'Other:',
     '  -h, --help                Show help',
@@ -132,6 +139,7 @@ export function parseArgs(argv) {
     effort: parseEffort(values.effort),
     models: parseProviderModels(values),
     efforts: parseProviderEfforts(values),
+    permissions: parseProviderPermissions(values),
     timeoutMs: values.timeout
       ? parseTimeoutMs(values.timeout)
       : DEFAULT_TIMEOUT_MS,
@@ -267,6 +275,18 @@ function parseProviderEfforts(values) {
   };
 }
 
+function parseProviderPermissions(values) {
+  return {
+    codex: parseEnumValue(values['codex-sandbox'], '--codex-sandbox', CODEX_SANDBOX_MODES),
+    claude: parseEnumValue(
+      values['claude-permission-mode'],
+      '--claude-permission-mode',
+      CLAUDE_PERMISSION_MODES
+    ),
+    gemini: null
+  };
+}
+
 function parseProviderEffort(value, engine) {
   if (value === undefined || value === null || value === '') {
     return null;
@@ -279,6 +299,20 @@ function parseProviderEffort(value, engine) {
 
   throw new Error(
     `Unsupported --${engine}-effort value: ${value} (expected ${allowed.join(', ')})`
+  );
+}
+
+function parseEnumValue(value, flagName, allowed) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  if (allowed.includes(value)) {
+    return value;
+  }
+
+  throw new Error(
+    `Unsupported ${flagName} value: ${value} (expected ${allowed.join(', ')})`
   );
 }
 

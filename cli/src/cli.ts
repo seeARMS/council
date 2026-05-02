@@ -80,6 +80,7 @@ export async function main(argv = process.argv.slice(2)) {
       effort: parsed.effort,
       models: parsed.models,
       efforts: parsed.efforts,
+      permissions: parsed.permissions,
       conversation: [],
       onEvent: undefined
     });
@@ -100,6 +101,7 @@ export async function main(argv = process.argv.slice(2)) {
     effort: parsed.effort,
     models: parsed.models,
     efforts: parsed.efforts,
+    permissions: parsed.permissions,
     conversation: [],
     onEvent: (event) => {
       if (ui.outputMode === 'json-stream') {

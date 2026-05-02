@@ -195,6 +195,30 @@ test('runEngine forwards --effort to codex via -c model_reasoning_effort', async
   }
 });
 
+test('runEngine forwards Codex sandbox permissions', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    codex: { member: { mode: 'echo-argv' } }
+  });
+
+  try {
+    const result = await runEngine('codex', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: fake.env,
+      permission: 'workspace-write'
+    });
+
+    assert.equal(result.status, 'ok');
+    const argv = JSON.parse(result.output);
+    const idx = argv.indexOf('--sandbox');
+    assert.ok(idx >= 0, 'codex did not receive --sandbox');
+    assert.equal(argv[idx + 1], 'workspace-write');
+  } finally {
+    await fake.cleanup();
+  }
+});
+
 test('runEngine forwards --effort to claude via --effort', async () => {
   const fake = await createFakeCouncilEnvironment({
     claude: { member: { mode: 'echo-argv' } }
@@ -214,6 +238,30 @@ test('runEngine forwards --effort to claude via --effort', async () => {
     const idx = argv.indexOf('--effort');
     assert.ok(idx >= 0, 'claude did not receive --effort');
     assert.equal(argv[idx + 1], 'medium');
+  } finally {
+    await fake.cleanup();
+  }
+});
+
+test('runEngine forwards Claude permission mode', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    claude: { member: { mode: 'echo-argv' } }
+  });
+
+  try {
+    const result = await runEngine('claude', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: fake.env,
+      permission: 'acceptEdits'
+    });
+
+    assert.equal(result.status, 'ok');
+    const argv = JSON.parse(result.output);
+    const idx = argv.indexOf('--permission-mode');
+    assert.ok(idx >= 0, 'claude did not receive --permission-mode');
+    assert.equal(argv[idx + 1], 'acceptEdits');
   } finally {
     await fake.cleanup();
   }

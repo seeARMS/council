@@ -2,6 +2,7 @@ import {
   ALL_ENGINES,
   AUTO_SUMMARIZER,
   DEFAULT_MAX_MEMBER_CHARS,
+  DEFAULT_PROVIDER_PERMISSIONS,
   DEFAULT_SUMMARIZER_ORDER,
   buildMemberPrompt,
   buildSummaryPrompt,
@@ -21,10 +22,16 @@ export async function runCouncil(options: any = {}) {
   effort = null,
   models = {},
   efforts = {},
+  permissions = {},
   onEvent = () => {}
   } = options;
   const resolvedModels = resolveEngineSettings(models, null);
   const resolvedEfforts = resolveEngineSettings(efforts, effort);
+  const resolvedPermissions = resolveEngineSettings(
+    permissions,
+    null,
+    DEFAULT_PROVIDER_PERMISSIONS
+  );
 
   emitEvent(onEvent, 'run_started', {
     cwd,
@@ -32,7 +39,8 @@ export async function runCouncil(options: any = {}) {
     summarizer,
     effort,
     models: resolvedModels,
-    efforts: resolvedEfforts
+    efforts: resolvedEfforts,
+    permissions: resolvedPermissions
   });
 
   const memberPrompt = buildMemberPrompt(query, {
@@ -47,6 +55,7 @@ export async function runCouncil(options: any = {}) {
         env,
         effort: resolvedEfforts[name],
         model: resolvedModels[name],
+        permission: resolvedPermissions[name],
         onEvent
       })
     )
@@ -70,6 +79,7 @@ export async function runCouncil(options: any = {}) {
         env,
         effort: resolvedEfforts[candidate],
         model: resolvedModels[candidate],
+        permission: resolvedPermissions[candidate],
         onEvent
       });
       summaryAttempts.push(attempt);
@@ -108,6 +118,7 @@ export async function runCouncil(options: any = {}) {
     effort,
     models: resolvedModels,
     efforts: resolvedEfforts,
+    permissions: resolvedPermissions,
     members: memberRuns,
     summaryAttempts,
     summary,
@@ -151,7 +162,7 @@ function summarizeNoResponse(memberRuns) {
   return 'No council member produced a response.';
 }
 
-async function runMember(name, { prompt, cwd, timeoutMs, env, effort, model, onEvent }) {
+async function runMember(name, { prompt, cwd, timeoutMs, env, effort, model, permission, onEvent }) {
   emitEvent(onEvent, 'member_started', {
     name
   });
@@ -165,6 +176,7 @@ async function runMember(name, { prompt, cwd, timeoutMs, env, effort, model, onE
     env,
     effort,
     model,
+    permission,
     onEvent
   });
 
@@ -175,7 +187,7 @@ async function runMember(name, { prompt, cwd, timeoutMs, env, effort, model, onE
   return result;
 }
 
-async function runSummaryAttempt(name, { prompt, cwd, timeoutMs, env, effort, model, onEvent }) {
+async function runSummaryAttempt(name, { prompt, cwd, timeoutMs, env, effort, model, permission, onEvent }) {
   emitEvent(onEvent, 'summary_started', {
     name
   });
@@ -189,6 +201,7 @@ async function runSummaryAttempt(name, { prompt, cwd, timeoutMs, env, effort, mo
     env,
     effort,
     model,
+    permission,
     onEvent
   });
 
@@ -231,7 +244,7 @@ async function runWithHeartbeat({ kind, name, onEvent, task }) {
   }
 }
 
-async function runEngineTask({ kind, name, prompt, cwd, timeoutMs, env, effort, model, onEvent }) {
+async function runEngineTask({ kind, name, prompt, cwd, timeoutMs, env, effort, model, permission, onEvent }) {
   const startedAt = Date.now();
 
   try {
@@ -247,6 +260,7 @@ async function runEngineTask({ kind, name, prompt, cwd, timeoutMs, env, effort, 
           env,
           effort,
           model,
+          permission,
           onProgress
         })
     });
@@ -255,11 +269,11 @@ async function runEngineTask({ kind, name, prompt, cwd, timeoutMs, env, effort, 
   }
 }
 
-function resolveEngineSettings(overrides, fallback) {
+function resolveEngineSettings(overrides, fallback, defaults = {}) {
   const resolved = {};
 
   for (const engine of ALL_ENGINES) {
-    resolved[engine] = overrides?.[engine] ?? fallback ?? null;
+    resolved[engine] = overrides?.[engine] ?? defaults?.[engine] ?? fallback ?? null;
   }
 
   return resolved;

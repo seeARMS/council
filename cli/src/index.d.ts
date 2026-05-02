@@ -4,6 +4,8 @@ export type ColorMode = 'auto' | 'always' | 'never';
 export type EngineStatus = 'ok' | 'missing' | 'timeout' | 'error';
 export type EffortLevel = 'low' | 'medium' | 'high';
 export type ProviderEffortLevel = EffortLevel | 'xhigh' | 'max';
+export type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
+export type ClaudePermissionMode = 'acceptEdits' | 'auto' | 'bypassPermissions' | 'default' | 'dontAsk' | 'plan';
 
 export interface ProviderModels {
   codex?: string | null;
@@ -15,6 +17,12 @@ export interface ProviderEfforts {
   codex?: ProviderEffortLevel | null;
   claude?: ProviderEffortLevel | null;
   gemini?: EffortLevel | null;
+}
+
+export interface ProviderPermissions {
+  codex?: CodexSandboxMode | null;
+  claude?: ClaudePermissionMode | null;
+  gemini?: null;
 }
 
 export interface ConversationTurn {
@@ -38,6 +46,7 @@ export interface ParsedArgs {
   effort: EffortLevel | null;
   models: ProviderModels;
   efforts: ProviderEfforts;
+  permissions: ProviderPermissions;
   timeoutMs: number;
   maxMemberChars: number;
   cwd: string;
@@ -69,6 +78,7 @@ export interface RunEngineOptions {
   env?: Record<string, string | undefined>;
   effort?: ProviderEffortLevel | null;
   model?: string | null;
+  permission?: CodexSandboxMode | ClaudePermissionMode | null;
   onProgress?: (progress: EngineProgress) => void;
 }
 
@@ -90,6 +100,7 @@ export interface RunCouncilOptions {
   effort?: EffortLevel | null;
   models?: ProviderModels;
   efforts?: ProviderEfforts;
+  permissions?: ProviderPermissions;
   conversation?: ConversationTurn[];
   env?: Record<string, string | undefined>;
   onEvent?: (event: CouncilEvent) => void;
@@ -103,6 +114,7 @@ export interface CouncilResult {
   effort: EffortLevel | null;
   models: ProviderModels;
   efforts: ProviderEfforts;
+  permissions: ProviderPermissions;
   members: CouncilEngineResult[];
   summaryAttempts: CouncilEngineResult[];
   summary: CouncilEngineResult;
@@ -123,6 +135,7 @@ export interface RunStartedEvent {
   effort: EffortLevel | null;
   models: ProviderModels;
   efforts: ProviderEfforts;
+  permissions: ProviderPermissions;
 }
 
 export interface MemberStartedEvent {
@@ -200,6 +213,13 @@ export const PROVIDER_EFFORT_LEVELS: {
   readonly codex: readonly ('low' | 'medium' | 'high' | 'xhigh')[];
   readonly claude: readonly ('low' | 'medium' | 'high' | 'xhigh' | 'max')[];
   readonly gemini: readonly EffortLevel[];
+};
+export const CODEX_SANDBOX_MODES: readonly CodexSandboxMode[];
+export const CLAUDE_PERMISSION_MODES: readonly ClaudePermissionMode[];
+export const DEFAULT_PROVIDER_PERMISSIONS: {
+  readonly codex: 'read-only';
+  readonly claude: 'plan';
+  readonly gemini: null;
 };
 export const EXIT_CODES: {
   readonly OK: 0;

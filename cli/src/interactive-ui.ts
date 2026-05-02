@@ -62,6 +62,7 @@ function SessionApp({
   effort = null,
   models = {},
   efforts = {},
+  permissions = {},
   conversation = [],
   onEvent
 }) {
@@ -137,6 +138,7 @@ function SessionApp({
       effort,
       models,
       efforts,
+      permissions,
       conversation: conversationRef.current,
       onEvent: (event) => {
         if (cancelled) return;
@@ -205,6 +207,7 @@ function SessionApp({
     effort,
     models,
     efforts,
+    permissions,
     maxMemberChars,
     members,
     onEvent,

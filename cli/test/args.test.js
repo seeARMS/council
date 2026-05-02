@@ -141,3 +141,30 @@ test('validates provider-specific effort values against each provider', () => {
     /Unsupported --claude-effort value/
   );
 });
+
+test('parses provider-specific permission flags', () => {
+  const parsed = parseArgs([
+    '--codex-sandbox',
+    'workspace-write',
+    '--claude-permission-mode',
+    'acceptEdits',
+    'question'
+  ]);
+
+  assert.deepEqual(parsed.permissions, {
+    codex: 'workspace-write',
+    claude: 'acceptEdits',
+    gemini: null
+  });
+});
+
+test('validates provider-specific permission values', () => {
+  assert.throws(
+    () => parseArgs(['--codex-sandbox', 'auto', 'q']),
+    /Unsupported --codex-sandbox value/
+  );
+  assert.throws(
+    () => parseArgs(['--claude-permission-mode', 'root', 'q']),
+    /Unsupported --claude-permission-mode value/
+  );
+});

@@ -125,7 +125,7 @@ test('runCouncil emits lifecycle events for members and synthesis', async () => 
   }
 });
 
-test('runCouncil applies provider-specific model and effort overrides', async () => {
+test('runCouncil applies provider-specific model, effort, and permission overrides', async () => {
   const fake = await createFakeCouncilEnvironment({
     codex: {
       member: { mode: 'echo-argv' },
@@ -151,24 +151,36 @@ test('runCouncil applies provider-specific model and effort overrides', async ()
       },
       efforts: {
         claude: 'max'
+      },
+      permissions: {
+        codex: 'workspace-write',
+        claude: 'acceptEdits'
       }
     });
 
     const codexMember = JSON.parse(result.members.find((member) => member.name === 'codex').output);
     assert.equal(codexMember[codexMember.indexOf('--model') + 1], 'gpt-5.2');
     assert.equal(codexMember[codexMember.indexOf('-c') + 1], 'model_reasoning_effort=low');
+    assert.equal(codexMember[codexMember.indexOf('--sandbox') + 1], 'workspace-write');
 
     const claudeMember = JSON.parse(result.members.find((member) => member.name === 'claude').output);
     assert.equal(claudeMember[claudeMember.indexOf('--model') + 1], 'opus');
     assert.equal(claudeMember[claudeMember.indexOf('--effort') + 1], 'max');
+    assert.equal(claudeMember[claudeMember.indexOf('--permission-mode') + 1], 'acceptEdits');
 
     const codexSummary = JSON.parse(result.summary.output);
     assert.equal(codexSummary[codexSummary.indexOf('--model') + 1], 'gpt-5.2');
     assert.equal(codexSummary[codexSummary.indexOf('-c') + 1], 'model_reasoning_effort=low');
+    assert.equal(codexSummary[codexSummary.indexOf('--sandbox') + 1], 'workspace-write');
     assert.deepEqual(result.efforts, {
       codex: 'low',
       claude: 'max',
       gemini: 'low'
+    });
+    assert.deepEqual(result.permissions, {
+      codex: 'workspace-write',
+      claude: 'acceptEdits',
+      gemini: null
     });
   } finally {
     await fake.cleanup();

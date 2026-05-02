@@ -153,6 +153,19 @@ council \
 
 `--effort low|medium|high` remains available as a common default for all members. Provider-specific effort flags override the common value for that provider.
 
+## Permission selection
+
+Council defaults to read-only consultation modes. Use provider-specific permission flags when a member needs broader local access:
+
+```bash
+council \
+  --codex-sandbox workspace-write \
+  --claude-permission-mode acceptEdits \
+  "Review and patch this issue"
+```
+
+Codex sandbox modes are `read-only`, `workspace-write`, and `danger-full-access`. Claude permission modes are passed through to Claude Code as `--permission-mode` and may be `plan`, `default`, `acceptEdits`, `auto`, `dontAsk`, or `bypassPermissions`.
+
 ## Safe defaults
 
 `council` intentionally runs the upstream tools in consultation-oriented modes:

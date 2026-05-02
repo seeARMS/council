@@ -14,6 +14,13 @@ export const PROVIDER_EFFORT_LEVELS = {
   claude: ['low', 'medium', 'high', 'xhigh', 'max'],
   gemini: ['low', 'medium', 'high']
 };
+export const CODEX_SANDBOX_MODES = ['read-only', 'workspace-write', 'danger-full-access'];
+export const CLAUDE_PERMISSION_MODES = ['acceptEdits', 'auto', 'bypassPermissions', 'default', 'dontAsk', 'plan'];
+export const DEFAULT_PROVIDER_PERMISSIONS = {
+  codex: 'read-only',
+  claude: 'plan',
+  gemini: null
+};
 
 const GEMINI_THINKING_BUDGETS = {
   low: 1024,
@@ -47,6 +54,7 @@ export async function runEngine(
     env = process.env,
     effort = null,
     model = null,
+    permission = null,
     onProgress = () => {}
   }
 ) {
@@ -55,14 +63,14 @@ export async function runEngine(
   }
 
   if (name === 'codex') {
-    return runCodex({ prompt, cwd, timeoutMs, env, effort, model, onProgress });
+    return runCodex({ prompt, cwd, timeoutMs, env, effort, model, permission, onProgress });
   }
 
   if (name === 'claude') {
-    return runClaude({ prompt, cwd, timeoutMs, env, effort, model, onProgress });
+    return runClaude({ prompt, cwd, timeoutMs, env, effort, model, permission, onProgress });
   }
 
-  return runGemini({ prompt, cwd, timeoutMs, env, effort, model, onProgress });
+  return runGemini({ prompt, cwd, timeoutMs, env, effort, model, permission, onProgress });
 }
 
 export function buildMemberPrompt(query, { conversation = [] } = {}) {
@@ -165,7 +173,7 @@ export function parseGeminiOutput(stdout) {
   return trimmed;
 }
 
-async function runCodex({ prompt, cwd, timeoutMs, env, effort, model, onProgress }) {
+async function runCodex({ prompt, cwd, timeoutMs, env, effort, model, permission, onProgress }) {
   const bin = resolveBinary('codex', env);
   const tempDir = await mkdtemp(path.join(tmpdir(), 'council-codex-'));
   const outputPath = path.join(tempDir, 'last-message.txt');
@@ -182,6 +190,7 @@ async function runCodex({ prompt, cwd, timeoutMs, env, effort, model, onProgress
 
   const modelArgs = model ? ['--model', model] : [];
   const effortArgs = effort ? ['-c', `model_reasoning_effort=${effort}`] : [];
+  const sandbox = permission || DEFAULT_PROVIDER_PERMISSIONS.codex;
 
   try {
     const commandResult = await runCommand({
@@ -192,7 +201,7 @@ async function runCodex({ prompt, cwd, timeoutMs, env, effort, model, onProgress
         ...effortArgs,
         '--skip-git-repo-check',
         '--sandbox',
-        'read-only',
+        sandbox,
         '--ephemeral',
         '--json',
         '-o',
@@ -223,7 +232,7 @@ async function runCodex({ prompt, cwd, timeoutMs, env, effort, model, onProgress
   }
 }
 
-async function runClaude({ prompt, cwd, timeoutMs, env, effort, model, onProgress }) {
+async function runClaude({ prompt, cwd, timeoutMs, env, effort, model, permission, onProgress }) {
   const bin = resolveBinary('claude', env);
   const startedAt = Date.now();
   let lastProgressDetail = '';
@@ -239,13 +248,14 @@ async function runClaude({ prompt, cwd, timeoutMs, env, effort, model, onProgres
   const authArgs = shouldUseClaudeBareMode(env) ? ['--bare'] : [];
   const modelArgs = model ? ['--model', model] : [];
   const effortArgs = resolvedEffort ? ['--effort', resolvedEffort] : [];
+  const permissionMode = permission || DEFAULT_PROVIDER_PERMISSIONS.claude;
   const commandResult = await runCommand({
     command: bin,
     args: [
       ...authArgs,
       '-p',
       '--permission-mode',
-      'plan',
+      permissionMode,
       '--verbose',
       '--output-format',
       'stream-json',
@@ -275,7 +285,7 @@ async function runClaude({ prompt, cwd, timeoutMs, env, effort, model, onProgres
   });
 }
 
-async function runGemini({ prompt, cwd, timeoutMs, env, effort, model, onProgress }) {
+async function runGemini({ prompt, cwd, timeoutMs, env, effort, model, permission, onProgress }) {
   const bin = resolveBinary('gemini', env);
   const startedAt = Date.now();
   let lastProgressDetail = '';
