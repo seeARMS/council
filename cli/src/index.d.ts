@@ -9,6 +9,7 @@ export type ClaudePermissionMode = 'acceptEdits' | 'auto' | 'bypassPermissions' 
 export type CodexAuthMethod = 'auto' | 'social-login' | 'login' | 'api-key';
 export type ClaudeAuthMethod = 'auto' | 'social-login' | 'oauth' | 'api-key' | 'keychain';
 export type GeminiAuthMethod = 'auto' | 'social-login' | 'login' | 'api-key';
+export type ProviderCapabilityMode = 'inherit' | 'override';
 export type CouncilRole = 'planner' | 'lead' | 'lead+planner' | 'executor';
 
 export interface ProviderModels {
@@ -33,6 +34,36 @@ export interface ProviderAuths {
   codex?: CodexAuthMethod | null;
   claude?: ClaudeAuthMethod | null;
   gemini?: GeminiAuthMethod | null;
+}
+
+export interface CodexCapabilities {
+  mode?: ProviderCapabilityMode;
+  config?: string[];
+  mcpProfile?: string | null;
+}
+
+export interface ClaudeCapabilities {
+  mode?: ProviderCapabilityMode;
+  mcpConfig?: string[];
+  allowedTools?: string[];
+  disallowedTools?: string[];
+}
+
+export interface GeminiCapabilities {
+  mode?: ProviderCapabilityMode;
+  settings?: string | null;
+  toolsProfile?: string[];
+}
+
+export type ProviderCapability =
+  | CodexCapabilities
+  | ClaudeCapabilities
+  | GeminiCapabilities;
+
+export interface ProviderCapabilities {
+  codex?: CodexCapabilities;
+  claude?: ClaudeCapabilities;
+  gemini?: GeminiCapabilities;
 }
 
 export interface AuthLoginOptions {
@@ -118,6 +149,7 @@ export interface ParsedArgs {
   efforts: ProviderEfforts;
   permissions: ProviderPermissions;
   auths: ProviderAuths;
+  capabilities: ProviderCapabilities;
   authLogin: AuthLoginOptions;
   promptContext: PromptContextOptions;
   handoff: boolean;
@@ -175,6 +207,7 @@ export interface CouncilEngineResult {
   totalIterations?: number;
   teamSize?: number;
   auth?: string | null;
+  capability?: ProviderCapability | null;
 }
 
 export interface RunEngineOptions {
@@ -186,6 +219,7 @@ export interface RunEngineOptions {
   model?: string | null;
   permission?: CodexSandboxMode | ClaudePermissionMode | null;
   auth?: string | null;
+  capability?: ProviderCapability | null;
   onProgress?: (progress: EngineProgress) => void;
 }
 
@@ -220,6 +254,7 @@ export interface RunCouncilOptions {
   efforts?: ProviderEfforts;
   permissions?: ProviderPermissions;
   auths?: ProviderAuths;
+  capabilities?: ProviderCapabilities;
   promptContext?: any;
   handoff?: boolean;
   lead?: EngineName | null;
@@ -242,6 +277,7 @@ export interface CouncilResult {
   efforts: ProviderEfforts;
   permissions: ProviderPermissions;
   auths: ProviderAuths;
+  capabilities: ProviderCapabilities;
   workflow: CouncilWorkflow;
   iterations: number;
   iterationResults: Array<{
@@ -270,6 +306,7 @@ export interface RunStartedEvent {
   efforts: ProviderEfforts;
   permissions: ProviderPermissions;
   auths: ProviderAuths;
+  capabilities: ProviderCapabilities;
   workflow: CouncilWorkflow;
 }
 
@@ -533,6 +570,7 @@ export const PROVIDER_AUTH_METHODS: {
   readonly claude: readonly ('auto' | 'social-login' | 'oauth' | 'api-key' | 'keychain')[];
   readonly gemini: readonly ('auto' | 'social-login' | 'login' | 'api-key')[];
 };
+export const PROVIDER_CAPABILITY_MODES: readonly ProviderCapabilityMode[];
 export const CODEX_SANDBOX_MODES: readonly CodexSandboxMode[];
 export const CLAUDE_PERMISSION_MODES: readonly ClaudePermissionMode[];
 export const DEFAULT_PROVIDER_PERMISSIONS: {
@@ -544,6 +582,24 @@ export const DEFAULT_PROVIDER_AUTHS: {
   readonly codex: 'auto';
   readonly claude: 'auto';
   readonly gemini: 'auto';
+};
+export const DEFAULT_PROVIDER_CAPABILITIES: {
+  readonly codex: {
+    readonly mode: 'inherit';
+    readonly config: readonly [];
+    readonly mcpProfile: null;
+  };
+  readonly claude: {
+    readonly mode: 'inherit';
+    readonly mcpConfig: readonly [];
+    readonly allowedTools: readonly [];
+    readonly disallowedTools: readonly [];
+  };
+  readonly gemini: {
+    readonly mode: 'inherit';
+    readonly settings: null;
+    readonly toolsProfile: readonly [];
+  };
 };
 export const DEFAULT_PROVIDER_TEAM_SIZES: {
   readonly codex: 0;

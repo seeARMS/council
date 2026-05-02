@@ -591,6 +591,93 @@ test('runEngine forwards provider model flags', async () => {
   }
 });
 
+test('runEngine forwards provider capability override flags', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    codex: { member: { mode: 'echo-argv' } },
+    claude: { member: { mode: 'echo-argv' } },
+    gemini: { member: { mode: 'echo-env' } }
+  });
+
+  try {
+    const codexResult = await runEngine('codex', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: fake.env,
+      capability: {
+        mode: 'override',
+        config: ['tools.web_search=true'],
+        mcpProfile: 'repo'
+      }
+    });
+    const codexArgv = JSON.parse(codexResult.output);
+    assert.equal(codexArgv[codexArgv.indexOf('-c') + 1], 'tools.web_search=true');
+    assert.equal(codexArgv[codexArgv.indexOf('--profile') + 1], 'repo');
+
+    const claudeResult = await runEngine('claude', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: fake.env,
+      capability: {
+        mode: 'override',
+        mcpConfig: ['.mcp.json'],
+        allowedTools: ['Read', 'Bash(git:*)'],
+        disallowedTools: ['Write']
+      }
+    });
+    const claudeArgv = JSON.parse(claudeResult.output);
+    assert.equal(claudeArgv[claudeArgv.indexOf('--mcp-config') + 1], '.mcp.json');
+    assert.equal(claudeArgv[claudeArgv.indexOf('--allowedTools') + 1], 'Read');
+    assert.equal(claudeArgv[claudeArgv.indexOf('--allowedTools') + 2], 'Bash(git:*)');
+    assert.equal(claudeArgv[claudeArgv.indexOf('--disallowedTools') + 1], 'Write');
+
+    const geminiResult = await runEngine('gemini', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: fake.env,
+      capability: {
+        mode: 'override',
+        settings: '.gemini/settings.json',
+        toolsProfile: ['repo-tools', 'web']
+      }
+    });
+    const geminiPayload = JSON.parse(geminiResult.output);
+    assert.equal(geminiPayload.GEMINI_CLI_SYSTEM_SETTINGS_PATH, '.gemini/settings.json');
+    assert.equal(geminiPayload.argv[geminiPayload.argv.indexOf('--extensions') + 1], 'repo-tools');
+    assert.equal(geminiPayload.argv[geminiPayload.argv.indexOf('--extensions') + 2], 'web');
+  } finally {
+    await fake.cleanup();
+  }
+});
+
+test('runEngine ignores provider capability values while inheriting provider config', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    codex: { member: { mode: 'echo-argv' } }
+  });
+
+  try {
+    const result = await runEngine('codex', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: fake.env,
+      capability: {
+        mode: 'inherit',
+        config: ['tools.web_search=true'],
+        mcpProfile: 'repo'
+      }
+    });
+
+    const argv = JSON.parse(result.output);
+    assert.equal(argv.includes('--profile'), false);
+    assert.equal(argv.includes('tools.web_search=true'), false);
+  } finally {
+    await fake.cleanup();
+  }
+});
+
 test('runEngine forwards --effort to gemini via thinkingBudget settings (no model swap)', async () => {
   const fake = await createFakeCouncilEnvironment({
     gemini: { member: { mode: 'echo-env' } }

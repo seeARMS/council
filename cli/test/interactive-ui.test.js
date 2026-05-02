@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   applyStudioSetting,
   buildInteractiveBlocks,
+  buildStudioCapabilityRows,
   buildStudioLinearDelivery,
   buildStudioSettings,
   buildStudioTelemetryLines,
@@ -10,6 +11,7 @@ import {
   createInitialExpanded,
   moveStudioPane,
   sanitizeImmediateFollowUpChunk,
+  setStudioCapabilityField,
   shouldUseInteractiveDashboard,
   toggleExpanded
 } from '../src/interactive-ui.js';
@@ -231,6 +233,13 @@ test('studio config builds editable settings from CLI options', () => {
     },
     auths: {
       claude: 'oauth'
+    },
+    capabilities: {
+      codex: {
+        mode: 'override',
+        config: ['tools.web_search=true'],
+        mcpProfile: 'repo'
+      }
     }
   });
   const settings = buildStudioSettings(config);
@@ -240,9 +249,12 @@ test('studio config builds editable settings from CLI options', () => {
   assert.equal(config.planner, 'codex');
   assert.equal(config.teams.claude, 3);
   assert.equal(config.auths.claude, 'oauth');
+  assert.equal(config.capabilities.codex.mode, 'override');
+  assert.deepEqual(config.capabilities.codex.config, ['tools.web_search=true']);
   assert.equal(settings.find((setting) => setting.id === 'handoff')?.value, 'on');
   assert.equal(settings.find((setting) => setting.id === 'codexSandbox')?.value, 'workspace-write');
   assert.equal(settings.find((setting) => setting.id === 'claudeAuth')?.value, 'oauth');
+  assert.equal(settings.find((setting) => setting.id === 'codexCapabilities')?.value, 'override');
   assert.equal(settings.find((setting) => setting.id === 'linearMode')?.value, 'off');
 });
 
@@ -267,9 +279,25 @@ test('studio settings cycle workflow values and keep roles valid', () => {
 
 test('studio pane movement reorders focused panes', () => {
   assert.deepEqual(
-    moveStudioPane(['menu', 'settings', 'agents', 'linear', 'results'], 'linear', -1),
-    ['menu', 'settings', 'linear', 'agents', 'results']
+    moveStudioPane(['menu', 'settings', 'agents', 'capabilities', 'linear', 'results'], 'linear', -1),
+    ['menu', 'settings', 'agents', 'linear', 'capabilities', 'results']
   );
+});
+
+test('studio capability pane edits provider config and switches to override', () => {
+  const config = createStudioConfig();
+  const modeConfig = applyStudioSetting(config, 'claudeCapabilities', 1);
+  const nextConfig = setStudioCapabilityField(
+    modeConfig,
+    'claude.allowedTools',
+    'Read,Bash(git:*)'
+  );
+  const rows = buildStudioCapabilityRows(nextConfig);
+
+  assert.equal(modeConfig.capabilities.claude.mode, 'override');
+  assert.deepEqual(nextConfig.capabilities.claude.allowedTools, ['Read', 'Bash(git:*)']);
+  assert.equal(nextConfig.capabilities.claude.mode, 'override');
+  assert.equal(rows.find((row) => row.id === 'claudeAllowedTools')?.value, 'Read,Bash(git:*)');
 });
 
 test('studio exposes Linear delivery settings and payload', () => {

@@ -46,8 +46,8 @@ import {
   summaryTextForConversation
 } from './session-core.js';
 
-const STUDIO_PANES = ['menu', 'settings', 'agents', 'linear', 'results'];
-const STUDIO_FOCUS_ORDER = ['menu', 'settings', 'agents', 'linear', 'results', 'prompt'];
+const STUDIO_PANES = ['menu', 'settings', 'agents', 'capabilities', 'linear', 'results'];
+const STUDIO_FOCUS_ORDER = ['menu', 'settings', 'agents', 'capabilities', 'linear', 'results', 'prompt'];
 const STUDIO_ENGINES = ['codex', 'claude', 'gemini'];
 const STUDIO_MENU = [
   { id: 'run', label: 'Run / re-run' },
@@ -64,6 +64,7 @@ const STUDIO_MENU = [
   { id: 'runCommand', label: 'Run command' },
   { id: 'settings', label: 'Settings' },
   { id: 'agents', label: 'Agents' },
+  { id: 'capabilities', label: 'Capabilities' },
   { id: 'linear', label: 'Linear' },
   { id: 'results', label: 'Results' },
   { id: 'help', label: 'Help' },
@@ -81,6 +82,7 @@ const STUDIO_EFFORTS = {
   claude: [null, 'low', 'medium', 'high', 'xhigh', 'max'],
   gemini: [null, 'low', 'medium', 'high']
 };
+const STUDIO_CAPABILITY_MODES = ['inherit', 'override'];
 const STUDIO_LINEAR_AUTH_METHODS = ['api-key', 'oauth'];
 const STUDIO_LINEAR_MODES = ['off', 'deliver', 'watch'];
 const STUDIO_LINEAR_WORKSPACE_STRATEGIES = ['worktree', 'copy', 'none'];
@@ -184,6 +186,7 @@ function StudioApp(props) {
   const [menuIndex, setMenuIndex] = useState(0);
   const [settingIndex, setSettingIndex] = useState(0);
   const [agentIndex, setAgentIndex] = useState(0);
+  const [capabilityIndex, setCapabilityIndex] = useState(0);
   const [resultIndex, setResultIndex] = useState(0);
   const [expanded, setExpanded] = useState(createInitialExpanded);
   const [conversationState, setConversationState] = useState(() => [
@@ -250,6 +253,7 @@ function StudioApp(props) {
       efforts: runConfig.efforts,
       permissions: runConfig.permissions,
       auths: runConfig.auths,
+      capabilities: runConfig.capabilities,
       handoff: runConfig.handoff,
       lead: runConfig.lead,
       planner: runConfig.planner,
@@ -571,6 +575,20 @@ function StudioApp(props) {
     setFocusPane('prompt');
   };
 
+  const startCapabilityFieldAction = (field, label) => {
+    const value = getStudioCapabilityFieldValue(configRef.current, field);
+    setPromptAction({
+      kind: 'capabilityField',
+      field,
+      label,
+      value,
+      cursorOffset: value.length
+    });
+    setActionStatus(`${label}. Press Enter to save; this switches the provider to override mode.`);
+    setEditingPrompt(false);
+    setFocusPane('prompt');
+  };
+
   const startStudioLinearStatus = () => {
     if (linearBusy) {
       return;
@@ -636,6 +654,7 @@ function StudioApp(props) {
       efforts: nextConfig.efforts,
       permissions: nextConfig.permissions,
       auths: nextConfig.auths,
+      capabilities: nextConfig.capabilities,
       handoff: nextConfig.handoff,
       lead: nextConfig.lead,
       planner: nextConfig.planner,
@@ -689,20 +708,33 @@ function StudioApp(props) {
     }
 
     const value = promptAction.value.trim();
-    if (!value) {
+    if (!value && !['linearField', 'capabilityField'].includes(promptAction.kind)) {
       setPromptAction(null);
       setActionStatus('');
       return;
     }
 
     const kind = promptAction.kind;
-    setActionStatus(kind === 'file' ? `Tagging ${value}...` : `Running ${value}...`);
+    setActionStatus(
+      kind === 'file'
+        ? `Tagging ${value}...`
+        : kind === 'command'
+          ? `Running ${value}...`
+          : `Saving ${value}...`
+    );
     setPromptAction(null);
 
     if (kind === 'linearField') {
       setConfig((current) => setStudioLinearField(current, promptAction.field, value));
       setFocusPane('linear');
       setActionStatus(`${promptAction.label || 'Linear field'} saved.`);
+      return;
+    }
+
+    if (kind === 'capabilityField') {
+      setConfig((current) => setStudioCapabilityField(current, promptAction.field, value));
+      setFocusPane('capabilities');
+      setActionStatus(`${promptAction.label || 'Provider capability'} saved.`);
       return;
     }
 
@@ -866,6 +898,13 @@ function StudioApp(props) {
         if (focusPane === 'settings') {
           const setting = buildStudioSettings(config)[settingIndex];
           if (setting) setConfig((current) => applyStudioSetting(current, setting.id, -1));
+        } else if (focusPane === 'capabilities') {
+          const row = buildStudioCapabilityRows(config)[capabilityIndex];
+          if (row?.kind === 'mode') {
+            setConfig((current) => applyStudioCapabilityRow(current, row.id, -1));
+          } else {
+            moveFocus(-1);
+          }
         } else {
           moveFocus(-1);
         }
@@ -876,6 +915,13 @@ function StudioApp(props) {
         if (focusPane === 'settings') {
           const setting = buildStudioSettings(config)[settingIndex];
           if (setting) setConfig((current) => applyStudioSetting(current, setting.id, 1));
+        } else if (focusPane === 'capabilities') {
+          const row = buildStudioCapabilityRows(config)[capabilityIndex];
+          if (row?.kind === 'mode') {
+            setConfig((current) => applyStudioCapabilityRow(current, row.id, 1));
+          } else {
+            moveFocus(1);
+          }
         } else {
           moveFocus(1);
         }
@@ -886,6 +932,7 @@ function StudioApp(props) {
         if (focusPane === 'menu') setMenuIndex((current) => wrapIndex(current - 1, STUDIO_MENU.length));
         if (focusPane === 'settings') setSettingIndex((current) => wrapIndex(current - 1, buildStudioSettings(config).length));
         if (focusPane === 'agents') setAgentIndex((current) => wrapIndex(current - 1, STUDIO_ENGINES.length));
+        if (focusPane === 'capabilities') setCapabilityIndex((current) => wrapIndex(current - 1, buildStudioCapabilityRows(config).length));
         if (focusPane === 'results') setResultIndex((current) => wrapIndex(current - 1, enabledStudioMembers(config).length + 1));
         return;
       }
@@ -894,6 +941,7 @@ function StudioApp(props) {
         if (focusPane === 'menu') setMenuIndex((current) => wrapIndex(current + 1, STUDIO_MENU.length));
         if (focusPane === 'settings') setSettingIndex((current) => wrapIndex(current + 1, buildStudioSettings(config).length));
         if (focusPane === 'agents') setAgentIndex((current) => wrapIndex(current + 1, STUDIO_ENGINES.length));
+        if (focusPane === 'capabilities') setCapabilityIndex((current) => wrapIndex(current + 1, buildStudioCapabilityRows(config).length));
         if (focusPane === 'results') setResultIndex((current) => wrapIndex(current + 1, enabledStudioMembers(config).length + 1));
         return;
       }
@@ -906,6 +954,13 @@ function StudioApp(props) {
           if (setting) setConfig((current) => applyStudioSetting(current, setting.id, 1));
         } else if (focusPane === 'agents') {
           setConfig((current) => toggleStudioMember(current, STUDIO_ENGINES[agentIndex]));
+        } else if (focusPane === 'capabilities') {
+          const row = buildStudioCapabilityRows(config)[capabilityIndex];
+          if (row?.kind === 'mode') {
+            setConfig((current) => applyStudioCapabilityRow(current, row.id, 1));
+          } else if (row?.field) {
+            startCapabilityFieldAction(row.field, row.label);
+          }
         } else if (focusPane === 'linear') {
           startStudioLinearStatus();
         } else if (focusPane === 'results') {
@@ -959,12 +1014,17 @@ function StudioApp(props) {
   );
 
   const settings = buildStudioSettings(config);
+  const capabilityRows = buildStudioCapabilityRows(config);
   const members = enabledStudioMembers(config);
   const compactLayout = columns < 120;
-  const panelWidths = calculateStudioPanelWidths(columns, compactLayout);
+  const stackedLayout = !compactLayout && columns < 180;
+  const columnsPerRow = compactLayout ? 2 : stackedLayout ? 3 : STUDIO_PANES.length;
+  const panelWidths = calculateStudioPanelWidths(columns, columnsPerRow);
   const paneRows = compactLayout
     ? [paneOrder.slice(0, 2), paneOrder.slice(2)]
-    : [paneOrder];
+    : stackedLayout
+      ? [paneOrder.slice(0, 3), paneOrder.slice(3)]
+      : [paneOrder];
 
   return h(
     Box,
@@ -990,6 +1050,7 @@ function StudioApp(props) {
             config,
             members,
             settings,
+            capabilityRows,
             linearStatus,
             linearResult,
             linearEvents,
@@ -997,6 +1058,7 @@ function StudioApp(props) {
             menuIndex,
             settingIndex,
             agentIndex,
+            capabilityIndex,
             resultIndex,
             sessionState,
             expanded,
@@ -1033,6 +1095,7 @@ function SessionApp({
   efforts = {},
   permissions = {},
   auths = {},
+  capabilities = {},
   handoff = false,
   lead = null,
   planner = null,
@@ -1122,6 +1185,7 @@ function SessionApp({
       efforts,
       permissions,
       auths,
+      capabilities,
       handoff,
       lead,
       planner,
@@ -1198,6 +1262,7 @@ function SessionApp({
     efforts,
     permissions,
     auths,
+    capabilities,
     handoff,
     lead,
     planner,
@@ -1372,6 +1437,7 @@ function StudioPane({
   config,
   members,
   settings,
+  capabilityRows,
   linearStatus,
   linearResult,
   linearEvents,
@@ -1379,6 +1445,7 @@ function StudioPane({
   menuIndex,
   settingIndex,
   agentIndex,
+  capabilityIndex,
   resultIndex,
   sessionState,
   expanded,
@@ -1388,6 +1455,7 @@ function StudioPane({
     menu: 'Command Palette',
     settings: 'Settings',
     agents: 'Agents',
+    capabilities: 'Capabilities',
     linear: 'Linear',
     results: 'Canvas'
   }[pane];
@@ -1412,6 +1480,9 @@ function StudioPane({
       : null,
     pane === 'agents'
       ? h(StudioAgentsPane, { config, sessionState, selectedIndex: agentIndex, focused })
+      : null,
+    pane === 'capabilities'
+      ? h(StudioCapabilitiesPane, { rows: capabilityRows, selectedIndex: capabilityIndex, focused })
       : null,
     pane === 'linear'
       ? h(StudioLinearPane, {
@@ -1482,7 +1553,8 @@ function StudioAgentsPane({ config, sessionState, selectedIndex, focused }) {
       const selected = focused && index === selectedIndex;
       const sessionItem = sessionState.items.find((item) => item.name === engine);
       const telemetry = sessionItem ? formatTelemetrySuffix(sessionItem) : '';
-      const detail = `${role}  team:${config.teams[engine] ?? config.teamWork}  auth:${config.auths[engine]}${telemetry ? `  ${telemetry}` : ''}`;
+      const capabilityMode = config.capabilities?.[engine]?.mode || 'inherit';
+      const detail = `${role}  team:${config.teams[engine] ?? config.teamWork}  auth:${config.auths[engine]}  caps:${capabilityMode}${telemetry ? `  ${telemetry}` : ''}`;
 
       return h(
         Fragment,
@@ -1496,6 +1568,31 @@ function StudioAgentsPane({ config, sessionState, selectedIndex, focused }) {
           `${selected ? '>' : ' '} [${enabled ? 'x' : ' '}] ${engine}`
         ),
         h(Text, { color: enabled ? 'gray' : 'gray' }, `    ${detail}`)
+      );
+    })
+  );
+}
+
+function StudioCapabilitiesPane({ rows, selectedIndex, focused }) {
+  return h(
+    Box,
+    { flexDirection: 'column' },
+    rows.map((row, index) => {
+      const selected = focused && index === selectedIndex;
+      const providerPrefix = row.provider ? `${row.provider} ` : '';
+      const text = row.kind === 'section'
+        ? row.label
+        : `${providerPrefix}${row.label}: ${row.value}`;
+
+      return h(
+        Text,
+        {
+          key: row.id,
+          color: selected ? 'black' : row.kind === 'section' ? 'cyan' : row.muted ? 'gray' : undefined,
+          backgroundColor: selected ? 'cyan' : undefined,
+          bold: row.kind === 'section'
+        },
+        `${selected ? '>' : ' '} ${text}`
       );
     })
   );
@@ -1707,7 +1804,9 @@ function StudioActionInputPanel({ promptAction }) {
     ? 'Tag file'
     : promptAction.kind === 'linearField'
       ? promptAction.label || 'Linear'
-      : 'Run command';
+      : promptAction.kind === 'capabilityField'
+        ? promptAction.label || 'Provider capability'
+        : 'Run command';
   const value = renderPromptWithCursor(promptAction.value, promptAction.cursorOffset);
 
   return h(
@@ -1730,10 +1829,11 @@ function StudioHelpPanel() {
     'Arrow keys: move selection; left/right changes selected setting',
     'Enter: activate selected menu item, toggle provider, expand selected result, or start prompt editing',
     'Agents pane: l lead, p planner, +/- provider team size',
-    'Settings pane: choose handoff, lead/planner, synthesis, auth methods, permissions, efforts, iterations, Linear mode/auth/workspace',
+    'Settings pane: choose handoff, lead/planner, synthesis, auth methods, capabilities mode, permissions, efforts, iterations, Linear mode/auth/workspace',
+    'Capabilities pane: switch inherit/override and edit Codex config/profile, Claude MCP/tools, Gemini settings/tool profiles',
     'Social login: opens each selected provider auth flow in browser tabs; paste returned codes here if prompted',
     'Linear pane: Enter checks setup/status; Command Palette can deliver issues or edit issue/query/media fields',
-    'Provider tools/MCP: Council inherits each CLI config when the selected sandbox or permission mode allows it',
+    'Provider Skills/MCP/Tools: inherit uses each CLI config; override passes the configured provider-specific flags',
     'Command Palette: tag local files or run shell commands into prompt context',
     'Canvas pane: provider rows show token/tool suffixes; Telemetry section lists current token/tool usage',
     '[ and ]: move the focused pane left/right',
@@ -1761,7 +1861,7 @@ function StudioHelpPanel() {
 function StudioFooter({ phase, focusPane, editingPrompt, exitArmedUntil = 0, linearBusy = false }) {
   const detail = editingPrompt
     ? 'typing prompt | Enter run | Esc keep'
-    : 'Tab focus | arrows select/change | Enter action | social login/Linear/tag files/run commands from menu | [ ] move pane | r run | e edit | ? help | q quit';
+    : 'Tab focus | arrows select/change | Enter action | capabilities/Linear/tag files/run commands from menu | [ ] move pane | r run | e edit | ? help | q quit';
   const exitHint = Date.now() < exitArmedUntil
     ? 'Ctrl-C again to close'
     : 'Ctrl-C twice to close';
@@ -2056,6 +2156,7 @@ export function createStudioConfig(options = {}) {
       claude: (options as any).auths?.claude ?? 'auto',
       gemini: (options as any).auths?.gemini ?? 'auto'
     },
+    capabilities: createStudioCapabilities((options as any).capabilities || {}),
     linear: createStudioLinearConfig(delivery)
   });
 }
@@ -2071,6 +2172,9 @@ export function buildStudioSettings(config) {
     { id: 'codexAuth', label: 'Codex auth', value: config.auths.codex },
     { id: 'claudeAuth', label: 'Claude auth', value: config.auths.claude },
     { id: 'geminiAuth', label: 'Gemini auth', value: config.auths.gemini },
+    { id: 'codexCapabilities', label: 'Codex caps', value: config.capabilities.codex.mode },
+    { id: 'claudeCapabilities', label: 'Claude caps', value: config.capabilities.claude.mode },
+    { id: 'geminiCapabilities', label: 'Gemini caps', value: config.capabilities.gemini.mode },
     { id: 'codexSandbox', label: 'Codex sandbox', value: config.permissions.codex },
     { id: 'claudePermission', label: 'Claude permission', value: config.permissions.claude },
     { id: 'codexEffort', label: 'Codex effort', value: config.efforts.codex || 'default' },
@@ -2117,6 +2221,12 @@ export function applyStudioSetting(config, settingId, direction = 1) {
     next.auths.claude = cycleValue(next.auths.claude, STUDIO_AUTHS.claude, direction);
   } else if (settingId === 'geminiAuth') {
     next.auths.gemini = cycleValue(next.auths.gemini, STUDIO_AUTHS.gemini, direction);
+  } else if (settingId === 'codexCapabilities') {
+    next.capabilities.codex.mode = cycleValue(next.capabilities.codex.mode, STUDIO_CAPABILITY_MODES, direction);
+  } else if (settingId === 'claudeCapabilities') {
+    next.capabilities.claude.mode = cycleValue(next.capabilities.claude.mode, STUDIO_CAPABILITY_MODES, direction);
+  } else if (settingId === 'geminiCapabilities') {
+    next.capabilities.gemini.mode = cycleValue(next.capabilities.gemini.mode, STUDIO_CAPABILITY_MODES, direction);
   } else if (settingId === 'codexEffort') {
     next.efforts.codex = cycleNullableValue(next.efforts.codex, STUDIO_EFFORTS.codex, direction);
   } else if (settingId === 'claudeEffort') {
@@ -2139,6 +2249,115 @@ export function applyStudioSetting(config, settingId, direction = 1) {
     next.linear.maxAttempts = Math.max(1, next.linear.maxAttempts + direction);
   } else if (settingId === 'linearFilter') {
     next.linear.filterSlot = cycleValue(next.linear.filterSlot || 'issue', ['issue', 'query', 'team', 'state', 'media'], direction);
+  }
+
+  return sanitizeStudioConfig(next);
+}
+
+export function buildStudioCapabilityRows(config) {
+  const capabilities = config.capabilities || createStudioCapabilities();
+  return [
+    {
+      id: 'codexMode',
+      provider: 'codex',
+      kind: 'mode',
+      label: 'mode',
+      value: capabilities.codex.mode
+    },
+    {
+      id: 'codexConfig',
+      provider: 'codex',
+      kind: 'field',
+      field: 'codex.config',
+      label: 'config',
+      value: formatStudioCapabilityList(capabilities.codex.config),
+      muted: capabilities.codex.mode === 'inherit'
+    },
+    {
+      id: 'codexMcpProfile',
+      provider: 'codex',
+      kind: 'field',
+      field: 'codex.mcpProfile',
+      label: 'mcp profile',
+      value: capabilities.codex.mcpProfile || 'default',
+      muted: capabilities.codex.mode === 'inherit'
+    },
+    {
+      id: 'claudeMode',
+      provider: 'claude',
+      kind: 'mode',
+      label: 'mode',
+      value: capabilities.claude.mode
+    },
+    {
+      id: 'claudeMcpConfig',
+      provider: 'claude',
+      kind: 'field',
+      field: 'claude.mcpConfig',
+      label: 'mcp config',
+      value: formatStudioCapabilityList(capabilities.claude.mcpConfig),
+      muted: capabilities.claude.mode === 'inherit'
+    },
+    {
+      id: 'claudeAllowedTools',
+      provider: 'claude',
+      kind: 'field',
+      field: 'claude.allowedTools',
+      label: 'allowed tools',
+      value: formatStudioCapabilityList(capabilities.claude.allowedTools),
+      muted: capabilities.claude.mode === 'inherit'
+    },
+    {
+      id: 'claudeDisallowedTools',
+      provider: 'claude',
+      kind: 'field',
+      field: 'claude.disallowedTools',
+      label: 'disallowed tools',
+      value: formatStudioCapabilityList(capabilities.claude.disallowedTools),
+      muted: capabilities.claude.mode === 'inherit'
+    },
+    {
+      id: 'geminiMode',
+      provider: 'gemini',
+      kind: 'mode',
+      label: 'mode',
+      value: capabilities.gemini.mode
+    },
+    {
+      id: 'geminiSettings',
+      provider: 'gemini',
+      kind: 'field',
+      field: 'gemini.settings',
+      label: 'settings',
+      value: capabilities.gemini.settings || 'default',
+      muted: capabilities.gemini.mode === 'inherit'
+    },
+    {
+      id: 'geminiToolsProfile',
+      provider: 'gemini',
+      kind: 'field',
+      field: 'gemini.toolsProfile',
+      label: 'tools profile',
+      value: formatStudioCapabilityList(capabilities.gemini.toolsProfile),
+      muted: capabilities.gemini.mode === 'inherit'
+    }
+  ];
+}
+
+export function applyStudioCapabilityRow(config, rowId, direction = 1) {
+  const next = cloneStudioConfig(config);
+  const provider = {
+    codexMode: 'codex',
+    claudeMode: 'claude',
+    geminiMode: 'gemini'
+  }[rowId];
+
+  if (provider) {
+    next.capabilities[provider].mode = cycleValue(
+      next.capabilities[provider].mode,
+      STUDIO_CAPABILITY_MODES,
+      direction
+    );
   }
 
   return sanitizeStudioConfig(next);
@@ -2192,6 +2411,7 @@ function sanitizeStudioConfig(config) {
     }
   }
 
+  next.capabilities = sanitizeStudioCapabilities(next.capabilities || {});
   return next;
 }
 
@@ -2204,7 +2424,99 @@ function cloneStudioConfig(config) {
     efforts: { ...(config.efforts || {}) },
     permissions: { ...(config.permissions || {}) },
     auths: { ...(config.auths || {}) },
+    capabilities: cloneStudioCapabilities(config.capabilities || {}),
     linear: cloneStudioLinearConfig(config.linear || {})
+  };
+}
+
+function createStudioCapabilities(capabilities: any = {}) {
+  return sanitizeStudioCapabilities({
+    codex: {
+      mode: capabilities.codex?.mode || 'inherit',
+      config: normalizeStudioStringArray(capabilities.codex?.config),
+      mcpProfile: capabilities.codex?.mcpProfile || ''
+    },
+    claude: {
+      mode: capabilities.claude?.mode || 'inherit',
+      mcpConfig: normalizeStudioStringArray(capabilities.claude?.mcpConfig),
+      allowedTools: normalizeStudioList(capabilities.claude?.allowedTools),
+      disallowedTools: normalizeStudioList(capabilities.claude?.disallowedTools)
+    },
+    gemini: {
+      mode: capabilities.gemini?.mode || 'inherit',
+      settings: capabilities.gemini?.settings || '',
+      toolsProfile: normalizeStudioList(capabilities.gemini?.toolsProfile)
+    }
+  });
+}
+
+function sanitizeStudioCapabilities(capabilities: any = {}) {
+  const next = cloneStudioCapabilities({
+    ...createRawStudioCapabilities(),
+    ...capabilities
+  });
+
+  for (const provider of STUDIO_ENGINES) {
+    next[provider] = {
+      ...createRawStudioCapabilities()[provider],
+      ...(next[provider] || {})
+    };
+    next[provider].mode = STUDIO_CAPABILITY_MODES.includes(next[provider].mode)
+      ? next[provider].mode
+      : 'inherit';
+  }
+
+  next.codex.config = normalizeStudioStringArray(next.codex.config);
+  next.codex.mcpProfile = String(next.codex.mcpProfile || '').trim() || null;
+  next.claude.mcpConfig = normalizeStudioStringArray(next.claude.mcpConfig);
+  next.claude.allowedTools = normalizeStudioList(next.claude.allowedTools);
+  next.claude.disallowedTools = normalizeStudioList(next.claude.disallowedTools);
+  next.gemini.settings = String(next.gemini.settings || '').trim() || null;
+  next.gemini.toolsProfile = normalizeStudioList(next.gemini.toolsProfile);
+  return next;
+}
+
+function createRawStudioCapabilities() {
+  return {
+    codex: {
+      mode: 'inherit',
+      config: [],
+      mcpProfile: null
+    },
+    claude: {
+      mode: 'inherit',
+      mcpConfig: [],
+      allowedTools: [],
+      disallowedTools: []
+    },
+    gemini: {
+      mode: 'inherit',
+      settings: null,
+      toolsProfile: []
+    }
+  };
+}
+
+function cloneStudioCapabilities(capabilities: any = {}) {
+  const raw = createRawStudioCapabilities();
+  return {
+    codex: {
+      ...raw.codex,
+      ...(capabilities.codex || {}),
+      config: normalizeStudioStringArray(capabilities.codex?.config || raw.codex.config)
+    },
+    claude: {
+      ...raw.claude,
+      ...(capabilities.claude || {}),
+      mcpConfig: normalizeStudioStringArray(capabilities.claude?.mcpConfig || raw.claude.mcpConfig),
+      allowedTools: normalizeStudioList(capabilities.claude?.allowedTools || raw.claude.allowedTools),
+      disallowedTools: normalizeStudioList(capabilities.claude?.disallowedTools || raw.claude.disallowedTools)
+    },
+    gemini: {
+      ...raw.gemini,
+      ...(capabilities.gemini || {}),
+      toolsProfile: normalizeStudioList(capabilities.gemini?.toolsProfile || raw.gemini.toolsProfile)
+    }
   };
 }
 
@@ -2299,6 +2611,32 @@ function setStudioLinearField(config, field, value) {
     next.linear[field] = String(value || '').trim();
   }
   next.linear.enabled = true;
+  return sanitizeStudioConfig(next);
+}
+
+function getStudioCapabilityFieldValue(config, field) {
+  const [provider, key] = String(field || '').split('.');
+  const current = config.capabilities?.[provider]?.[key];
+  return Array.isArray(current) ? current.join(',') : String(current || '');
+}
+
+export function setStudioCapabilityField(config, field, value) {
+  const next = cloneStudioConfig(config);
+  const [provider, key] = String(field || '').split('.');
+
+  if (!next.capabilities?.[provider] || !key) {
+    return sanitizeStudioConfig(next);
+  }
+
+  if (['config', 'mcpConfig'].includes(key)) {
+    next.capabilities[provider][key] = normalizeStudioStringArray(value);
+  } else if (['allowedTools', 'disallowedTools', 'toolsProfile'].includes(key)) {
+    next.capabilities[provider][key] = normalizeStudioList(value);
+  } else {
+    next.capabilities[provider][key] = String(value || '').trim() || null;
+  }
+
+  next.capabilities[provider].mode = 'override';
   return sanitizeStudioConfig(next);
 }
 
@@ -2435,6 +2773,22 @@ function normalizeStudioList(value) {
     .filter(Boolean);
 }
 
+function normalizeStudioStringArray(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => String(entry || '').trim())
+      .filter(Boolean);
+  }
+
+  const text = String(value || '').trim();
+  return text ? [text] : [];
+}
+
+function formatStudioCapabilityList(value) {
+  const list = normalizeStudioStringArray(value);
+  return list.length > 0 ? list.join(',') : 'default';
+}
+
 function toggleStudioMember(config, engine) {
   const next = cloneStudioConfig(config);
   if (next.members.includes(engine)) {
@@ -2525,25 +2879,34 @@ function wrapIndex(index, length) {
   return ((index % length) + length) % length;
 }
 
-function calculateStudioPanelWidths(columns, compact = false) {
-  if (compact) {
-    const width = Math.max(34, Math.floor((Math.max(72, columns) - 3) / 2));
+function calculateStudioPanelWidths(columns, columnsPerRow = STUDIO_PANES.length) {
+  if (columnsPerRow < STUDIO_PANES.length) {
+    const usable = Math.max(
+      columns,
+      columnsPerRow * 30 + Math.max(0, columnsPerRow - 1)
+    );
+    const width = Math.max(
+      30,
+      Math.floor((usable - Math.max(0, columnsPerRow - 1)) / columnsPerRow)
+    );
     return {
       menu: width,
       settings: width,
       agents: width,
+      capabilities: width,
       linear: width,
       results: width
     };
   }
 
-  const available = Math.max(90, columns - 3);
-  const menu = Math.max(18, Math.min(25, Math.floor(available * 0.16)));
-  const settings = Math.max(28, Math.min(36, Math.floor(available * 0.23)));
-  const agents = Math.max(26, Math.min(32, Math.floor(available * 0.19)));
-  const linear = Math.max(28, Math.min(36, Math.floor(available * 0.20)));
-  const results = Math.max(30, available - menu - settings - agents - linear);
-  return { menu, settings, agents, linear, results };
+  const available = Math.max(120, columns - 5);
+  const menu = Math.max(20, Math.min(25, Math.floor(available * 0.12)));
+  const settings = Math.max(30, Math.min(36, Math.floor(available * 0.18)));
+  const agents = Math.max(26, Math.min(32, Math.floor(available * 0.15)));
+  const capabilities = Math.max(34, Math.min(42, Math.floor(available * 0.20)));
+  const linear = Math.max(28, Math.min(36, Math.floor(available * 0.17)));
+  const results = Math.max(30, available - menu - settings - agents - capabilities - linear);
+  return { menu, settings, agents, capabilities, linear, results };
 }
 
 function renderPromptWithCursor(value, cursorOffset) {

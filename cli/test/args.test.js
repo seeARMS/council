@@ -178,6 +178,71 @@ test('parses provider-specific auth flags', () => {
   });
 });
 
+test('parses provider capabilities override flags', () => {
+  const parsed = parseArgs([
+    '--codex-config',
+    'model_provider=openai',
+    '--codex-config',
+    'tools.web_search=true',
+    '--codex-mcp-profile',
+    'repo',
+    '--claude-mcp-config',
+    '.mcp.json',
+    '--claude-allowed-tools',
+    'Read,Bash(git:*)',
+    '--claude-disallowed-tools',
+    'Write',
+    '--gemini-settings',
+    '.gemini/settings.json',
+    '--gemini-tools-profile',
+    'repo-tools,web',
+    'question'
+  ]);
+
+  assert.deepEqual(parsed.capabilities, {
+    codex: {
+      mode: 'override',
+      config: ['model_provider=openai', 'tools.web_search=true'],
+      mcpProfile: 'repo'
+    },
+    claude: {
+      mode: 'override',
+      mcpConfig: ['.mcp.json'],
+      allowedTools: ['Read', 'Bash(git:*)'],
+      disallowedTools: ['Write']
+    },
+    gemini: {
+      mode: 'override',
+      settings: '.gemini/settings.json',
+      toolsProfile: ['repo-tools', 'web']
+    }
+  });
+});
+
+test('supports explicit provider capability inheritance', () => {
+  const parsed = parseArgs([
+    '--codex-capabilities',
+    'inherit',
+    '--codex-config',
+    'ignored.until.override=true',
+    '--claude-capabilities',
+    'override',
+    'question'
+  ]);
+
+  assert.equal(parsed.capabilities.codex.mode, 'inherit');
+  assert.deepEqual(parsed.capabilities.codex.config, ['ignored.until.override=true']);
+  assert.equal(parsed.capabilities.claude.mode, 'override');
+  assert.equal(parsed.capabilities.gemini.mode, 'inherit');
+});
+
+test('validates provider capability modes', () => {
+  assert.throws(
+    () => parseArgs(['--gemini-capabilities', 'maybe', 'q']),
+    /Unsupported --gemini-capabilities value/
+  );
+});
+
 test('validates provider-specific auth values', () => {
   assert.throws(
     () => parseArgs(['--claude-auth', 'saml', 'q']),

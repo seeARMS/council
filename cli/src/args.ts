@@ -10,6 +10,7 @@ import {
   DEFAULT_TIMEOUT_MS,
   EFFORT_LEVELS,
   PROVIDER_AUTH_METHODS,
+  PROVIDER_CAPABILITY_MODES,
   PROVIDER_EFFORT_LEVELS
 } from './engines.js';
 import { DEFAULT_AUTH_LOGIN_TIMEOUT_MS } from './provider-auth.js';
@@ -44,6 +45,16 @@ const OPTIONS = {
   'codex-auth': { type: 'string' },
   'claude-auth': { type: 'string' },
   'gemini-auth': { type: 'string' },
+  'codex-capabilities': { type: 'string' },
+  'claude-capabilities': { type: 'string' },
+  'gemini-capabilities': { type: 'string' },
+  'codex-config': { type: 'string' },
+  'codex-mcp-profile': { type: 'string' },
+  'claude-mcp-config': { type: 'string' },
+  'claude-allowed-tools': { type: 'string' },
+  'claude-disallowed-tools': { type: 'string' },
+  'gemini-settings': { type: 'string' },
+  'gemini-tools-profile': { type: 'string' },
   'auth-login': { type: 'boolean' },
   'auth-login-providers': { type: 'string' },
   'auth-device-code': { type: 'boolean' },
@@ -160,6 +171,26 @@ export function usageText(version) {
     `  --codex-auth <method>     Codex auth preference: ${PROVIDER_AUTH_METHODS.codex.join(', ')}`,
     `  --claude-auth <method>    Claude auth preference: ${PROVIDER_AUTH_METHODS.claude.join(', ')}`,
     `  --gemini-auth <method>    Gemini auth preference: ${PROVIDER_AUTH_METHODS.gemini.join(', ')}`,
+    `  --codex-capabilities <mode>`,
+    `                            Codex Skills/MCP/Tools config: ${PROVIDER_CAPABILITY_MODES.join(', ')}`,
+    '  --codex-config <key=value>',
+    '                            Repeatable Codex -c config override; implies --codex-capabilities override',
+    '  --codex-mcp-profile <name>',
+    '                            Codex config profile passed via --profile; implies override',
+    `  --claude-capabilities <mode>`,
+    `                            Claude Skills/MCP/Tools config: ${PROVIDER_CAPABILITY_MODES.join(', ')}`,
+    '  --claude-mcp-config <path-or-json>',
+    '                            Repeatable Claude MCP config passed via --mcp-config; implies override',
+    '  --claude-allowed-tools <list>',
+    '                            Comma-separated or repeatable Claude allowed tools; implies override',
+    '  --claude-disallowed-tools <list>',
+    '                            Comma-separated or repeatable Claude disallowed tools; implies override',
+    `  --gemini-capabilities <mode>`,
+    `                            Gemini Skills/MCP/Tools config: ${PROVIDER_CAPABILITY_MODES.join(', ')}`,
+    '  --gemini-settings <path>',
+    '                            Gemini settings file path; implies override',
+    '  --gemini-tools-profile <list>',
+    '                            Comma-separated or repeatable Gemini extension/tool profiles; implies override',
     '  --auth-login              Launch social-login auth for selected providers before running',
     '  --auth-login-providers <list>',
     '                            Comma-separated providers to authenticate; defaults to social-login members, then all enabled members',
@@ -258,6 +289,7 @@ export function parseArgs(argv) {
     efforts: parseProviderEfforts(values),
     permissions: parseProviderPermissions(values),
     auths: parseProviderAuths(values),
+    capabilities: parseProviderCapabilities(values, parsed.tokens),
     authLogin: parseAuthLoginOptions(values),
     promptContext: parsePromptContextOptions(parsed.tokens),
     handoff: Boolean(values.handoff),
@@ -425,6 +457,51 @@ function parseProviderAuths(values) {
     claude: parseEnumValue(values['claude-auth'], '--claude-auth', PROVIDER_AUTH_METHODS.claude),
     gemini: parseEnumValue(values['gemini-auth'], '--gemini-auth', PROVIDER_AUTH_METHODS.gemini)
   };
+}
+
+function parseProviderCapabilities(values, tokens = []) {
+  const codexConfig = collectRepeatedStringOptions(tokens, ['codex-config']);
+  const codexMcpProfile = parseOptionalString(values['codex-mcp-profile'], '--codex-mcp-profile');
+  const claudeMcpConfig = collectRepeatedStringOptions(tokens, ['claude-mcp-config']);
+  const claudeAllowedTools = collectRepeatedListOptions(tokens, ['claude-allowed-tools']);
+  const claudeDisallowedTools = collectRepeatedListOptions(tokens, ['claude-disallowed-tools']);
+  const geminiSettings = parseOptionalString(values['gemini-settings'], '--gemini-settings');
+  const geminiToolsProfile = collectRepeatedListOptions(tokens, ['gemini-tools-profile']);
+
+  return {
+    codex: {
+      mode: parseCapabilityMode(values['codex-capabilities'], '--codex-capabilities', Boolean(codexConfig.length || codexMcpProfile)),
+      config: codexConfig,
+      mcpProfile: codexMcpProfile
+    },
+    claude: {
+      mode: parseCapabilityMode(
+        values['claude-capabilities'],
+        '--claude-capabilities',
+        Boolean(claudeMcpConfig.length || claudeAllowedTools.length || claudeDisallowedTools.length)
+      ),
+      mcpConfig: claudeMcpConfig,
+      allowedTools: claudeAllowedTools,
+      disallowedTools: claudeDisallowedTools
+    },
+    gemini: {
+      mode: parseCapabilityMode(
+        values['gemini-capabilities'],
+        '--gemini-capabilities',
+        Boolean(geminiSettings || geminiToolsProfile.length)
+      ),
+      settings: geminiSettings,
+      toolsProfile: geminiToolsProfile
+    }
+  };
+}
+
+function parseCapabilityMode(value, flagName, hasOverrideValues = false) {
+  return parseEnumValue(
+    value ?? (hasOverrideValues ? 'override' : 'inherit'),
+    flagName,
+    PROVIDER_CAPABILITY_MODES
+  );
 }
 
 function parseAuthLoginOptions(values) {

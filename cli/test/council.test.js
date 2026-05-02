@@ -204,6 +204,56 @@ test('runCouncil applies provider-specific model, effort, and permission overrid
   }
 });
 
+test('runCouncil applies provider capability overrides to members and synthesis', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    codex: {
+      member: { mode: 'echo-argv' },
+      summary: { mode: 'echo-argv' }
+    },
+    claude: {
+      member: { mode: 'echo-argv' }
+    }
+  });
+
+  try {
+    const result = await runCouncil({
+      query: 'Hello',
+      cwd: process.cwd(),
+      members: ['codex', 'claude'],
+      summarizer: 'codex',
+      timeoutMs: 5_000,
+      env: fake.env,
+      capabilities: {
+        codex: {
+          mode: 'override',
+          config: ['tools.web_search=true'],
+          mcpProfile: 'repo'
+        },
+        claude: {
+          mode: 'override',
+          mcpConfig: ['.mcp.json'],
+          allowedTools: ['Read']
+        }
+      }
+    });
+
+    const codexMember = JSON.parse(result.members.find((member) => member.name === 'codex').output);
+    assert.equal(codexMember[codexMember.indexOf('-c') + 1], 'tools.web_search=true');
+    assert.equal(codexMember[codexMember.indexOf('--profile') + 1], 'repo');
+
+    const claudeMember = JSON.parse(result.members.find((member) => member.name === 'claude').output);
+    assert.equal(claudeMember[claudeMember.indexOf('--mcp-config') + 1], '.mcp.json');
+    assert.equal(claudeMember[claudeMember.indexOf('--allowedTools') + 1], 'Read');
+
+    const codexSummary = JSON.parse(result.summary.output);
+    assert.equal(codexSummary[codexSummary.indexOf('--profile') + 1], 'repo');
+    assert.equal(result.capabilities.codex.mode, 'override');
+    assert.equal(result.members.find((member) => member.name === 'codex').capability.mode, 'override');
+  } finally {
+    await fake.cleanup();
+  }
+});
+
 test('runCouncil assigns planner, lead, executor, and team roles', async () => {
   const fake = await createFakeCouncilEnvironment({
     codex: {

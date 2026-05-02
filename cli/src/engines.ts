@@ -28,6 +28,25 @@ export const PROVIDER_AUTH_METHODS = {
   claude: ['auto', 'social-login', 'oauth', 'api-key', 'keychain'],
   gemini: ['auto', 'social-login', 'login', 'api-key']
 };
+export const PROVIDER_CAPABILITY_MODES = ['inherit', 'override'];
+export const DEFAULT_PROVIDER_CAPABILITIES = {
+  codex: {
+    mode: 'inherit',
+    config: [],
+    mcpProfile: null
+  },
+  claude: {
+    mode: 'inherit',
+    mcpConfig: [],
+    allowedTools: [],
+    disallowedTools: []
+  },
+  gemini: {
+    mode: 'inherit',
+    settings: null,
+    toolsProfile: []
+  }
+};
 export const DEFAULT_PROVIDER_AUTHS = {
   codex: 'auto',
   claude: 'auto',
@@ -74,6 +93,7 @@ export async function runEngine(
     model = null,
     permission = null,
     auth = DEFAULT_PROVIDER_AUTHS[name],
+    capability = DEFAULT_PROVIDER_CAPABILITIES[name],
     onProgress = () => {}
   }
 ) {
@@ -82,14 +102,14 @@ export async function runEngine(
   }
 
   if (name === 'codex') {
-    return runCodex({ prompt, cwd, timeoutMs, env, effort, model, permission, auth, onProgress });
+    return runCodex({ prompt, cwd, timeoutMs, env, effort, model, permission, auth, capability, onProgress });
   }
 
   if (name === 'claude') {
-    return runClaude({ prompt, cwd, timeoutMs, env, effort, model, permission, auth, onProgress });
+    return runClaude({ prompt, cwd, timeoutMs, env, effort, model, permission, auth, capability, onProgress });
   }
 
-  return runGemini({ prompt, cwd, timeoutMs, env, effort, model, permission, auth, onProgress });
+  return runGemini({ prompt, cwd, timeoutMs, env, effort, model, permission, auth, capability, onProgress });
 }
 
 export function buildMemberPrompt(
@@ -318,7 +338,7 @@ export function buildTokenUsage({ prompt = '', output = '', stdout = '', stderr 
   };
 }
 
-async function runCodex({ prompt, cwd, timeoutMs, env, effort, model, permission, auth, onProgress }) {
+async function runCodex({ prompt, cwd, timeoutMs, env, effort, model, permission, auth, capability, onProgress }) {
   const bin = resolveBinary('codex', env);
   const tempDir = await mkdtemp(path.join(tmpdir(), 'council-codex-'));
   const outputPath = path.join(tempDir, 'last-message.txt');
@@ -336,6 +356,7 @@ async function runCodex({ prompt, cwd, timeoutMs, env, effort, model, permission
 
   const modelArgs = model ? ['--model', model] : [];
   const effortArgs = effort ? ['-c', `model_reasoning_effort=${effort}`] : [];
+  const capabilityArgs = codexCapabilityArgs(capability);
   const sandbox = permission || DEFAULT_PROVIDER_PERMISSIONS.codex;
 
   try {
@@ -345,6 +366,7 @@ async function runCodex({ prompt, cwd, timeoutMs, env, effort, model, permission
         'exec',
         ...modelArgs,
         ...effortArgs,
+        ...capabilityArgs,
         '--skip-git-repo-check',
         '--sandbox',
         sandbox,
@@ -380,7 +402,7 @@ async function runCodex({ prompt, cwd, timeoutMs, env, effort, model, permission
   }
 }
 
-async function runClaude({ prompt, cwd, timeoutMs, env, effort, model, permission, auth, onProgress }) {
+async function runClaude({ prompt, cwd, timeoutMs, env, effort, model, permission, auth, capability, onProgress }) {
   const bin = resolveBinary('claude', env);
   const startedAt = Date.now();
   const toolUsage = [];
@@ -397,6 +419,7 @@ async function runClaude({ prompt, cwd, timeoutMs, env, effort, model, permissio
   const authArgs = shouldUseClaudeBareMode(env, auth) ? ['--bare'] : [];
   const modelArgs = model ? ['--model', model] : [];
   const effortArgs = resolvedEffort ? ['--effort', resolvedEffort] : [];
+  const capabilityArgs = claudeCapabilityArgs(capability);
   const permissionMode = permission || DEFAULT_PROVIDER_PERMISSIONS.claude;
   const commandResult = await runCommand({
     command: bin,
@@ -411,7 +434,8 @@ async function runClaude({ prompt, cwd, timeoutMs, env, effort, model, permissio
       '--include-partial-messages',
       '--no-session-persistence',
       ...modelArgs,
-      ...effortArgs
+      ...effortArgs,
+      ...capabilityArgs
     ],
     cwd,
     env,
@@ -436,22 +460,24 @@ async function runClaude({ prompt, cwd, timeoutMs, env, effort, model, permissio
   });
 }
 
-async function runGemini({ prompt, cwd, timeoutMs, env, effort, model, permission, auth, onProgress }) {
+async function runGemini({ prompt, cwd, timeoutMs, env, effort, model, permission, auth, capability, onProgress }) {
   const bin = resolveBinary('gemini', env);
   const startedAt = Date.now();
   const toolUsage = [];
   let lastProgressDetail = '';
-  const effortContext = await prepareGeminiEffortSettings(effort, env);
+  const effortContext = await prepareGeminiEffortSettings(effort, env, capability);
   const runEnv = effortContext
     ? { ...env, GEMINI_CLI_SYSTEM_SETTINGS_PATH: effortContext.settingsPath }
     : env;
   const modelArgs = model ? ['--model', model] : [];
+  const capabilityArgs = geminiCapabilityArgs(capability);
 
   try {
     const commandResult = await runCommand({
       command: bin,
       args: [
         ...modelArgs,
+        ...capabilityArgs,
         '-p',
         prompt,
         '--skip-trust',
@@ -489,25 +515,87 @@ async function runGemini({ prompt, cwd, timeoutMs, env, effort, model, permissio
       detailOverride: authRequired ? GEMINI_LOGIN_DETAIL : ''
     });
   } finally {
-    if (effortContext) {
+    if (effortContext?.dir) {
       await rm(effortContext.dir, { recursive: true, force: true });
     }
   }
 }
 
-async function prepareGeminiEffortSettings(effort, env) {
+async function prepareGeminiEffortSettings(effort, env, capability: any = {}) {
+  const capabilitySettingsPath = shouldOverrideCapabilities(capability)
+    ? compactString(capability.settings)
+    : '';
+
   if (!effort || GEMINI_THINKING_BUDGETS[effort] === undefined) {
-    return null;
+    return capabilitySettingsPath
+      ? { dir: null, settingsPath: capabilitySettingsPath }
+      : null;
   }
 
   const dir = await mkdtemp(path.join(tmpdir(), 'council-gemini-effort-'));
   const settingsPath = path.join(dir, 'settings.json');
   const settings = await mergeGeminiSettings({
-    settingsPath: env.GEMINI_CLI_SYSTEM_SETTINGS_PATH,
+    settingsPath: capabilitySettingsPath || env.GEMINI_CLI_SYSTEM_SETTINGS_PATH,
     thinkingBudget: GEMINI_THINKING_BUDGETS[effort]
   });
   await writeFile(settingsPath, JSON.stringify(settings), 'utf8');
   return { dir, settingsPath };
+}
+
+function shouldOverrideCapabilities(capability: any = {}) {
+  return capability?.mode === 'override';
+}
+
+function codexCapabilityArgs(capability: any = {}) {
+  if (!shouldOverrideCapabilities(capability)) {
+    return [];
+  }
+
+  return [
+    ...normalizeCapabilityList(capability.config).flatMap((value) => ['-c', value]),
+    ...(compactString(capability.mcpProfile)
+      ? ['--profile', compactString(capability.mcpProfile)]
+      : [])
+  ];
+}
+
+function claudeCapabilityArgs(capability: any = {}) {
+  if (!shouldOverrideCapabilities(capability)) {
+    return [];
+  }
+
+  const mcpConfig = normalizeCapabilityList(capability.mcpConfig);
+  const allowedTools = normalizeCapabilityList(capability.allowedTools);
+  const disallowedTools = normalizeCapabilityList(capability.disallowedTools);
+  return [
+    ...(mcpConfig.length > 0 ? ['--mcp-config', ...mcpConfig] : []),
+    ...(allowedTools.length > 0 ? ['--allowedTools', ...allowedTools] : []),
+    ...(disallowedTools.length > 0 ? ['--disallowedTools', ...disallowedTools] : [])
+  ];
+}
+
+function geminiCapabilityArgs(capability: any = {}) {
+  if (!shouldOverrideCapabilities(capability)) {
+    return [];
+  }
+
+  const toolsProfile = normalizeCapabilityList(capability.toolsProfile);
+  return toolsProfile.length > 0 ? ['--extensions', ...toolsProfile] : [];
+}
+
+function normalizeCapabilityList(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => compactString(entry))
+      .filter(Boolean);
+  }
+
+  const compacted = compactString(value);
+  return compacted ? [compacted] : [];
+}
+
+function compactString(value) {
+  return String(value ?? '').trim();
 }
 
 async function mergeGeminiSettings({ settingsPath, thinkingBudget }) {

@@ -142,7 +142,7 @@ In a real TTY, `council` uses a live dashboard:
 - press `q` or `Esc` to exit the interactive view
 - press `Ctrl-C` twice to close from the keyboard interrupt path
 
-For a fuller terminal app, use `--studio`. Studio mode opens focusable panes for the command menu, workflow settings, agents, Linear, results/canvas, help, and prompt. You can move focus with `Tab`, change settings with the arrow keys, toggle providers in the agents pane, mark lead/planner roles, select auth mode per provider, resize the provider teams, configure Linear mode/auth/workspace/retry settings, reorder panes with `[` and `]`, edit the prompt, and run or re-run from inside the UI. The command palette includes actions to launch provider social login, check Linear setup/status, deliver Linear work, edit Linear issue/query/team/state/media fields, tag local files, run shell commands into the prompt context, and open Help. `?` toggles help from anywhere.
+For a fuller terminal app, use `--studio`. Studio mode opens focusable panes for the command menu, workflow settings, agents, provider capabilities, Linear, results/canvas, help, and prompt. You can move focus with `Tab`, change settings with the arrow keys, toggle providers in the agents pane, mark lead/planner roles, select auth mode per provider, choose whether each provider inherits or overrides Skills/MCP/Tools config, resize the provider teams, configure Linear mode/auth/workspace/retry settings, reorder panes with `[` and `]`, edit the prompt, and run or re-run from inside the UI. The command palette includes actions to launch provider social login, check Linear setup/status, deliver Linear work, edit Linear issue/query/team/state/media fields, tag local files, run shell commands into the prompt context, and open Help. `?` toggles help from anywhere.
 
 ## Prompt context, files, and commands
 
@@ -269,6 +269,37 @@ council \
 ```
 
 `--auth-login-providers` defaults to members configured for `social-login`, then all enabled members. `--auth-device-code` asks Codex to use its device-code paste flow where available. Claude uses `claude auth login`; Gemini uses Gemini CLI's native interactive auth selector because current Gemini CLI releases open "Login with Google" from the normal interactive entrypoint rather than a dedicated `auth login` subcommand. In Studio, choose Social login from the command menu; it runs the same provider flows while preserving code paste and browser deeplink callbacks.
+
+## Provider capabilities, Skills, MCP, and tools
+
+Council inherits each upstream provider's normal config by default. That means Codex, Claude, and Gemini can still use the Skills, MCP servers, extensions, hooks, and tool settings already configured in those CLIs, subject to the selected sandbox or permission mode.
+
+Use provider capability overrides when a run needs a specific config/profile/tool allowlist without changing your global provider setup:
+
+```bash
+council \
+  --codex-capabilities override \
+  --codex-config tools.web_search=true \
+  --codex-mcp-profile repo \
+  --claude-capabilities override \
+  --claude-mcp-config .mcp.json \
+  --claude-allowed-tools "Read,Bash(git:*)" \
+  --claude-disallowed-tools Write \
+  --gemini-capabilities override \
+  --gemini-settings .gemini/settings.json \
+  --gemini-tools-profile repo-tools \
+  "Review this change with the repo tool profile"
+```
+
+Passing `--codex-config`, `--codex-mcp-profile`, `--claude-mcp-config`, `--claude-allowed-tools`, `--claude-disallowed-tools`, `--gemini-settings`, or `--gemini-tools-profile` automatically switches that provider to `override` unless you explicitly set `<provider>-capabilities inherit`. In inherit mode, Council keeps the values visible in configuration but does not pass them to the provider.
+
+Provider mapping:
+
+- Codex: `--codex-config` becomes repeatable Codex `-c <key=value>` overrides. `--codex-mcp-profile` becomes Codex `--profile <name>`.
+- Claude: `--claude-mcp-config` maps to Claude `--mcp-config`; `--claude-allowed-tools` and `--claude-disallowed-tools` map to Claude's tool allow/deny options.
+- Gemini: `--gemini-settings` sets `GEMINI_CLI_SYSTEM_SETTINGS_PATH` for the run, and still merges with `--gemini-effort` thinking-budget settings when effort is selected. `--gemini-tools-profile` maps to Gemini CLI `--extensions`.
+
+In Studio, use the Capabilities pane to toggle `inherit`/`override` per provider and edit Codex config/profile, Claude MCP/tool lists, and Gemini settings/tool profiles without restarting Node. The Settings pane also includes quick capability-mode rows.
 
 ## Linear setup and delivery
 

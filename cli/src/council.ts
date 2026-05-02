@@ -4,6 +4,7 @@ import {
   DEFAULT_ITERATIONS,
   DEFAULT_MAX_MEMBER_CHARS,
   DEFAULT_PROVIDER_AUTHS,
+  DEFAULT_PROVIDER_CAPABILITIES,
   DEFAULT_PROVIDER_PERMISSIONS,
   DEFAULT_TEAM_SIZE,
   DEFAULT_SUMMARIZER_ORDER,
@@ -28,6 +29,7 @@ export async function runCouncil(options: any = {}) {
   efforts = {},
   permissions = {},
   auths = {},
+  capabilities = {},
   handoff = false,
   lead = null,
   planner = null,
@@ -48,6 +50,7 @@ export async function runCouncil(options: any = {}) {
     null,
     DEFAULT_PROVIDER_AUTHS
   );
+  const resolvedCapabilities = resolveProviderCapabilities(capabilities);
   const iterationCount = normalizeIterationCount(iterations);
   const teamWorkSize = normalizeTeamSize(teamWork);
   const resolvedTeams = resolveEngineSettings(
@@ -73,6 +76,7 @@ export async function runCouncil(options: any = {}) {
     efforts: resolvedEfforts,
     permissions: resolvedPermissions,
     auths: resolvedAuths,
+    capabilities: resolvedCapabilities,
     workflow
   });
 
@@ -98,6 +102,7 @@ export async function runCouncil(options: any = {}) {
       resolvedModels,
       resolvedPermissions,
       resolvedAuths,
+      resolvedCapabilities,
       workflow,
       iteration,
       previousIterationMembers,
@@ -147,6 +152,7 @@ export async function runCouncil(options: any = {}) {
         model: resolvedModels[candidate],
         permission: resolvedPermissions[candidate],
         auth: resolvedAuths[candidate],
+        capability: resolvedCapabilities[candidate],
         role: roleForEngine(candidate, workflow),
         iteration: iterationCount,
         totalIterations: iterationCount,
@@ -191,6 +197,7 @@ export async function runCouncil(options: any = {}) {
     efforts: resolvedEfforts,
     permissions: resolvedPermissions,
     auths: resolvedAuths,
+    capabilities: resolvedCapabilities,
     workflow,
     iterations: iterationCount,
     iterationResults,
@@ -254,6 +261,7 @@ async function runCouncilIteration({
   resolvedModels,
   resolvedPermissions,
   resolvedAuths,
+  resolvedCapabilities,
   workflow,
   iteration,
   previousIterationMembers,
@@ -291,6 +299,7 @@ async function runCouncilIteration({
         model: resolvedModels[name],
         permission: resolvedPermissions[name],
         auth: resolvedAuths[name],
+        capability: resolvedCapabilities[name],
         role,
         iteration,
         totalIterations: workflow.iterations,
@@ -335,6 +344,7 @@ async function runCouncilIteration({
       model: resolvedModels[plannerName],
       permission: resolvedPermissions[plannerName],
       auth: resolvedAuths[plannerName],
+      capability: resolvedCapabilities[plannerName],
       role,
       iteration,
       totalIterations: workflow.iterations,
@@ -372,6 +382,7 @@ async function runCouncilIteration({
         model: resolvedModels[name],
         permission: resolvedPermissions[name],
         auth: resolvedAuths[name],
+        capability: resolvedCapabilities[name],
         role,
         iteration,
         totalIterations: workflow.iterations,
@@ -395,6 +406,7 @@ async function runMember(
     model,
     permission,
     auth,
+    capability,
     role,
     iteration,
     totalIterations,
@@ -429,6 +441,7 @@ async function runMember(
     model,
     permission,
     auth,
+    capability,
     role,
     iteration,
     totalIterations,
@@ -454,6 +467,7 @@ async function runSummaryAttempt(
     model,
     permission,
     auth,
+    capability,
     role,
     iteration,
     totalIterations,
@@ -488,6 +502,7 @@ async function runSummaryAttempt(
     model,
     permission,
     auth,
+    capability,
     role,
     iteration,
     totalIterations,
@@ -545,6 +560,7 @@ async function runEngineTask({
   model,
   permission,
   auth,
+  capability,
   role,
   iteration,
   totalIterations,
@@ -568,6 +584,7 @@ async function runEngineTask({
           model,
           permission,
           auth,
+          capability,
           onProgress
         })
     });
@@ -577,7 +594,8 @@ async function runEngineTask({
       iteration,
       totalIterations,
       teamSize,
-      auth
+      auth,
+      capability
     };
   } catch (error) {
     return {
@@ -586,7 +604,8 @@ async function runEngineTask({
       iteration,
       totalIterations,
       teamSize,
-      auth
+      auth,
+      capability
     };
   }
 }
@@ -599,6 +618,30 @@ function resolveEngineSettings(overrides, fallback, defaults = {}) {
   }
 
   return resolved;
+}
+
+function resolveProviderCapabilities(overrides = {}) {
+  const resolved = {};
+
+  for (const engine of ALL_ENGINES) {
+    resolved[engine] = cloneProviderCapability({
+      ...(DEFAULT_PROVIDER_CAPABILITIES[engine] || {}),
+      ...(overrides?.[engine] || {})
+    });
+  }
+
+  return resolved;
+}
+
+function cloneProviderCapability(capability: any = {}) {
+  return {
+    ...capability,
+    config: Array.isArray(capability.config) ? [...capability.config] : capability.config,
+    mcpConfig: Array.isArray(capability.mcpConfig) ? [...capability.mcpConfig] : capability.mcpConfig,
+    allowedTools: Array.isArray(capability.allowedTools) ? [...capability.allowedTools] : capability.allowedTools,
+    disallowedTools: Array.isArray(capability.disallowedTools) ? [...capability.disallowedTools] : capability.disallowedTools,
+    toolsProfile: Array.isArray(capability.toolsProfile) ? [...capability.toolsProfile] : capability.toolsProfile
+  };
 }
 
 function executionOrderForMembers(members, planner) {
