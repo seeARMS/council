@@ -68,6 +68,13 @@ export interface DeliveryOptions {
   observabilityDir?: string | null;
   workspaceStrategy: 'worktree' | 'copy' | 'none';
   workflowFile?: string | null;
+  attachMedia?: string[];
+  attachmentTitle?: string | null;
+}
+
+export interface PromptContextOptions {
+  files: string[];
+  commands: string[];
 }
 
 export interface CouncilWorkflow {
@@ -103,6 +110,7 @@ export interface ParsedArgs {
   efforts: ProviderEfforts;
   permissions: ProviderPermissions;
   auths: ProviderAuths;
+  promptContext: PromptContextOptions;
   handoff: boolean;
   lead: EngineName | null;
   planner: EngineName | null;
@@ -119,6 +127,24 @@ export interface ParsedArgs {
 
 export interface EngineProgress {
   detail: string;
+  tool?: ToolUsage | null;
+}
+
+export interface TokenUsage {
+  input: number;
+  output: number;
+  total: number;
+  estimated: boolean;
+  source: string;
+}
+
+export interface ToolUsage {
+  type: 'tool' | 'command' | string;
+  name: string;
+  command?: string;
+  description?: string;
+  provider?: string;
+  count?: number;
 }
 
 export interface CouncilEngineResult {
@@ -132,6 +158,9 @@ export interface CouncilEngineResult {
   stdout?: string;
   stderr?: string;
   output?: string;
+  command?: string;
+  tokenUsage?: TokenUsage;
+  toolUsage?: ToolUsage[];
   role?: CouncilRole;
   iteration?: number;
   totalIterations?: number;
@@ -182,6 +211,7 @@ export interface RunCouncilOptions {
   efforts?: ProviderEfforts;
   permissions?: ProviderPermissions;
   auths?: ProviderAuths;
+  promptContext?: any;
   handoff?: boolean;
   lead?: EngineName | null;
   planner?: EngineName | null;
@@ -259,6 +289,7 @@ export interface MemberStartedEvent {
   totalIterations: number;
   teamSize: number;
   auth?: string | null;
+  tokenUsage?: TokenUsage;
 }
 
 export interface MemberProgressEvent {
@@ -271,6 +302,7 @@ export interface MemberProgressEvent {
   teamSize?: number;
   auth?: string | null;
   detail?: string;
+  tool?: ToolUsage | null;
   elapsedMs?: number;
 }
 
@@ -289,6 +321,7 @@ export interface SummaryStartedEvent {
   totalIterations: number;
   teamSize: number;
   auth?: string | null;
+  tokenUsage?: TokenUsage;
 }
 
 export interface SummaryProgressEvent {
@@ -301,6 +334,7 @@ export interface SummaryProgressEvent {
   teamSize?: number;
   auth?: string | null;
   detail?: string;
+  tool?: ToolUsage | null;
   elapsedMs?: number;
 }
 
@@ -338,8 +372,16 @@ export function renderLinearDeliveryStatus(status: any): string;
 export function renderDeliveryResult(result: any): string;
 export function renderDeliveryProgressEvent(event: any): string;
 export function buildDeliveryPhasePrompt(options: any): string;
+export function buildPromptContext(options?: any): Promise<any>;
+export function buildPromptWithContext(query: string, context?: any): string;
+export function loadTaggedFile(options: any): Promise<any>;
+export function runPromptCommand(options: any): Promise<any>;
+export function summarizePromptContext(context?: any): any;
 export function fetchLinearIssues(options?: any): Promise<any[]>;
 export function fetchLinearViewer(options?: any): Promise<any | null>;
+export function uploadLinearFile(options: any): Promise<any>;
+export function createLinearAttachment(options: any): Promise<any>;
+export function attachLinearMedia(options: any): Promise<any>;
 export function isCouncilSuccess(result: CouncilResult): boolean;
 export function runEngine(name: EngineName, options: RunEngineOptions): Promise<CouncilEngineResult>;
 export function buildMemberPrompt(query: string, options?: BuildPromptOptions): string;

@@ -19,7 +19,14 @@ import {
 } from 'ink';
 import { runCouncil } from './council.js';
 import {
+  buildPromptWithContext,
+  formatPromptContextStatus,
+  loadTaggedFile,
+  runPromptCommand
+} from './prompt-context.js';
+import {
   buildHotkeyParts,
+  formatTelemetrySuffix,
   buildSessionBlocks
 } from './presentation.js';
 import {
@@ -36,6 +43,8 @@ const STUDIO_ENGINES = ['codex', 'claude', 'gemini'];
 const STUDIO_MENU = [
   { id: 'run', label: 'Run / re-run' },
   { id: 'prompt', label: 'Edit prompt' },
+  { id: 'tagFile', label: 'Tag local file' },
+  { id: 'runCommand', label: 'Run command' },
   { id: 'settings', label: 'Settings' },
   { id: 'agents', label: 'Agents' },
   { id: 'results', label: 'Results' },
@@ -133,6 +142,13 @@ function StudioApp(props) {
   const [promptValue, setPromptValue] = useState(initialPrompt.trim());
   const [cursorOffset, setCursorOffset] = useState(initialPrompt.trim().length);
   const [editingPrompt, setEditingPrompt] = useState(!initialPrompt.trim());
+  const [promptContext, setPromptContext] = useState(() => ({
+    files: [...(props.promptContext?.files || [])],
+    commands: [...(props.promptContext?.commands || [])]
+  }));
+  const promptContextRef = useRef(promptContext);
+  const [promptAction, setPromptAction] = useState(null);
+  const [actionStatus, setActionStatus] = useState('');
   const [showHelp, setShowHelp] = useState(false);
   const [focusPane, setFocusPane] = useState('menu');
   const [paneOrder, setPaneOrder] = useState([...STUDIO_PANES]);
@@ -160,6 +176,10 @@ function StudioApp(props) {
   }, [config]);
 
   useEffect(() => {
+    promptContextRef.current = promptContext;
+  }, [promptContext]);
+
+  useEffect(() => {
     conversationRef.current = conversationState;
   }, [conversationState]);
 
@@ -185,6 +205,7 @@ function StudioApp(props) {
 
     let cancelled = false;
     const prompt = activeRun.prompt;
+    const displayPrompt = activeRun.displayPrompt || prompt;
     const runConfig = activeRun.config;
     const runMembers = enabledStudioMembers(runConfig);
 
@@ -221,7 +242,7 @@ function StudioApp(props) {
         setConversationState((current) => [
           ...current,
           {
-            user: prompt,
+            user: displayPrompt,
             assistant: summaryTextForConversation(result)
           }
         ]);
@@ -249,7 +270,7 @@ function StudioApp(props) {
         setConversationState((current) => [
           ...current,
           {
-            user: prompt,
+            user: displayPrompt,
             assistant: summaryTextForConversation(fallback)
           }
         ]);
@@ -288,6 +309,7 @@ function StudioApp(props) {
 
     const nextConfig = sanitizeStudioConfig(configRef.current);
     const members = enabledStudioMembers(nextConfig);
+    const query = buildPromptWithContext(prompt, promptContextRef.current);
     setConfig(nextConfig);
     setSessionState(createSessionState(members));
     setExpanded(createInitialExpanded());
@@ -296,7 +318,7 @@ function StudioApp(props) {
     setPhase('running');
     setRunSequence((current) => {
       const next = current + 1;
-      setActiveRun({ id: next, prompt, config: nextConfig });
+      setActiveRun({ id: next, prompt: query, displayPrompt: prompt, config: nextConfig });
       return next;
     });
   };
@@ -310,6 +332,16 @@ function StudioApp(props) {
     if (actionId === 'prompt') {
       setFocusPane('prompt');
       setEditingPrompt(true);
+      return;
+    }
+
+    if (actionId === 'tagFile') {
+      startPromptAction('file');
+      return;
+    }
+
+    if (actionId === 'runCommand') {
+      startPromptAction('command');
       return;
     }
 
@@ -403,10 +435,140 @@ function StudioApp(props) {
     }
   };
 
+  const startPromptAction = (kind) => {
+    setPromptAction({
+      kind,
+      value: '',
+      cursorOffset: 0
+    });
+    setActionStatus(kind === 'file' ? 'Enter a local file path to tag.' : 'Enter a shell command to run before the prompt.');
+    setEditingPrompt(false);
+    setFocusPane('prompt');
+  };
+
+  const setPromptActionValue = (nextValue, nextCursorOffset = nextValue.length) => {
+    setPromptAction((current) => current
+      ? {
+          ...current,
+          value: nextValue,
+          cursorOffset: Math.max(0, Math.min(nextValue.length, nextCursorOffset))
+        }
+      : current);
+  };
+
+  const completePromptAction = async () => {
+    if (!promptAction) {
+      return;
+    }
+
+    const value = promptAction.value.trim();
+    if (!value) {
+      setPromptAction(null);
+      setActionStatus('');
+      return;
+    }
+
+    const kind = promptAction.kind;
+    setActionStatus(kind === 'file' ? `Tagging ${value}...` : `Running ${value}...`);
+    setPromptAction(null);
+
+    if (kind === 'file') {
+      const file = await loadTaggedFile({ filePath: value, cwd });
+      setPromptContext((current) => ({
+        ...current,
+        files: [...current.files, file]
+      }));
+      setActionStatus(file.status === 'error'
+        ? `File failed: ${file.displayPath} (${file.detail})`
+        : `Tagged file: ${file.displayPath}`);
+      return;
+    }
+
+    const command = await runPromptCommand({ command: value, cwd, env: process.env });
+    setPromptContext((current) => ({
+      ...current,
+      commands: [...current.commands, command]
+    }));
+    setActionStatus(command.status === 'ok'
+      ? `Command captured: ${value}`
+      : `Command ${command.status}: ${value}`);
+  };
+
+  const updatePromptActionFromInput = (input, key) => {
+    if (!promptAction) {
+      return;
+    }
+
+    if (key.escape) {
+      setPromptAction(null);
+      setActionStatus('');
+      return;
+    }
+
+    if (key.return) {
+      void completePromptAction();
+      return;
+    }
+
+    if (key.leftArrow) {
+      setPromptAction((current) => current
+        ? { ...current, cursorOffset: Math.max(0, current.cursorOffset - 1) }
+        : current);
+      return;
+    }
+
+    if (key.rightArrow) {
+      setPromptAction((current) => current
+        ? { ...current, cursorOffset: Math.min(current.value.length, current.cursorOffset + 1) }
+        : current);
+      return;
+    }
+
+    if (key.backspace) {
+      if (promptAction.cursorOffset === 0) {
+        return;
+      }
+      const nextCursorOffset = promptAction.cursorOffset - 1;
+      setPromptActionValue(
+        promptAction.value.slice(0, nextCursorOffset) + promptAction.value.slice(promptAction.cursorOffset),
+        nextCursorOffset
+      );
+      return;
+    }
+
+    if (key.delete) {
+      if (promptAction.cursorOffset >= promptAction.value.length) {
+        return;
+      }
+      setPromptActionValue(
+        promptAction.value.slice(0, promptAction.cursorOffset) + promptAction.value.slice(promptAction.cursorOffset + 1),
+        promptAction.cursorOffset
+      );
+      return;
+    }
+
+    if (key.upArrow || key.downArrow || key.tab || (key.ctrl && input === 'c')) {
+      return;
+    }
+
+    const chunk = sanitizeImmediateFollowUpChunk(input);
+    if (chunk) {
+      setPromptActionValue(
+        promptAction.value.slice(0, promptAction.cursorOffset) + chunk + promptAction.value.slice(promptAction.cursorOffset),
+        promptAction.cursorOffset + chunk.length
+      );
+    }
+  };
+
   useInput(
     (input, key) => {
       if (key.ctrl && input === 'c') {
         requestExit();
+        return;
+      }
+
+      if (promptAction) {
+        updatePromptActionFromInput(input, key);
         return;
       }
 
@@ -527,6 +689,18 @@ function StudioApp(props) {
 
   usePaste(
     (text) => {
+      if (promptAction) {
+        const sanitized = sanitizeImmediateFollowUpChunk(text);
+        if (!sanitized) {
+          return;
+        }
+        setPromptActionValue(
+          promptAction.value.slice(0, promptAction.cursorOffset) + sanitized + promptAction.value.slice(promptAction.cursorOffset),
+          promptAction.cursorOffset + sanitized.length
+        );
+        return;
+      }
+
       if (!editingPrompt) {
         return;
       }
@@ -541,7 +715,7 @@ function StudioApp(props) {
         cursorOffset + sanitized.length
       );
     },
-    { isActive: editingPrompt }
+    { isActive: editingPrompt || Boolean(promptAction) }
   );
 
   const settings = buildStudioSettings(config);
@@ -591,8 +765,13 @@ function StudioApp(props) {
       focused: focusPane === 'prompt',
       editing: editingPrompt,
       promptValue,
-      cursorOffset
+      cursorOffset,
+      promptContext,
+      actionStatus
     }),
+    promptAction
+      ? h(StudioActionInputPanel, { promptAction })
+      : null,
     showHelp ? h(StudioHelpPanel) : null,
     h(StudioFooter, { phase, focusPane, editingPrompt, exitArmedUntil })
   );
@@ -616,12 +795,16 @@ function SessionApp({
   iterations = 1,
   teamWork = 0,
   teams = {},
+  promptContext = { files: [], commands: [] },
   conversation = [],
   onEvent
 }) {
   const { exit } = useApp();
   const { isRawModeSupported } = useStdin();
   const initialQuery = initialPrompt.trim();
+  const initialRunPrompt = initialQuery
+    ? buildPromptWithContext(initialQuery, promptContext)
+    : '';
 
   const [phase, setPhase] = useState(initialQuery ? 'running' : 'prompt');
   const [conversationState, setConversationState] = useState(() => [
@@ -640,7 +823,7 @@ function SessionApp({
   const { exitArmedUntil, requestExit } = useDoubleCtrlCExit(exit, lastResult);
   const [, setRunSequence] = useState(initialQuery ? 1 : 0);
   const [activeRun, setActiveRun] = useState(
-    initialQuery ? { id: 1, prompt: initialQuery } : null
+    initialQuery ? { id: 1, prompt: initialRunPrompt, displayPrompt: initialQuery } : null
   );
   const [, setTick] = useState(0);
 
@@ -681,6 +864,7 @@ function SessionApp({
 
     let cancelled = false;
     const prompt = activeRun.prompt;
+    const displayPrompt = activeRun.displayPrompt || prompt;
 
     runCouncil({
       query: prompt,
@@ -715,7 +899,7 @@ function SessionApp({
         setConversationState((current) => [
           ...current,
           {
-            user: prompt,
+            user: displayPrompt,
             assistant: summaryTextForConversation(result)
           }
         ]);
@@ -744,7 +928,7 @@ function SessionApp({
         setConversationState((current) => [
           ...current,
           {
-            user: prompt,
+            user: displayPrompt,
             assistant: summaryTextForConversation(fallback)
           }
         ]);
@@ -855,7 +1039,11 @@ function SessionApp({
     setPhase('running');
     setRunSequence((current) => {
       const next = current + 1;
-      setActiveRun({ id: next, prompt });
+      setActiveRun({
+        id: next,
+        prompt: buildPromptWithContext(prompt, promptContext),
+        displayPrompt: prompt
+      });
       return next;
     });
   };
@@ -974,7 +1162,7 @@ function StudioPane({
       ? h(StudioSettingsPane, { settings, selectedIndex: settingIndex, focused })
       : null,
     pane === 'agents'
-      ? h(StudioAgentsPane, { config, selectedIndex: agentIndex, focused })
+      ? h(StudioAgentsPane, { config, sessionState, selectedIndex: agentIndex, focused })
       : null,
     pane === 'results'
       ? h(StudioResultsPane, {
@@ -1025,7 +1213,7 @@ function StudioSettingsPane({ settings, selectedIndex, focused }) {
   );
 }
 
-function StudioAgentsPane({ config, selectedIndex, focused }) {
+function StudioAgentsPane({ config, sessionState, selectedIndex, focused }) {
   return h(
     Box,
     { flexDirection: 'column' },
@@ -1033,7 +1221,9 @@ function StudioAgentsPane({ config, selectedIndex, focused }) {
       const enabled = config.members.includes(engine);
       const role = studioRoleForEngine(config, engine);
       const selected = focused && index === selectedIndex;
-      const detail = `${role}  team:${config.teams[engine] ?? config.teamWork}  auth:${config.auths[engine]}`;
+      const sessionItem = sessionState.items.find((item) => item.name === engine);
+      const telemetry = sessionItem ? formatTelemetrySuffix(sessionItem) : '';
+      const detail = `${role}  team:${config.teams[engine] ?? config.teamWork}  auth:${config.auths[engine]}${telemetry ? `  ${telemetry}` : ''}`;
 
       return h(
         Fragment,
@@ -1092,10 +1282,15 @@ function StudioResultsPane({
   );
 }
 
-function StudioPromptPanel({ focused, editing, promptValue, cursorOffset }) {
+function StudioPromptPanel({ focused, editing, promptValue, cursorOffset, promptContext, actionStatus }) {
   const renderedPrompt = editing
     ? renderPromptWithCursor(promptValue, cursorOffset)
     : promptValue || '(empty)';
+  const contextStatus = formatPromptContextStatus(promptContext);
+  const contextLines = [
+    ...(promptContext.files || []).slice(-3).map((file) => `file ${file.status}: ${file.displayPath}`),
+    ...(promptContext.commands || []).slice(-3).map((command) => `cmd ${command.status}: ${command.command}`)
+  ];
 
   return h(
     Box,
@@ -1107,7 +1302,28 @@ function StudioPromptPanel({ focused, editing, promptValue, cursorOffset }) {
       flexDirection: 'column'
     },
     h(Text, { color: focused ? 'cyan' : 'gray', bold: focused }, 'Prompt'),
-    h(Text, null, renderedPrompt)
+    h(Text, null, renderedPrompt),
+    contextStatus ? h(Text, { color: 'gray' }, `context ${contextStatus}`) : null,
+    ...contextLines.map((line) => h(Text, { key: line, color: 'gray' }, `  ${line}`)),
+    actionStatus ? h(Text, { color: 'yellow' }, actionStatus) : null
+  );
+}
+
+function StudioActionInputPanel({ promptAction }) {
+  const label = promptAction.kind === 'file' ? 'Tag file' : 'Run command';
+  const value = renderPromptWithCursor(promptAction.value, promptAction.cursorOffset);
+
+  return h(
+    Box,
+    {
+      borderStyle: 'single',
+      borderColor: 'yellow',
+      marginTop: 1,
+      paddingX: 1,
+      flexDirection: 'column'
+    },
+    h(Text, { color: 'yellow', bold: true }, label),
+    h(Text, null, value)
   );
 }
 
@@ -1118,6 +1334,7 @@ function StudioHelpPanel() {
     'Enter: activate selected menu item, toggle provider, expand selected result, or start prompt editing',
     'Agents pane: l lead, p planner, +/- provider team size',
     'Settings pane: choose handoff, lead/planner, synthesis, auth methods, permissions, efforts, iterations',
+    'Command Palette: tag local files or run shell commands into prompt context',
     '[ and ]: move the focused pane left/right',
     'r: run or re-run without restarting node',
     'e: edit prompt',
@@ -1143,7 +1360,7 @@ function StudioHelpPanel() {
 function StudioFooter({ phase, focusPane, editingPrompt, exitArmedUntil = 0 }) {
   const detail = editingPrompt
     ? 'typing prompt | Enter run | Esc keep'
-    : 'Tab focus | arrows select/change | Enter action | [ ] move pane | r run | e edit | ? help | q quit';
+    : 'Tab focus | arrows select/change | Enter action | tag files/run commands from menu | [ ] move pane | r run | e edit | ? help | q quit';
   const exitHint = Date.now() < exitArmedUntil
     ? 'Ctrl-C again to close'
     : 'Ctrl-C twice to close';

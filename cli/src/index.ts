@@ -15,7 +15,20 @@ export {
   DEFAULT_PROVIDER_AUTHS,
   DEFAULT_PROVIDER_TEAM_SIZES
 } from './engines.js';
-export { fetchLinearIssues, fetchLinearViewer } from './linear.js';
+export {
+  attachLinearMedia,
+  createLinearAttachment,
+  fetchLinearIssues,
+  fetchLinearViewer,
+  uploadLinearFile
+} from './linear.js';
+export {
+  buildPromptContext,
+  buildPromptWithContext,
+  loadTaggedFile,
+  runPromptCommand,
+  summarizePromptContext
+} from './prompt-context.js';
 export {
   buildDeliveryPhasePrompt,
   getLinearDeliveryStatus,

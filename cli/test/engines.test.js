@@ -6,6 +6,7 @@ import path from 'node:path';
 import {
   buildMemberPrompt,
   buildSummaryPrompt,
+  buildTokenUsage,
   parseClaudeOutput,
   parseGeminiOutput,
   runEngine
@@ -132,6 +133,50 @@ test('parseGeminiOutput extracts JSON even with noisy prefixes', () => {
     'Ripgrep is not available. Falling back to GrepTool.\\n{"response":"gemini answer"}'
   );
   assert.equal(output, 'gemini answer');
+});
+
+test('buildTokenUsage extracts provider token usage from JSON output', () => {
+  const usage = buildTokenUsage({
+    prompt: 'hello',
+    output: 'world',
+    stdout: JSON.stringify({
+      usage: {
+        input_tokens: 11,
+        output_tokens: 7,
+        total_tokens: 18
+      }
+    })
+  });
+
+  assert.deepEqual(usage, {
+    input: 11,
+    output: 7,
+    total: 18,
+    estimated: false,
+    source: 'provider'
+  });
+});
+
+test('runEngine returns estimated token usage and command telemetry', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    claude: { member: { output: 'member answer' } }
+  });
+
+  try {
+    const result = await runEngine('claude', {
+      prompt: 'hello from prompt',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: fake.env
+    });
+
+    assert.equal(result.status, 'ok');
+    assert.equal(result.tokenUsage.estimated, true);
+    assert.ok(result.tokenUsage.total > 0);
+    assert.match(result.command, /claude/);
+  } finally {
+    await fake.cleanup();
+  }
 });
 
 test('runEngine returns timeout for a hanging CLI', async () => {

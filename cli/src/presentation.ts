@@ -161,10 +161,10 @@ function buildMemberBlock(item, hotkey, expanded, now) {
     id: `row:${item.name}`,
     kind: 'result-row',
     color: colorForStatus(item.status),
-    headerText: `${hotkey}. ${statusToken(item.status)} ${item.name}${formatRoleSuffix(item)} (${formatElapsedWindow(item.startedAt, item.completedAt, now)})`,
+    headerText: `${hotkey}. ${statusToken(item.status)} ${item.name}${formatRoleSuffix(item)}${formatTelemetrySuffix(item)} (${formatElapsedWindow(item.startedAt, item.completedAt, now)})`,
     previewText,
     expanded: expanded.has(`member:${item.name}`) && Boolean(body),
-    body
+    body: appendTelemetryToBody(body, item)
   };
 }
 
@@ -182,10 +182,10 @@ function buildSummaryBlock(item, hotkey, expanded, now) {
     id: 'row:summary',
     kind: 'result-row',
     color: colorForSummaryStatus(item.status),
-    headerText: `${hotkey}. ${statusToken(item.status)} ${label}${formatRoleSuffix(item)} (${formatElapsedWindow(item.startedAt, item.completedAt, now)})`,
+    headerText: `${hotkey}. ${statusToken(item.status)} ${label}${formatRoleSuffix(item)}${formatTelemetrySuffix(item)} (${formatElapsedWindow(item.startedAt, item.completedAt, now)})`,
     previewText,
     expanded: expanded.has('summary') && Boolean(body),
-    body
+    body: appendTelemetryToBody(body, item)
   };
 }
 
@@ -201,6 +201,63 @@ function formatRoleSuffix(item) {
   }
 
   return parts.length > 0 ? ` [${parts.join(',')}]` : '';
+}
+
+export function formatTelemetrySuffix(item: any = {}) {
+  const tokenUsage = item.tokenUsage || item.result?.tokenUsage;
+  const toolUsage = item.toolUsage || item.result?.toolUsage || [];
+  const parts = [];
+
+  if (tokenUsage?.total) {
+    parts.push(`tok:${tokenUsage.estimated ? '~' : ''}${formatCompactNumber(tokenUsage.total)}`);
+  }
+
+  if (toolUsage.length > 0) {
+    parts.push(`tools:${toolUsage.reduce((sum, tool) => sum + (tool.count || 1), 0)}`);
+  }
+
+  return parts.length > 0 ? ` {${parts.join(',')}}` : '';
+}
+
+function appendTelemetryToBody(body, item) {
+  const tokenUsage = item.tokenUsage || item.result?.tokenUsage;
+  const toolUsage = item.toolUsage || item.result?.toolUsage || [];
+  const lines = [];
+
+  if (body) {
+    lines.push(body);
+  }
+
+  if (tokenUsage) {
+    lines.push(
+      '',
+      `Usage: input ${formatCompactNumber(tokenUsage.input || 0)}, output ${formatCompactNumber(tokenUsage.output || 0)}, total ${tokenUsage.estimated ? '~' : ''}${formatCompactNumber(tokenUsage.total || 0)} tokens`
+    );
+  }
+
+  if (toolUsage.length > 0) {
+    lines.push('', 'Tools and commands:');
+    for (const tool of toolUsage.slice(0, 12)) {
+      const detail = tool.command || tool.description || '';
+      lines.push(`- ${tool.name}${detail ? `: ${detail}` : ''}${tool.count > 1 ? ` (${tool.count}x)` : ''}`);
+    }
+    if (toolUsage.length > 12) {
+      lines.push(`- ... ${toolUsage.length - 12} more`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
+function formatCompactNumber(value) {
+  const numeric = Number(value) || 0;
+  if (numeric >= 1_000_000) {
+    return `${(numeric / 1_000_000).toFixed(1)}m`;
+  }
+  if (numeric >= 1_000) {
+    return `${(numeric / 1_000).toFixed(1)}k`;
+  }
+  return String(numeric);
 }
 
 function formatTeamSummary(teams = {}) {

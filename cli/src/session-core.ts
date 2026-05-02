@@ -71,7 +71,9 @@ export function createSessionState(members) {
       startedAt: null,
       completedAt: null,
       result: null,
-      progressDetail: ''
+      progressDetail: '',
+      tokenUsage: null,
+      toolUsage: []
     })),
     summaryItem: {
       name: 'synthesis',
@@ -82,7 +84,9 @@ export function createSessionState(members) {
       startedAt: null,
       completedAt: null,
       result: null,
-      progressDetail: ''
+      progressDetail: '',
+      tokenUsage: null,
+      toolUsage: []
     }
   };
 }
@@ -117,6 +121,8 @@ export function hydrateSessionStateFromResult(result, members, now = Date.now())
     item.completedAt = completedAt;
     item.result = memberResult;
     item.progressDetail = '';
+    item.tokenUsage = memberResult.tokenUsage || null;
+    item.toolUsage = memberResult.toolUsage || [];
   }
 
   const summaryResult = result.summary;
@@ -134,6 +140,8 @@ export function hydrateSessionStateFromResult(result, members, now = Date.now())
     state.summaryItem.completedAt = completedAt;
     state.summaryItem.result = summaryResult;
     state.summaryItem.progressDetail = '';
+    state.summaryItem.tokenUsage = summaryResult.tokenUsage || null;
+    state.summaryItem.toolUsage = summaryResult.toolUsage || [];
   }
 
   return state;
@@ -170,7 +178,9 @@ export function reduceSessionEvent(state, event) {
         startedAt: null,
         completedAt: null,
         result: null,
-        progressDetail: ''
+        progressDetail: '',
+        tokenUsage: null,
+        toolUsage: []
       }));
       next.summaryItem.status = 'pending';
       next.summaryItem.role = null;
@@ -179,6 +189,8 @@ export function reduceSessionEvent(state, event) {
       next.summaryItem.completedAt = null;
       next.summaryItem.result = null;
       next.summaryItem.progressDetail = '';
+      next.summaryItem.tokenUsage = null;
+      next.summaryItem.toolUsage = [];
       return next;
     }
     case 'member_started': {
@@ -189,6 +201,8 @@ export function reduceSessionEvent(state, event) {
         item.teamSize = event.teamSize ?? item.teamSize;
         item.startedAt = timestamp(event.at);
         item.progressDetail = 'thinking...';
+        item.tokenUsage = event.tokenUsage || null;
+        item.toolUsage = [];
       }
       return next;
     }
@@ -196,6 +210,9 @@ export function reduceSessionEvent(state, event) {
       const item = next.items.find((entry) => entry.name === event.name);
       if (item && event.detail) {
         item.progressDetail = event.detail;
+      }
+      if (item && event.tool) {
+        item.toolUsage = mergeToolUsage(item.toolUsage, event.tool);
       }
       return next;
     }
@@ -214,6 +231,8 @@ export function reduceSessionEvent(state, event) {
         item.completedAt = timestamp(event.at);
         item.result = event.result;
         item.progressDetail = '';
+        item.tokenUsage = event.result.tokenUsage || item.tokenUsage;
+        item.toolUsage = event.result.toolUsage || item.toolUsage;
       }
       return next;
     }
@@ -226,11 +245,16 @@ export function reduceSessionEvent(state, event) {
       next.summaryItem.completedAt = null;
       next.summaryItem.result = null;
       next.summaryItem.progressDetail = 'synthesizing...';
+      next.summaryItem.tokenUsage = event.tokenUsage || null;
+      next.summaryItem.toolUsage = [];
       return next;
     }
     case 'summary_progress': {
       if (event.detail) {
         next.summaryItem.progressDetail = event.detail;
+      }
+      if (event.tool) {
+        next.summaryItem.toolUsage = mergeToolUsage(next.summaryItem.toolUsage, event.tool);
       }
       return next;
     }
@@ -246,11 +270,44 @@ export function reduceSessionEvent(state, event) {
       next.summaryItem.completedAt = timestamp(event.at);
       next.summaryItem.result = event.result;
       next.summaryItem.progressDetail = '';
+      next.summaryItem.tokenUsage = event.result.tokenUsage || next.summaryItem.tokenUsage;
+      next.summaryItem.toolUsage = event.result.toolUsage || next.summaryItem.toolUsage;
       return next;
     }
     default:
       return next;
   }
+}
+
+function mergeToolUsage(existing = [], tool) {
+  if (!tool?.name) {
+    return existing;
+  }
+
+  const key = [
+    tool.type || 'tool',
+    tool.name,
+    tool.command || '',
+    tool.description || ''
+  ].join('\u0000');
+  const next = [...existing];
+  const idx = next.findIndex((item) => [
+    item.type || 'tool',
+    item.name,
+    item.command || '',
+    item.description || ''
+  ].join('\u0000') === key);
+
+  if (idx === -1) {
+    next.push({ ...tool, count: tool.count || 1 });
+  } else {
+    next[idx] = {
+      ...next[idx],
+      count: (next[idx].count || 1) + (tool.count || 1)
+    };
+  }
+
+  return next;
 }
 
 function timestamp(value) {

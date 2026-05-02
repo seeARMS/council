@@ -51,6 +51,7 @@ export function renderHumanResult(result, { summaryOnly = false, verbose = false
       `=== ${member.name}${formatRoleSuffix(member)} (${formatDuration(member.durationMs)}) ===`
     );
     lines.push(member.output);
+    lines.push(...formatTelemetryLines(member));
   }
 
   if (verbose) {
@@ -60,6 +61,7 @@ export function renderHumanResult(result, { summaryOnly = false, verbose = false
         `=== ${member.name}${formatRoleSuffix(member)} (${member.status}: ${member.detail}) ===`
       );
       lines.push(member.output || '(no output)');
+      lines.push(...formatTelemetryLines(member));
     }
   }
 
@@ -70,8 +72,32 @@ export function renderHumanResult(result, { summaryOnly = false, verbose = false
       : '=== synthesis ==='
   );
   lines.push(result.summary?.status === 'ok' ? result.summary.output : renderSummaryFailure(result.summary));
+  lines.push(...formatTelemetryLines(result.summary));
 
   return lines.join('\n');
+}
+
+function formatTelemetryLines(result: any = {}) {
+  const lines = [];
+  const usage = result.tokenUsage;
+  const tools = result.toolUsage || [];
+
+  if (usage) {
+    lines.push(
+      `Usage: input ${usage.input || 0}, output ${usage.output || 0}, total ${usage.estimated ? '~' : ''}${usage.total || 0} tokens`
+    );
+  }
+
+  if (tools.length > 0) {
+    lines.push(
+      `Tools: ${tools
+        .slice(0, 6)
+        .map((tool) => tool.command || tool.name)
+        .join('; ')}${tools.length > 6 ? `; ... ${tools.length - 6} more` : ''}`
+    );
+  }
+
+  return lines;
 }
 
 function formatRoleSuffix(result) {

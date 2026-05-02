@@ -10,7 +10,7 @@ import {
 } from 'node:fs/promises';
 import path from 'node:path';
 import { runCouncil } from './council.js';
-import { fetchLinearIssues, fetchLinearViewer } from './linear.js';
+import { attachLinearMedia, fetchLinearIssues, fetchLinearViewer } from './linear.js';
 
 const DEFAULT_DELIVERY_PHASES = ['plan', 'implement', 'verify', 'ship'];
 const DEFAULT_POLL_INTERVAL_MS = 60_000;
@@ -184,6 +184,7 @@ async function runLinearDeliveryPoll({
       state,
       workflowPolicy,
       env,
+      fetchFn,
       runner,
       workspaceFactory,
       councilOptions,
@@ -217,6 +218,7 @@ async function runLinearIssueDelivery({
   state,
   workflowPolicy,
   env,
+  fetchFn,
   runner,
   workspaceFactory,
   councilOptions,
@@ -312,10 +314,56 @@ async function runLinearIssueDelivery({
 
   const issueSuccess = phaseResults.length === phases.length &&
     phaseResults.every((phase) => phase.result.summary?.status === 'ok');
+  const mediaAttachments = [];
 
   if (issueSuccess) {
     issueState.status = 'delivered';
     issueState.deliveredAt = isoNow(context.nowFn);
+    if (delivery.attachMedia?.length > 0) {
+      issueState.mediaAttachments = [];
+      for (const media of delivery.attachMedia) {
+        await emitDeliveryEvent(context, 'delivery_media_attach_started', {
+          issue,
+          media
+        });
+        try {
+          const attachment = await attachLinearMedia({
+            issue,
+            media,
+            cwd: workspace.cwd,
+            endpoint: delivery.endpoint,
+            authorization: resolveLinearAuthorization({ delivery, env }),
+            fetchFn,
+            titlePrefix: delivery.attachmentTitle
+          });
+          mediaAttachments.push(attachment);
+          issueState.mediaAttachments.push({
+            source: attachment.source,
+            url: attachment.url,
+            attachmentId: attachment.attachment.id,
+            title: attachment.attachment.title,
+            attachedAt: isoNow(context.nowFn)
+          });
+          await emitDeliveryEvent(context, 'delivery_media_attached', {
+            issue,
+            media,
+            attachment: attachment.attachment,
+            url: attachment.url
+          });
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error);
+          mediaAttachments.push({
+            source: media,
+            error: detail
+          });
+          await emitDeliveryEvent(context, 'delivery_media_attach_failed', {
+            issue,
+            media,
+            detail
+          });
+        }
+      }
+    }
   } else {
     scheduleRetry({
       issueState,
@@ -332,10 +380,12 @@ async function runLinearIssueDelivery({
     }
   }
 
+  const finalIssueSuccess = issueSuccess &&
+    mediaAttachments.every((attachment) => !attachment.error);
   await writeDeliveryState(context.paths.stateFile, state, context);
   await emitDeliveryEvent(context, 'delivery_issue_completed', {
     issue,
-    success: issueSuccess,
+    success: finalIssueSuccess,
     status: issueState.status,
     attempts: issueState.attempts,
     nextRetryAt: issueState.nextRetryAt || null
@@ -343,12 +393,13 @@ async function runLinearIssueDelivery({
 
   return {
     issue,
-    success: issueSuccess,
+    success: finalIssueSuccess,
     status: issueState.status,
     workspace,
     attempts: issueState.attempts,
     nextRetryAt: issueState.nextRetryAt || null,
-    phases: phaseResults
+    phases: phaseResults,
+    mediaAttachments
   };
 }
 
@@ -455,6 +506,14 @@ export function renderDeliveryResult(result) {
       const summary = phase.result.summary;
       lines.push(`- ${phase.phase}: ${summary?.status || 'unknown'} via ${summary?.name || 'none'}`);
     }
+
+    for (const media of issue.mediaAttachments || []) {
+      if (media.error) {
+        lines.push(`- media: failed ${media.source} (${media.error})`);
+      } else {
+        lines.push(`- media: attached ${media.attachment?.title || media.source} -> ${media.url}`);
+      }
+    }
   }
 
   return lines.join('\n');
@@ -478,6 +537,12 @@ export function renderDeliveryProgressEvent(event) {
       return `[delivery] ${event.issue.identifier}: ${event.phase} started`;
     case 'delivery_phase_completed':
       return `[delivery] ${event.issue.identifier}: ${event.phase} ${event.success ? 'ok' : 'failed'}`;
+    case 'delivery_media_attach_started':
+      return `[delivery] ${event.issue.identifier}: attaching media ${event.media}`;
+    case 'delivery_media_attached':
+      return `[delivery] ${event.issue.identifier}: attached media ${event.attachment.title}`;
+    case 'delivery_media_attach_failed':
+      return `[delivery] ${event.issue.identifier}: media attach failed (${event.detail})`;
     case 'delivery_retry_scheduled':
       return `[delivery] ${event.issue.identifier}: retry scheduled ${event.nextRetryAt}`;
     case 'delivery_reconciled':

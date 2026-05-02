@@ -142,7 +142,31 @@ In a real TTY, `council` uses a live dashboard:
 - press `q` or `Esc` to exit the interactive view
 - press `Ctrl-C` twice to close from the keyboard interrupt path
 
-For a fuller terminal app, use `--studio`. Studio mode opens focusable panes for the command menu, workflow settings, agents, results, help, and prompt. You can move focus with `Tab`, change settings with the arrow keys, toggle providers in the agents pane, mark lead/planner roles, select auth mode per provider, resize the provider teams, reorder panes with `[` and `]`, edit the prompt, and run or re-run from inside the UI. The command palette includes a Help action, and `?` toggles help from anywhere.
+For a fuller terminal app, use `--studio`. Studio mode opens focusable panes for the command menu, workflow settings, agents, results, help, and prompt. You can move focus with `Tab`, change settings with the arrow keys, toggle providers in the agents pane, mark lead/planner roles, select auth mode per provider, resize the provider teams, reorder panes with `[` and `]`, edit the prompt, and run or re-run from inside the UI. The command palette includes actions to tag local files, run shell commands into the prompt context, and open Help. `?` toggles help from anywhere.
+
+## Prompt context, files, and commands
+
+Tag local files into the prompt without pasting them manually:
+
+```bash
+council \
+  --file README.md \
+  --file cli/package.json \
+  "Review this package setup"
+```
+
+Run command-line tools before the council starts and include their output in the prompt:
+
+```bash
+council \
+  --cmd "git status --short" \
+  --cmd "npm test -- --test-reporter=dot" \
+  "Use the repo state and test output to suggest the next patch"
+```
+
+`--file`/`--tag-file` and `--cmd`/`--prompt-command` are repeatable. In Studio mode, use the command palette to tag files or run commands while the Node process stays open; the prompt panel shows the active context. Council also streams command progress and provider tool usage so you can see shell commands being executed by prompt context and by upstream providers.
+
+Member rows include token usage as `tok:<n>` and tool usage as `tools:<n>` when available. Provider-reported token usage is used when the upstream CLI exposes it; otherwise Council shows a conservative estimate marked with `~`.
 
 ## Tool selection
 
@@ -292,6 +316,20 @@ Long-running Linear mode includes:
 - workflow policy: if `WORKFLOW.md` exists, Council includes it in each phase prompt; override with `--linear-workflow-file`.
 
 Use `--linear-state-file`, `--linear-workspace-root`, and `--linear-observability-dir` to relocate the state, workspace, and event-log paths.
+
+Attach media back to Linear after a task is delivered:
+
+```bash
+council \
+  --deliver-linear \
+  --linear-issue ENG-123 \
+  --linear-attach-media proof.png \
+  --linear-attach-media https://example.com/demo.mp4 \
+  --linear-attachment-title "Council proof" \
+  "Deliver the issue and attach the proof artifacts"
+```
+
+Local files are uploaded to Linear storage first, then attached to the issue as Linear resources. Remote `http`/`https` URLs are attached directly. This is useful when a provider creates screenshots, videos, diagrams, or other proof files in the issue workspace during implementation or verification.
 
 ## Safe defaults
 

@@ -196,6 +196,30 @@ test('validates provider-specific permission values', () => {
   );
 });
 
+test('parses repeatable prompt file and command context flags', () => {
+  const parsed = parseArgs([
+    '--file',
+    'README.md',
+    '--tag-file',
+    'cli/README.md,cli/package.json',
+    '--cmd',
+    'git status --short',
+    '--prompt-command',
+    'npm test',
+    'question'
+  ]);
+
+  assert.deepEqual(parsed.promptContext.files, [
+    'README.md',
+    'cli/README.md',
+    'cli/package.json'
+  ]);
+  assert.deepEqual(parsed.promptContext.commands, [
+    'git status --short',
+    'npm test'
+  ]);
+});
+
 test('parses Linear delivery options', () => {
   const parsed = parseArgs([
     '--deliver-linear',
@@ -236,6 +260,12 @@ test('parses Linear delivery options', () => {
     'copy',
     '--linear-workflow-file',
     'WORKFLOW.md',
+    '--linear-attach-media',
+    'out.png,https://example.com/demo.mp4',
+    '--linear-attach-media',
+    'proof.pdf',
+    '--linear-attachment-title',
+    'Council proof',
     '--delivery-phases',
     'plan,verify',
     'ship it'
@@ -261,6 +291,12 @@ test('parses Linear delivery options', () => {
   assert.equal(parsed.delivery.observabilityDir, '.events');
   assert.equal(parsed.delivery.workspaceStrategy, 'copy');
   assert.equal(parsed.delivery.workflowFile, 'WORKFLOW.md');
+  assert.deepEqual(parsed.delivery.attachMedia, [
+    'out.png',
+    'https://example.com/demo.mp4',
+    'proof.pdf'
+  ]);
+  assert.equal(parsed.delivery.attachmentTitle, 'Council proof');
   assert.deepEqual(parsed.delivery.phases, ['plan', 'verify']);
 });
 

@@ -15,6 +15,10 @@ import {
   renderLinearDeliveryStatus,
   runLinearDelivery
 } from './delivery.js';
+import {
+  buildPromptContext,
+  buildPromptWithContext
+} from './prompt-context.js';
 import { renderHumanResult } from './render.js';
 import {
   renderBanner,
@@ -91,9 +95,36 @@ export async function main(argv = process.argv.slice(2)) {
     );
   }
 
+  const emitCliEvent = (event) => {
+    if (ui.outputMode === 'json-stream') {
+      process.stdout.write(`${JSON.stringify(event)}\n`);
+      return;
+    }
+
+    if (ui.showProgress) {
+      const line = renderProgressEvent(event, {
+        colorEnabled: ui.stderrColor
+      });
+      if (line) {
+        process.stderr.write(`${line}\n`);
+      }
+    }
+  };
+  const promptContext = await buildPromptContext({
+    cwd: resolvedCwd,
+    files: parsed.promptContext.files,
+    commands: parsed.promptContext.commands,
+    env: process.env,
+    onEvent: (event) => emitCliEvent({
+      at: new Date().toISOString(),
+      ...event
+    })
+  });
+  const enrichedPrompt = buildPromptWithContext(initialPrompt, promptContext);
+
   if (parsed.delivery.enabled) {
     const result = await runLinearDelivery({
-      baseQuery: initialPrompt,
+      baseQuery: enrichedPrompt,
       cwd: resolvedCwd,
       delivery: parsed.delivery,
       members: parsed.members,
@@ -158,6 +189,7 @@ export async function main(argv = process.argv.slice(2)) {
       iterations: parsed.iterations,
       teamWork: parsed.teamWork,
       teams: parsed.teams,
+      promptContext,
       studio: parsed.studio,
       conversation: [],
       onEvent: undefined
@@ -170,7 +202,7 @@ export async function main(argv = process.argv.slice(2)) {
   }
 
   const result = await runCouncil({
-    query: initialPrompt,
+    query: enrichedPrompt,
     cwd: resolvedCwd,
     members: parsed.members,
     summarizer: parsed.summarizer,
@@ -188,21 +220,7 @@ export async function main(argv = process.argv.slice(2)) {
     teamWork: parsed.teamWork,
     teams: parsed.teams,
     conversation: [],
-    onEvent: (event) => {
-      if (ui.outputMode === 'json-stream') {
-        process.stdout.write(`${JSON.stringify(event)}\n`);
-        return;
-      }
-
-      if (ui.showProgress) {
-        const line = renderProgressEvent(event, {
-          colorEnabled: ui.stderrColor
-        });
-        if (line) {
-          process.stderr.write(`${line}\n`);
-        }
-      }
-    }
+    onEvent: emitCliEvent
   });
 
   if (ui.outputMode === 'json') {

@@ -2,6 +2,7 @@ import {
   colorForSummaryStatus,
   colorForStatus,
   formatDuration,
+  formatTelemetrySuffix,
   formatWorkflowSummary
 } from './presentation.js';
 
@@ -61,6 +62,20 @@ export function renderBanner({ colorEnabled = false } = {}) {
 
 export function renderProgressEvent(event, { colorEnabled = false } = {}) {
   switch (event.type) {
+    case 'prompt_file_loaded':
+      return style(
+        `[ctx] file ${event.file.displayPath}: ${event.file.status}${event.file.truncated ? ' truncated' : ''}`,
+        event.file.status === 'error' ? '31' : '36',
+        colorEnabled
+      );
+    case 'prompt_command_started':
+      return style(`[ctx] running command: ${event.command}`, '36', colorEnabled);
+    case 'prompt_command_completed':
+      return style(
+        `[ctx] command ${event.status}: ${event.command} (${formatDuration(event.durationMs)})`,
+        event.status === 'ok' ? '32' : '31',
+        colorEnabled
+      );
     case 'run_started':
       return style(
         `Council Studio: ${event.members.join(', ')} | ${formatWorkflowSummary(event.workflow)}`,
@@ -119,7 +134,7 @@ function renderStatusLine(result, colorEnabled) {
 
   if (result.status === 'ok') {
     return style(
-      `[ok]   ${result.name} (${formatDuration(result.durationMs)})`,
+      `[ok]   ${result.name}${formatTelemetrySuffix({ result })} (${formatDuration(result.durationMs)})`,
       color,
       colorEnabled
     );
@@ -141,7 +156,7 @@ function renderSummaryLine(result, colorEnabled) {
 
   if (result.status === 'ok') {
     return style(
-      `[ok]   synthesis via ${result.name} (${formatDuration(result.durationMs)})`,
+      `[ok]   synthesis via ${result.name}${formatTelemetrySuffix({ result })} (${formatDuration(result.durationMs)})`,
       color,
       colorEnabled
     );

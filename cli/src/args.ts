@@ -43,6 +43,10 @@ const OPTIONS = {
   'codex-auth': { type: 'string' },
   'claude-auth': { type: 'string' },
   'gemini-auth': { type: 'string' },
+  file: { type: 'string' },
+  'tag-file': { type: 'string' },
+  cmd: { type: 'string' },
+  'prompt-command': { type: 'string' },
   handoff: { type: 'boolean' },
   lead: { type: 'string' },
   planner: { type: 'string' },
@@ -78,6 +82,8 @@ const OPTIONS = {
   'linear-observability-dir': { type: 'string' },
   'linear-workspace-strategy': { type: 'string' },
   'linear-workflow-file': { type: 'string' },
+  'linear-attach-media': { type: 'string' },
+  'linear-attachment-title': { type: 'string' },
   'delivery-phases': { type: 'string' },
   timeout: { type: 'string' },
   'max-member-chars': { type: 'string' },
@@ -148,6 +154,10 @@ export function usageText(version) {
     `  --codex-auth <method>     Codex auth preference: ${PROVIDER_AUTH_METHODS.codex.join(', ')}`,
     `  --claude-auth <method>    Claude auth preference: ${PROVIDER_AUTH_METHODS.claude.join(', ')}`,
     `  --gemini-auth <method>    Gemini auth preference: ${PROVIDER_AUTH_METHODS.gemini.join(', ')}`,
+    '  --file <path>             Tag a local file into the prompt context (repeatable)',
+    '  --tag-file <path>         Alias for --file',
+    '  --cmd <command>           Run a shell command and include its output in the prompt (repeatable)',
+    '  --prompt-command <cmd>    Alias for --cmd',
     '  --handoff                 Run members in order and pass each response to the next member',
     '  --lead <name>             Lead model for final synthesis preference: codex, claude, or gemini',
     '  --planner <name>          Planner model that runs before executor members',
@@ -183,6 +193,10 @@ export function usageText(version) {
     '                            JSONL event log directory',
     '  --linear-workflow-file <path>',
     '                            Optional repo workflow policy file to include in delivery prompts',
+    '  --linear-attach-media <paths-or-urls>',
+    '                            Comma-separated or repeatable local files/URLs to attach back to delivered Linear issues',
+    '  --linear-attachment-title <text>',
+    '                            Optional title prefix for Linear media attachments',
     '  --delivery-phases <list>  Comma-separated plan,implement,verify,ship',
     '',
     'Other:',
@@ -232,6 +246,7 @@ export function parseArgs(argv) {
     efforts: parseProviderEfforts(values),
     permissions: parseProviderPermissions(values),
     auths: parseProviderAuths(values),
+    promptContext: parsePromptContextOptions(parsed.tokens),
     handoff: Boolean(values.handoff),
     lead: parseOptionalEngine(values.lead, '--lead'),
     planner: parseOptionalEngine(values.planner, '--planner'),
@@ -240,7 +255,7 @@ export function parseArgs(argv) {
       : DEFAULT_ITERATIONS,
     teamWork: parseTeamWork(values),
     teams: parseProviderTeams(values),
-    delivery: parseDeliveryOptions(values),
+    delivery: parseDeliveryOptions(values, parsed.tokens),
     timeoutMs: values.timeout
       ? parseTimeoutMs(values.timeout)
       : DEFAULT_TIMEOUT_MS,
@@ -399,7 +414,14 @@ function parseProviderAuths(values) {
   };
 }
 
-function parseDeliveryOptions(values) {
+function parsePromptContextOptions(tokens = []) {
+  return {
+    files: collectRepeatedListOptions(tokens, ['file', 'tag-file']),
+    commands: collectRepeatedStringOptions(tokens, ['cmd', 'prompt-command'])
+  };
+}
+
+function parseDeliveryOptions(values, tokens = []) {
   const enabled = Boolean(
     values['deliver-linear'] ||
     values.linear ||
@@ -449,8 +471,24 @@ function parseDeliveryOptions(values) {
       '--linear-workspace-strategy',
       ['worktree', 'copy', 'none']
     ),
-    workflowFile: parseOptionalString(values['linear-workflow-file'], '--linear-workflow-file')
+    workflowFile: parseOptionalString(values['linear-workflow-file'], '--linear-workflow-file'),
+    attachMedia: collectRepeatedListOptions(tokens, ['linear-attach-media']),
+    attachmentTitle: parseOptionalString(values['linear-attachment-title'], '--linear-attachment-title')
   };
+}
+
+function collectRepeatedStringOptions(tokens, names) {
+  return tokens
+    .filter((token) => token.kind === 'option' && names.includes(token.name))
+    .map((token) => String(token.value ?? '').trim())
+    .filter(Boolean);
+}
+
+function collectRepeatedListOptions(tokens, names) {
+  return collectRepeatedStringOptions(tokens, names)
+    .flatMap((value) => value.split(','))
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
 function parseOptionalList(value) {

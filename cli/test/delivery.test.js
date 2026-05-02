@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
@@ -10,7 +10,12 @@ import {
   renderLinearDeliveryStatus,
   runLinearDelivery
 } from '../src/delivery.js';
-import { fetchLinearIssues, fetchLinearViewer } from '../src/linear.js';
+import {
+  attachLinearMedia,
+  fetchLinearIssues,
+  fetchLinearViewer,
+  uploadLinearFile
+} from '../src/linear.js';
 
 const issue = {
   id: 'issue-id',
@@ -80,6 +85,83 @@ test('fetchLinearViewer supports OAuth bearer authorization', async () => {
   });
 
   assert.equal(viewer.name, 'Dvir');
+});
+
+test('uploadLinearFile requests a signed URL and uploads bytes with returned headers', async () => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), 'council-linear-upload-'));
+  const filePath = path.join(tempDir, 'proof.png');
+  const calls = [];
+  await writeFile(filePath, 'image-bytes', 'utf8');
+
+  try {
+    const uploaded = await uploadLinearFile({
+      filePath,
+      authorization: 'test-linear-key',
+      fetchFn: async (url, request) => {
+        calls.push({ url, request });
+        if (url === 'https://uploads.example/proof') {
+          assert.equal(request.method, 'PUT');
+          assert.equal(request.headers['x-upload-token'], 'abc');
+          return { ok: true, status: 200 };
+        }
+
+        assert.match(request.body, /CouncilLinearFileUpload/);
+        return {
+          ok: true,
+          json: async () => ({
+            data: {
+              fileUpload: {
+                success: true,
+                uploadFile: {
+                  uploadUrl: 'https://uploads.example/proof',
+                  assetUrl: 'https://uploads.linear.app/proof',
+                  headers: [{ key: 'x-upload-token', value: 'abc' }]
+                }
+              }
+            }
+          })
+        };
+      }
+    });
+
+    assert.equal(uploaded.assetUrl, 'https://uploads.linear.app/proof');
+    assert.equal(calls.length, 2);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('attachLinearMedia creates Linear attachments for remote URLs', async () => {
+  const attachment = await attachLinearMedia({
+    issue,
+    media: 'https://example.com/demo.mp4',
+    authorization: 'test-linear-key',
+    titlePrefix: 'Council proof',
+    fetchFn: async (url, request) => {
+      assert.match(request.body, /CouncilLinearAttachmentCreate/);
+      const body = JSON.parse(request.body);
+      assert.equal(body.variables.input.issueId, issue.id);
+      assert.equal(body.variables.input.url, 'https://example.com/demo.mp4');
+      assert.equal(body.variables.input.title, 'Council proof: demo.mp4');
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            attachmentCreate: {
+              success: true,
+              attachment: {
+                id: 'attachment-id',
+                title: body.variables.input.title,
+                url: body.variables.input.url
+              }
+            }
+          }
+        })
+      };
+    }
+  });
+
+  assert.equal(attachment.attachment.id, 'attachment-id');
 });
 
 test('buildDeliveryPhasePrompt includes testing and GitHub delivery expectations', () => {

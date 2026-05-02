@@ -38,6 +38,7 @@ export const DEFAULT_PROVIDER_TEAM_SIZES = {
   claude: DEFAULT_TEAM_SIZE,
   gemini: DEFAULT_TEAM_SIZE
 };
+export const TOKEN_ESTIMATE_CHARS_PER_TOKEN = 4;
 
 const GEMINI_THINKING_BUDGETS = {
   low: 1024,
@@ -282,11 +283,47 @@ export function parseGeminiOutput(stdout) {
   return trimmed;
 }
 
+export function estimateTokens(text) {
+  const value = String(text || '');
+  if (!value) {
+    return 0;
+  }
+
+  return Math.max(1, Math.ceil(value.length / TOKEN_ESTIMATE_CHARS_PER_TOKEN));
+}
+
+export function buildTokenUsage({ prompt = '', output = '', stdout = '', stderr = '' }: any = {}) {
+  const extracted = extractTokenUsage(`${stdout || ''}\n${stderr || ''}`);
+  if (extracted) {
+    return {
+      input: extracted.input ?? estimateTokens(prompt),
+      output: extracted.output ?? estimateTokens(output),
+      total:
+        extracted.total ??
+        (extracted.input ?? estimateTokens(prompt)) +
+          (extracted.output ?? estimateTokens(output)),
+      estimated: false,
+      source: 'provider'
+    };
+  }
+
+  const input = estimateTokens(prompt);
+  const outputTokens = estimateTokens(output || stdout || stderr);
+  return {
+    input,
+    output: outputTokens,
+    total: input + outputTokens,
+    estimated: true,
+    source: 'estimate'
+  };
+}
+
 async function runCodex({ prompt, cwd, timeoutMs, env, effort, model, permission, auth, onProgress }) {
   const bin = resolveBinary('codex', env);
   const tempDir = await mkdtemp(path.join(tmpdir(), 'council-codex-'));
   const outputPath = path.join(tempDir, 'last-message.txt');
   const startedAt = Date.now();
+  const toolUsage = [];
   let lastProgressDetail = '';
   const codexProgress = createCodexProgressTracker((progress) => {
     if (progress.detail === lastProgressDetail) {
@@ -295,7 +332,7 @@ async function runCodex({ prompt, cwd, timeoutMs, env, effort, model, permission
 
     lastProgressDetail = progress.detail;
     onProgress(progress);
-  });
+  }, toolUsage);
 
   const modelArgs = model ? ['--model', model] : [];
   const effortArgs = effort ? ['-c', `model_reasoning_effort=${effort}`] : [];
@@ -334,7 +371,9 @@ async function runCodex({ prompt, cwd, timeoutMs, env, effort, model, permission
       bin,
       startedAt,
       commandResult,
-      output
+      output,
+      prompt,
+      toolUsage
     });
   } finally {
     await rm(tempDir, { recursive: true, force: true });
@@ -344,6 +383,7 @@ async function runCodex({ prompt, cwd, timeoutMs, env, effort, model, permission
 async function runClaude({ prompt, cwd, timeoutMs, env, effort, model, permission, auth, onProgress }) {
   const bin = resolveBinary('claude', env);
   const startedAt = Date.now();
+  const toolUsage = [];
   let lastProgressDetail = '';
   const claudeProgress = createClaudeProgressTracker((progress) => {
     if (!progress?.detail || progress.detail === lastProgressDetail) {
@@ -352,7 +392,7 @@ async function runClaude({ prompt, cwd, timeoutMs, env, effort, model, permissio
 
     lastProgressDetail = progress.detail;
     onProgress(progress);
-  });
+  }, toolUsage);
   const resolvedEffort = effort || readEnvValue(env, 'CLAUDE_CODE_EFFORT_LEVEL');
   const authArgs = shouldUseClaudeBareMode(env, auth) ? ['--bare'] : [];
   const modelArgs = model ? ['--model', model] : [];
@@ -390,13 +430,16 @@ async function runClaude({ prompt, cwd, timeoutMs, env, effort, model, permissio
     bin,
     startedAt,
     commandResult,
-    output
+    output,
+    prompt,
+    toolUsage
   });
 }
 
 async function runGemini({ prompt, cwd, timeoutMs, env, effort, model, permission, auth, onProgress }) {
   const bin = resolveBinary('gemini', env);
   const startedAt = Date.now();
+  const toolUsage = [];
   let lastProgressDetail = '';
   const effortContext = await prepareGeminiEffortSettings(effort, env);
   const runEnv = effortContext
@@ -441,6 +484,8 @@ async function runGemini({ prompt, cwd, timeoutMs, env, effort, model, permissio
       startedAt,
       commandResult,
       output,
+      prompt,
+      toolUsage,
       detailOverride: authRequired ? GEMINI_LOGIN_DETAIL : ''
     });
   } finally {
@@ -521,9 +566,21 @@ function resolveBinary(name, env) {
   return override && override.trim() ? override.trim() : config.defaultBin;
 }
 
-function finalizeResult({ name, bin, startedAt, commandResult, output, detailOverride = '' }) {
+function finalizeResult({ name, bin, startedAt, commandResult, output, prompt = '', toolUsage = [], detailOverride = '' }) {
   const durationMs = Date.now() - startedAt;
   const detail = detailOverride || summarizeFailure(commandResult, output);
+  const command = formatCommandInvocation(commandResult.command, commandResult.args);
+  const tokenUsage = buildTokenUsage({
+    prompt,
+    output,
+    stdout: commandResult.stdout,
+    stderr: commandResult.stderr
+  });
+  const telemetry = {
+    command,
+    tokenUsage,
+    toolUsage: toolUsage.map(withoutInternalToolKey)
+  };
 
   if (commandResult.error?.code === 'ENOENT') {
     return {
@@ -536,7 +593,8 @@ function finalizeResult({ name, bin, startedAt, commandResult, output, detailOve
       signal: null,
       stdout: commandResult.stdout,
       stderr: commandResult.stderr,
-      output: ''
+      output: '',
+      ...telemetry
     };
   }
 
@@ -551,7 +609,8 @@ function finalizeResult({ name, bin, startedAt, commandResult, output, detailOve
       signal: commandResult.signal,
       stdout: commandResult.stdout,
       stderr: commandResult.stderr,
-      output: ''
+      output: '',
+      ...telemetry
     };
   }
 
@@ -566,7 +625,8 @@ function finalizeResult({ name, bin, startedAt, commandResult, output, detailOve
       signal: commandResult.signal,
       stdout: commandResult.stdout,
       stderr: commandResult.stderr,
-      output: output ?? ''
+      output: output ?? '',
+      ...telemetry
     };
   }
 
@@ -581,7 +641,8 @@ function finalizeResult({ name, bin, startedAt, commandResult, output, detailOve
       signal: commandResult.signal,
       stdout: commandResult.stdout,
       stderr: commandResult.stderr,
-      output: output ?? ''
+      output: output ?? '',
+      ...telemetry
     };
   }
 
@@ -596,7 +657,8 @@ function finalizeResult({ name, bin, startedAt, commandResult, output, detailOve
       signal: commandResult.signal,
       stdout: commandResult.stdout,
       stderr: commandResult.stderr,
-      output: ''
+      output: '',
+      ...telemetry
     };
   }
 
@@ -610,7 +672,8 @@ function finalizeResult({ name, bin, startedAt, commandResult, output, detailOve
     signal: commandResult.signal,
     stdout: commandResult.stdout,
     stderr: commandResult.stderr,
-    output
+    output,
+    ...telemetry
   };
 }
 
@@ -634,6 +697,84 @@ function summarizeFailure(commandResult, output) {
   }
 
   return '';
+}
+
+function extractTokenUsage(text) {
+  const objects = [
+    ...parseJsonLines(text),
+    extractJsonObject(text)
+  ].filter(Boolean);
+  const usage = {
+    input: null,
+    output: null,
+    total: null
+  } as any;
+
+  for (const object of objects) {
+    collectTokenUsage(object, usage);
+  }
+
+  if (usage.input === null && usage.output === null && usage.total === null) {
+    return null;
+  }
+
+  return usage;
+}
+
+function collectTokenUsage(value, usage) {
+  if (!value || typeof value !== 'object') {
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectTokenUsage(item, usage);
+    }
+    return;
+  }
+
+  for (const [key, raw] of Object.entries(value)) {
+    const normalizedKey = key.toLowerCase().replace(/[_-]/g, '');
+    const numeric = typeof raw === 'number' && Number.isFinite(raw)
+      ? raw
+      : null;
+
+    if (numeric !== null) {
+      if (
+        normalizedKey === 'inputtokens' ||
+        normalizedKey === 'prompttokens' ||
+        normalizedKey === 'prompttokencount'
+      ) {
+        usage.input = Math.max(usage.input ?? 0, numeric);
+      } else if (
+        normalizedKey === 'outputtokens' ||
+        normalizedKey === 'completiontokens' ||
+        normalizedKey === 'candidatestokencount'
+      ) {
+        usage.output = Math.max(usage.output ?? 0, numeric);
+      } else if (
+        normalizedKey === 'totaltokens' ||
+        normalizedKey === 'totaltokencount'
+      ) {
+        usage.total = Math.max(usage.total ?? 0, numeric);
+      }
+    }
+
+    collectTokenUsage(raw, usage);
+  }
+}
+
+function formatCommandInvocation(command, args = []) {
+  return [command, ...(args || [])]
+    .map((part) => shellQuote(part))
+    .join(' ');
+}
+
+function shellQuote(value) {
+  const text = String(value ?? '');
+  return /^[A-Za-z0-9_./:=@%+-]+$/.test(text)
+    ? text
+    : JSON.stringify(text);
 }
 
 function detectGeminiLoginRequired({ stdout, stderr }) {
@@ -679,21 +820,28 @@ function detectGeminiRetryProgress({ source, stderr }) {
   };
 }
 
-function createCodexProgressTracker(onProgress) {
+function createCodexProgressTracker(onProgress, toolUsage = []) {
   return createJsonlStreamConsumer((event) => {
     if (event?.type !== 'item.started') {
       return;
     }
 
     if (event.item?.type === 'command_execution' && typeof event.item.command === 'string') {
+      const tool = recordToolUsage(toolUsage, {
+        type: 'command',
+        name: 'shell',
+        command: summarizeCommand(event.item.command),
+        provider: 'codex'
+      });
       onProgress({
-        detail: `running shell: ${summarizeCommand(event.item.command)}`
+        detail: `running shell: ${summarizeCommand(event.item.command)}`,
+        tool
       });
     }
   });
 }
 
-function createClaudeProgressTracker(onProgress) {
+function createClaudeProgressTracker(onProgress, toolUsage = []) {
   let thinking = '';
   let toolInput = '';
   let currentToolName = '';
@@ -725,7 +873,8 @@ function createClaudeProgressTracker(onProgress) {
 
           if (toolDetail) {
             onProgress({
-              detail: toolDetail
+              detail: toolDetail,
+              tool: recordClaudeToolUsage(toolUsage, currentToolName, toolInput)
             });
           }
           return;
@@ -752,7 +901,8 @@ function createClaudeProgressTracker(onProgress) {
           currentToolName = streamEvent.content_block.name || 'tool';
           toolInput = '';
           onProgress({
-            detail: `${currentToolName}: preparing tool input...`
+            detail: `${currentToolName}: preparing tool input...`,
+            tool: recordClaudeToolUsage(toolUsage, currentToolName, toolInput)
           });
         }
       }
@@ -768,12 +918,76 @@ function createClaudeProgressTracker(onProgress) {
         const toolDetail = describeClaudeTool(currentToolName, JSON.stringify(toolUseBlock.input || {}));
         if (toolDetail) {
           onProgress({
-            detail: toolDetail
+            detail: toolDetail,
+            tool: recordClaudeToolUsage(toolUsage, currentToolName, JSON.stringify(toolUseBlock.input || {}))
           });
         }
       }
     }
   });
+}
+
+function recordClaudeToolUsage(toolUsage, toolName, partialJson) {
+  const parsed = extractJsonObject(partialJson);
+  const command =
+    typeof parsed?.command === 'string' && parsed.command.trim()
+      ? summarizeCommand(parsed.command)
+      : '';
+  const description =
+    typeof parsed?.description === 'string' && parsed.description.trim()
+      ? truncateProgressDetail(compactWhitespace(parsed.description))
+      : '';
+
+  return recordToolUsage(toolUsage, {
+    type: command ? 'command' : 'tool',
+    name: toolName || 'tool',
+    command,
+    description,
+    provider: 'claude'
+  });
+}
+
+function recordToolUsage(toolUsage, entry) {
+  if (!entry?.name) {
+    return null;
+  }
+
+  const normalized = {
+    type: entry.type || 'tool',
+    name: entry.name,
+    command: entry.command || '',
+    description: entry.description || '',
+    provider: entry.provider || ''
+  };
+  const key = [
+    normalized.type,
+    normalized.name,
+    normalized.command,
+    normalized.description
+  ].join('\u0000');
+  const existing = toolUsage.find((item) => item.key === key);
+
+  if (existing) {
+    existing.count += 1;
+    return withoutInternalToolKey(existing);
+  }
+
+  const next = {
+    ...normalized,
+    key,
+    count: 1
+  };
+  toolUsage.push(next);
+  return withoutInternalToolKey(next);
+}
+
+function withoutInternalToolKey(tool) {
+  if (!tool) {
+    return null;
+  }
+
+  const { key, ...publicTool } = tool;
+  return publicTool;
 }
 
 function describeClaudeTool(toolName, partialJson) {

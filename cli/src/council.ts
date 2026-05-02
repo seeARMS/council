@@ -7,6 +7,7 @@ import {
   DEFAULT_PROVIDER_PERMISSIONS,
   DEFAULT_TEAM_SIZE,
   DEFAULT_SUMMARIZER_ORDER,
+  estimateTokens,
   buildMemberPrompt,
   buildSummaryPrompt,
   runEngine
@@ -407,7 +408,14 @@ async function runMember(
     iteration,
     totalIterations,
     teamSize,
-    auth
+    auth,
+    tokenUsage: {
+      input: estimateTokens(prompt),
+      output: 0,
+      total: estimateTokens(prompt),
+      estimated: true,
+      source: 'prompt'
+    }
   });
 
   const result = await runEngineTask({
@@ -459,7 +467,14 @@ async function runSummaryAttempt(
     iteration,
     totalIterations,
     teamSize,
-    auth
+    auth,
+    tokenUsage: {
+      input: estimateTokens(prompt),
+      output: 0,
+      total: estimateTokens(prompt),
+      estimated: true,
+      source: 'prompt'
+    }
   });
 
   const result = await runEngineTask({
@@ -658,7 +673,16 @@ function unexpectedEngineFailure(name, error, durationMs) {
     signal: null,
     stdout: '',
     stderr: '',
-    output: ''
+    output: '',
+    tokenUsage: {
+      input: 0,
+      output: 0,
+      total: 0,
+      estimated: true,
+      source: 'error'
+    },
+    toolUsage: [],
+    command: ''
   };
 }
 
