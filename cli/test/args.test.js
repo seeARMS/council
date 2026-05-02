@@ -311,6 +311,10 @@ test('parses Linear delivery options', () => {
     '--deliver-linear',
     '--linear-issue',
     'ABC-1,ABC-2',
+    '--linear-project',
+    'Project Alpha,project-slug',
+    '--linear-epic',
+    'ENG-1',
     '--linear-team',
     'ENG',
     '--linear-state',
@@ -334,6 +338,15 @@ test('parses Linear delivery options', () => {
     '2',
     '--linear-max-attempts',
     '5',
+    '--linear-until-complete',
+    '--linear-completion-gate',
+    'review-or-ci',
+    '--linear-ci-timeout',
+    '30',
+    '--linear-ci-poll-interval',
+    '2',
+    '--linear-review-state',
+    'In Review',
     '--linear-retry-base',
     '10',
     '--linear-state-file',
@@ -359,6 +372,8 @@ test('parses Linear delivery options', () => {
 
   assert.equal(parsed.delivery.enabled, true);
   assert.deepEqual(parsed.delivery.issueIds, ['ABC-1', 'ABC-2']);
+  assert.deepEqual(parsed.delivery.projects, ['Project Alpha', 'project-slug']);
+  assert.deepEqual(parsed.delivery.epics, ['ENG-1']);
   assert.equal(parsed.delivery.team, 'ENG');
   assert.equal(parsed.delivery.state, 'Todo');
   assert.equal(parsed.delivery.assignee, 'Dvir');
@@ -367,6 +382,11 @@ test('parses Linear delivery options', () => {
   assert.equal(parsed.delivery.authMethod, 'oauth');
   assert.equal(parsed.delivery.oauthTokenEnv, 'TEST_LINEAR_OAUTH');
   assert.equal(parsed.delivery.watch, true);
+  assert.equal(parsed.delivery.untilComplete, true);
+  assert.equal(parsed.delivery.completionGate, 'review-or-ci');
+  assert.equal(parsed.delivery.ciTimeoutMs, 30_000);
+  assert.equal(parsed.delivery.ciPollIntervalMs, 2_000);
+  assert.equal(parsed.delivery.reviewState, 'In Review');
   assert.equal(parsed.delivery.pollIntervalMs, 5_000);
   assert.equal(parsed.delivery.maxPolls, 4);
   assert.equal(parsed.delivery.maxConcurrency, 2);

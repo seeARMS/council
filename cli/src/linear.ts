@@ -13,6 +13,8 @@ const ISSUE_FIELDS = `
   branchName
   createdAt
   updatedAt
+  project { id name slug url }
+  parent { id identifier title url }
   state { name }
   team { key name }
   assignee { name email }
@@ -25,7 +27,10 @@ export async function fetchLinearIssues({
   team = null,
   state = null,
   assignee = null,
+  projects = [],
+  epics = [],
   limit = 3,
+  fetchAll = false,
   endpoint = DEFAULT_LINEAR_ENDPOINT,
   apiKey,
   authorization = apiKey,
@@ -51,26 +56,43 @@ export async function fetchLinearIssues({
     return issues;
   }
 
-  const data = await linearGraphql({
-    endpoint,
-    authorization,
-    fetchFn,
-    query: `
-      query CouncilLinearIssues($first: Int!, $filter: IssueFilter) {
-        issues(first: $first, filter: $filter) {
-          nodes {
-            ${ISSUE_FIELDS}
+  const pageSize = Math.max(1, limit);
+  const filter = buildIssueFilter({ query, team, state, assignee, projects, epics });
+  const issues = [];
+  let after: string | null = null;
+
+  do {
+    const data = await linearGraphql({
+      endpoint,
+      authorization,
+      fetchFn,
+      query: `
+        query CouncilLinearIssues($first: Int!, $after: String, $filter: IssueFilter) {
+          issues(first: $first, after: $after, filter: $filter) {
+            nodes {
+              ${ISSUE_FIELDS}
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
           }
         }
+      `,
+      variables: {
+        first: pageSize,
+        after,
+        filter
       }
-    `,
-    variables: {
-      first: Math.max(1, limit),
-      filter: buildIssueFilter({ query, team, state, assignee })
-    }
-  });
+    });
+    const connection = data?.issues;
+    issues.push(...(connection?.nodes || []));
+    after = fetchAll && connection?.pageInfo?.hasNextPage
+      ? connection.pageInfo.endCursor || null
+      : null;
+  } while (after);
 
-  return normalizeLinearIssues(data?.issues?.nodes || []);
+  return normalizeLinearIssues(issues);
 }
 
 export async function fetchLinearIssueById({
@@ -394,7 +416,7 @@ function inferContentType(filename) {
   return types[ext] || 'application/octet-stream';
 }
 
-function buildIssueFilter({ query, team, state, assignee }) {
+function buildIssueFilter({ query, team, state, assignee, projects = [], epics = [] }) {
   const filter: any = {};
 
   if (query) {
@@ -430,7 +452,50 @@ function buildIssueFilter({ query, team, state, assignee }) {
     };
   }
 
+  const projectFilter = buildLinearEntityFilter(projects, {
+    textFields: ['name'],
+    exactFields: ['id', 'slug']
+  });
+  if (projectFilter) {
+    filter.project = projectFilter;
+  }
+
+  const epicFilter = buildLinearEntityFilter(epics, {
+    textFields: ['title'],
+    exactFields: ['id', 'identifier']
+  });
+  if (epicFilter) {
+    filter.parent = epicFilter;
+  }
+
   return Object.keys(filter).length > 0 ? filter : null;
+}
+
+function buildLinearEntityFilter(values = [], { textFields = [], exactFields = [] } = {}) {
+  const list = normalizeFilterValues(values);
+  if (list.length === 0) {
+    return null;
+  }
+
+  const or = [];
+  for (const value of list) {
+    for (const field of exactFields) {
+      or.push({ [field]: { eq: value } });
+    }
+    for (const field of textFields) {
+      or.push({ [field]: { containsIgnoreCase: value } });
+    }
+  }
+
+  return or.length === 1 ? or[0] : { or };
+}
+
+function normalizeFilterValues(values = []) {
+  const list = Array.isArray(values) ? values : [values];
+  return list
+    .flatMap((value) => String(value || '').split(','))
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
 function normalizeLinearIssues(issues) {
@@ -446,6 +511,22 @@ function normalizeLinearIssue(issue) {
     priority: issue.priority ?? null,
     url: issue.url || null,
     branchName: issue.branchName || null,
+    project: issue.project
+      ? {
+          id: issue.project.id,
+          name: issue.project.name || null,
+          slug: issue.project.slug || null,
+          url: issue.project.url || null
+        }
+      : null,
+    epic: issue.parent
+      ? {
+          id: issue.parent.id,
+          identifier: issue.parent.identifier || null,
+          title: issue.parent.title || null,
+          url: issue.parent.url || null
+        }
+      : null,
     state: issue.state?.name || null,
     team: issue.team?.key || issue.team?.name || null,
     assignee: issue.assignee?.name || issue.assignee?.email || null,

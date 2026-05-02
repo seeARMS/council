@@ -305,11 +305,17 @@ test('studio exposes Linear delivery settings and payload', () => {
     delivery: {
       enabled: true,
       watch: true,
+      untilComplete: true,
       issueIds: ['ENG-123'],
+      projects: ['Migration Project'],
+      epics: ['ENG-1'],
       team: 'ENG',
       state: 'Todo',
+      completionGate: 'review-or-ci',
+      reviewState: 'In Review',
       authMethod: 'oauth',
       maxConcurrency: 2,
+      maxAttempts: null,
       workspaceStrategy: 'copy',
       attachMedia: ['proof.png']
     }
@@ -319,10 +325,19 @@ test('studio exposes Linear delivery settings and payload', () => {
   const delivery = buildStudioLinearDelivery(config);
 
   assert.equal(settings.find((setting) => setting.id === 'linearMode')?.value, 'watch');
+  assert.equal(settings.find((setting) => setting.id === 'linearUntilComplete')?.value, 'until complete');
+  assert.equal(settings.find((setting) => setting.id === 'linearCompletion')?.value, 'review-or-ci');
+  assert.equal(settings.find((setting) => setting.id === 'linearAttempts')?.value, 'unlimited');
   assert.equal(settings.find((setting) => setting.id === 'linearAuth')?.value, 'oauth');
   assert.equal(settings.find((setting) => setting.id === 'linearWorkspace')?.value, 'copy');
-  assert.equal(nextMode.linear.enabled, false);
+  assert.equal(nextMode.linear.enabled, true);
+  assert.equal(nextMode.linear.watch, true);
   assert.deepEqual(delivery.issueIds, ['ENG-123']);
+  assert.deepEqual(delivery.projects, ['Migration Project']);
+  assert.deepEqual(delivery.epics, ['ENG-1']);
+  assert.equal(delivery.untilComplete, true);
+  assert.equal(delivery.completionGate, 'review-or-ci');
+  assert.equal(delivery.reviewState, 'In Review');
   assert.equal(delivery.team, 'ENG');
   assert.equal(delivery.state, 'Todo');
   assert.equal(delivery.authMethod, 'oauth');

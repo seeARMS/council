@@ -79,8 +79,11 @@ const OPTIONS = {
   'linear-setup': { type: 'boolean' },
   'linear-status': { type: 'boolean' },
   'linear-watch': { type: 'boolean' },
+  'linear-until-complete': { type: 'boolean' },
   'linear-issue': { type: 'string' },
   'linear-query': { type: 'string' },
+  'linear-project': { type: 'string' },
+  'linear-epic': { type: 'string' },
   'linear-team': { type: 'string' },
   'linear-state': { type: 'string' },
   'linear-assignee': { type: 'string' },
@@ -94,6 +97,10 @@ const OPTIONS = {
   'linear-max-concurrency': { type: 'string' },
   'linear-max-attempts': { type: 'string' },
   'linear-retry-base': { type: 'string' },
+  'linear-completion-gate': { type: 'string' },
+  'linear-ci-timeout': { type: 'string' },
+  'linear-ci-poll-interval': { type: 'string' },
+  'linear-review-state': { type: 'string' },
   'linear-state-file': { type: 'string' },
   'linear-workspace-root': { type: 'string' },
   'linear-observability-dir': { type: 'string' },
@@ -213,12 +220,15 @@ export function usageText(version) {
     '  --linear-setup            Print Linear integration setup and local status',
     '  --linear-status           Print Linear integration status and local delivery state',
     '  --linear-watch            Keep polling Linear for eligible tasks',
+    '  --linear-until-complete   Watch until the selected target has no unfinished work',
     '  --linear-issue <ids>      Comma-separated Linear issue IDs/keys to deliver',
     '  --linear-query <text>     Fetch matching Linear issues when explicit IDs are not provided',
+    '  --linear-project <list>   Restrict Linear fetches to project id/name/slug values',
+    '  --linear-epic <list>      Restrict Linear fetches to parent epic issue id/key/title values',
     '  --linear-team <key>       Restrict Linear fetches to a team key',
     '  --linear-state <name>     Restrict Linear fetches to a state name',
     '  --linear-assignee <text>  Restrict Linear fetches to an assignee name/email',
-    '  --linear-limit <n>        Max Linear issues to fetch (default: 3)',
+    '  --linear-limit <n>        Max Linear issues to dispatch per poll (default: 3)',
     '  --linear-auth <method>    Linear auth: api-key or oauth',
     '  --linear-poll-interval <seconds>',
     '                            Poll interval for --linear-watch (default: 60)',
@@ -226,6 +236,14 @@ export function usageText(version) {
     '  --linear-max-concurrency <n>',
     '                            Max issues delivered concurrently (default: 1)',
     '  --linear-max-attempts <n> Max retry attempts per issue (default: 3)',
+    '  --linear-completion-gate <gate>',
+    '                            delivered, human-review, ci-success, or review-or-ci',
+    '  --linear-review-state <name>',
+    '                            Linear state name that counts as human-review ready',
+    '  --linear-ci-timeout <seconds>',
+    '                            Max time to wait for GitHub checks when CI success is required',
+    '  --linear-ci-poll-interval <seconds>',
+    '                            Poll interval for GitHub checks (default: 30)',
     '  --linear-workspace-root <path>',
     '                            Directory for per-issue isolated workspaces',
     '  --linear-workspace-strategy <worktree|copy|none>',
@@ -529,16 +547,24 @@ function parseDeliveryOptions(values, tokens = []) {
     values.linear ||
     values['linear-setup'] ||
     values['linear-status'] ||
-    values['linear-watch']
+    values['linear-watch'] ||
+    values['linear-until-complete'] ||
+    values['linear-project'] ||
+    values['linear-epic'] ||
+    values['linear-completion-gate']
   );
+  const untilComplete = Boolean(values['linear-until-complete']);
   return {
     enabled,
     provider: enabled ? 'linear' : null,
     setup: Boolean(values['linear-setup']),
     status: Boolean(values['linear-status']),
-    watch: Boolean(values['linear-watch']),
+    watch: Boolean(values['linear-watch'] || untilComplete),
+    untilComplete,
     issueIds: parseOptionalList(values['linear-issue']),
     query: parseOptionalString(values['linear-query'], '--linear-query'),
+    projects: collectRepeatedListOptions(tokens, ['linear-project']),
+    epics: collectRepeatedListOptions(tokens, ['linear-epic']),
     team: parseOptionalString(values['linear-team'], '--linear-team'),
     state: parseOptionalString(values['linear-state'], '--linear-state'),
     assignee: parseOptionalString(values['linear-assignee'], '--linear-assignee'),
@@ -561,10 +587,22 @@ function parseDeliveryOptions(values, tokens = []) {
       : 1,
     maxAttempts: values['linear-max-attempts']
       ? parsePositiveInteger(values['linear-max-attempts'], '--linear-max-attempts')
-      : 3,
+      : untilComplete ? null : 3,
     retryBaseMs: values['linear-retry-base']
       ? parsePositiveSecondsMs(values['linear-retry-base'], '--linear-retry-base')
       : 60_000,
+    completionGate: parseEnumValue(
+      values['linear-completion-gate'] ?? 'delivered',
+      '--linear-completion-gate',
+      ['delivered', 'human-review', 'ci-success', 'review-or-ci']
+    ),
+    ciTimeoutMs: values['linear-ci-timeout']
+      ? parsePositiveSecondsMs(values['linear-ci-timeout'], '--linear-ci-timeout')
+      : 900_000,
+    ciPollIntervalMs: values['linear-ci-poll-interval']
+      ? parsePositiveSecondsMs(values['linear-ci-poll-interval'], '--linear-ci-poll-interval')
+      : 30_000,
+    reviewState: parseOptionalString(values['linear-review-state'], '--linear-review-state'),
     stateFile: parseOptionalString(values['linear-state-file'], '--linear-state-file'),
     workspaceRoot: parseOptionalString(values['linear-workspace-root'], '--linear-workspace-root'),
     observabilityDir: parseOptionalString(values['linear-observability-dir'], '--linear-observability-dir'),

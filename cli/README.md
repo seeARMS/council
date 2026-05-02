@@ -314,9 +314,9 @@ Set `LINEAR_API_KEY` for API-key auth, or set `LINEAR_OAUTH_TOKEN` and pass `--l
 
 In Studio mode, Linear is managed from the Settings, Linear, and Command Palette panes:
 
-- Settings: cycle `Linear mode` (`off`, `deliver`, `watch`), `Linear auth` (`api-key`, `oauth`), workspace strategy, issue limit, concurrency, and retry attempts.
+- Settings: cycle `Linear mode` (`off`, `deliver`, `watch`), `Linear loop`, `Linear gate`, `Linear auth` (`api-key`, `oauth`), workspace strategy, issue limit, concurrency, and retry attempts.
 - Linear pane: press `Enter` while focused to refresh setup/status, viewer, state counts, workspace root, and observability log.
-- Command Palette: use `Linear status`, `Deliver Linear`, `Set Linear issue`, `Set Linear query`, `Set Linear team`, `Set Linear state`, and `Attach Linear media` without restarting Node.
+- Command Palette: use `Linear status`, `Deliver Linear`, `Set Linear issue`, `Set Linear query`, `Set Linear project`, `Set Linear epic`, `Set Linear team`, `Set Linear state`, and `Attach Linear media` without restarting Node.
 - In a real TTY, `--studio --linear-status`, `--studio --deliver-linear`, and the other Linear flags pre-populate those Studio controls instead of bypassing the TUI.
 
 Council can fetch Linear work and run each issue through delivery phases:
@@ -331,7 +331,7 @@ council \
   "Keep the patch small and open a PR when tests pass"
 ```
 
-If you do not pass explicit issue IDs, use `--linear-query`, `--linear-team`, `--linear-state`, `--linear-assignee`, and `--linear-limit` to fetch candidate tasks. Delivery phases default to `plan,implement,verify,ship`; override with `--delivery-phases`.
+If you do not pass explicit issue IDs, use `--linear-query`, `--linear-project`, `--linear-epic`, `--linear-team`, `--linear-state`, `--linear-assignee`, and `--linear-limit` to fetch candidate tasks. `--linear-project` matches Linear project id/name/slug values. `--linear-epic` matches the parent epic issue id/key/title. Delivery phases default to `plan,implement,verify,ship`; override with `--delivery-phases`.
 
 Each Linear issue is normalized into a task prompt. Council then runs phase-specific prompts:
 
@@ -346,11 +346,14 @@ For Symphony-style operation, run Council as a long-running Linear worker:
 council \
   --deliver-linear \
   --linear-watch \
+  --linear-until-complete \
+  --linear-project "Migration Project" \
+  --linear-epic ENG-1 \
   --linear-team ENG \
   --linear-state Todo \
+  --linear-completion-gate review-or-ci \
   --linear-poll-interval 60 \
   --linear-max-concurrency 2 \
-  --linear-max-attempts 3 \
   --linear-workspace-strategy worktree \
   --planner codex \
   --lead claude \
@@ -362,12 +365,16 @@ council \
 Long-running Linear mode includes:
 
 - polling: `--linear-watch` keeps fetching eligible issues until interrupted; `--linear-max-polls` bounds a run for CI or testing.
+- target completion: `--linear-until-complete` keeps watch mode alive until the current target has no unfinished work. It is meant to be paired with `--linear-project`, `--linear-epic`, explicit issue IDs, or other Linear filters. Council scans every matching Linear page for completion, while `--linear-limit` remains the per-poll dispatch batch size.
+- completion gates: `--linear-completion-gate delivered` preserves the old behavior of completing after all phases pass. `human-review` requires PR/branch evidence or a matching `--linear-review-state`. `ci-success` waits for `gh pr checks` to pass. `review-or-ci` accepts either human-review readiness or passing GitHub checks.
 - isolated workspaces: each issue gets a workspace under `.council/linear-workspaces` by default. `worktree` creates a Git worktree and falls back to `copy`; `copy` clones the files without `.git`, `.council`, `node_modules`, or `dist`; `none` keeps the current `--cwd`.
-- retry and reconciliation: Council persists `.council/linear-delivery-state.json`, tracks attempts, schedules exponential backoff, skips delivered/running issues, and marks watched issues ineligible when they stop matching the current Linear query.
+- retry and reconciliation: Council persists `.council/linear-delivery-state.json`, tracks attempts, schedules exponential backoff, skips delivered/review-ready/CI-passed/running issues, and marks watched issues ineligible when they stop matching the current Linear query. With `--linear-until-complete`, attempts are unlimited unless you explicitly pass `--linear-max-attempts`.
 - observability: every delivery event is appended as JSONL to `.council/linear-observability/events.jsonl`; `--json-stream` also streams lifecycle events to stdout.
 - workflow policy: if `WORKFLOW.md` exists, Council includes it in each phase prompt; override with `--linear-workflow-file`.
 
 Use `--linear-state-file`, `--linear-workspace-root`, and `--linear-observability-dir` to relocate the state, workspace, and event-log paths.
+
+For CI-gated delivery, Council uses the GitHub CLI from the issue workspace. `--linear-ci-timeout` controls how long `ci-success` waits for checks, and `--linear-ci-poll-interval` controls the check polling interval.
 
 Attach media back to Linear after a task is delivered:
 

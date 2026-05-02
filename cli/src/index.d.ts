@@ -85,6 +85,8 @@ export interface DeliveryOptions {
   provider: 'linear' | null;
   issueIds: string[];
   query?: string | null;
+  projects?: string[];
+  epics?: string[];
   team?: string | null;
   state?: string | null;
   assignee?: string | null;
@@ -97,10 +99,15 @@ export interface DeliveryOptions {
   setup: boolean;
   status: boolean;
   watch: boolean;
+  untilComplete?: boolean;
+  completionGate?: 'delivered' | 'human-review' | 'ci-success' | 'review-or-ci';
+  ciTimeoutMs?: number;
+  ciPollIntervalMs?: number;
+  reviewState?: string | null;
   pollIntervalMs: number;
   maxPolls: number | null;
   maxConcurrency: number;
-  maxAttempts: number;
+  maxAttempts: number | null;
   retryBaseMs: number;
   stateFile?: string | null;
   workspaceRoot?: string | null;

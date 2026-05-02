@@ -57,6 +57,8 @@ const STUDIO_MENU = [
   { id: 'linearDeliver', label: 'Deliver Linear' },
   { id: 'linearIssue', label: 'Set Linear issue' },
   { id: 'linearQuery', label: 'Set Linear query' },
+  { id: 'linearProject', label: 'Set Linear project' },
+  { id: 'linearEpic', label: 'Set Linear epic' },
   { id: 'linearTeam', label: 'Set Linear team' },
   { id: 'linearState', label: 'Set Linear state' },
   { id: 'linearMedia', label: 'Attach Linear media' },
@@ -85,6 +87,7 @@ const STUDIO_EFFORTS = {
 const STUDIO_CAPABILITY_MODES = ['inherit', 'override'];
 const STUDIO_LINEAR_AUTH_METHODS = ['api-key', 'oauth'];
 const STUDIO_LINEAR_MODES = ['off', 'deliver', 'watch'];
+const STUDIO_LINEAR_COMPLETION_GATES = ['delivered', 'human-review', 'ci-success', 'review-or-ci'];
 const STUDIO_LINEAR_WORKSPACE_STRATEGIES = ['worktree', 'copy', 'none'];
 const DEFAULT_STUDIO_LINEAR_PHASES = ['plan', 'implement', 'verify', 'ship'];
 
@@ -390,6 +393,16 @@ function StudioApp(props) {
 
     if (actionId === 'linearQuery') {
       startLinearFieldAction('query', 'Set Linear query text');
+      return;
+    }
+
+    if (actionId === 'linearProject') {
+      startLinearFieldAction('projects', 'Set Linear project IDs, names, or slugs');
+      return;
+    }
+
+    if (actionId === 'linearEpic') {
+      startLinearFieldAction('epics', 'Set Linear epic parent issue IDs, keys, or titles');
       return;
     }
 
@@ -1617,11 +1630,13 @@ function StudioLinearPane({ config, status, result, events = [], busy, focused }
         'status:not checked'
       ];
   const filterLines = [
-    `mode:${busy ? 'busy' : mode}`,
+    `mode:${busy ? 'busy' : mode}  loop:${linear.untilComplete ? 'until-complete' : 'bounded'}`,
+    `gate:${linear.completionGate}`,
     `issue:${linear.issueIds?.join(',') || 'none'}`,
     `query:${linear.query || 'none'}`,
+    `project:${linear.projects?.join(',') || 'any'}  epic:${linear.epics?.join(',') || 'any'}`,
     `team:${linear.team || 'any'}  state:${linear.state || 'any'}`,
-    `limit:${linear.limit}  concurrency:${linear.maxConcurrency}  attempts:${linear.maxAttempts}`,
+    `limit:${linear.limit}  concurrency:${linear.maxConcurrency}  attempts:${linear.maxAttempts === null ? 'unlimited' : linear.maxAttempts}`,
     `workspace:${linear.workspaceStrategy}`
   ];
   const media = linear.attachMedia?.length
@@ -1832,7 +1847,8 @@ function StudioHelpPanel() {
     'Settings pane: choose handoff, lead/planner, synthesis, auth methods, capabilities mode, permissions, efforts, iterations, Linear mode/auth/workspace',
     'Capabilities pane: switch inherit/override and edit Codex config/profile, Claude MCP/tools, Gemini settings/tool profiles',
     'Social login: opens each selected provider auth flow in browser tabs; paste returned codes here if prompted',
-    'Linear pane: Enter checks setup/status; Command Palette can deliver issues or edit issue/query/media fields',
+    'Linear pane: Enter checks setup/status; Command Palette can deliver issues or edit issue/query/project/epic/media fields',
+    'Linear loop: use until-complete plus project/epic targets and a completion gate for review-ready or CI-passed delivery',
     'Provider Skills/MCP/Tools: inherit uses each CLI config; override passes the configured provider-specific flags',
     'Command Palette: tag local files or run shell commands into prompt context',
     'Canvas pane: provider rows show token/tool suffixes; Telemetry section lists current token/tool usage',
@@ -2181,11 +2197,13 @@ export function buildStudioSettings(config) {
     { id: 'claudeEffort', label: 'Claude effort', value: config.efforts.claude || 'default' },
     { id: 'geminiEffort', label: 'Gemini effort', value: config.efforts.gemini || 'default' },
     { id: 'linearMode', label: 'Linear mode', value: studioLinearMode(config.linear) },
+    { id: 'linearUntilComplete', label: 'Linear loop', value: config.linear.untilComplete ? 'until complete' : 'bounded' },
+    { id: 'linearCompletion', label: 'Linear gate', value: config.linear.completionGate },
     { id: 'linearAuth', label: 'Linear auth', value: config.linear.authMethod },
     { id: 'linearWorkspace', label: 'Linear workspace', value: config.linear.workspaceStrategy },
     { id: 'linearLimit', label: 'Linear limit', value: String(config.linear.limit) },
     { id: 'linearConcurrency', label: 'Linear concurrency', value: String(config.linear.maxConcurrency) },
-    { id: 'linearAttempts', label: 'Linear attempts', value: String(config.linear.maxAttempts) },
+    { id: 'linearAttempts', label: 'Linear attempts', value: config.linear.maxAttempts === null ? 'unlimited' : String(config.linear.maxAttempts) },
     { id: 'linearFilter', label: 'Linear filter', value: formatStudioLinearFilter(config.linear) }
   ];
 }
@@ -2237,6 +2255,17 @@ export function applyStudioSetting(config, settingId, direction = 1) {
     const mode = cycleValue(studioLinearMode(next.linear), STUDIO_LINEAR_MODES, direction);
     next.linear.enabled = mode !== 'off';
     next.linear.watch = mode === 'watch';
+  } else if (settingId === 'linearUntilComplete') {
+    next.linear.untilComplete = !next.linear.untilComplete;
+    if (next.linear.untilComplete) {
+      next.linear.enabled = true;
+      next.linear.watch = true;
+      if (next.linear.maxAttempts === 3) {
+        next.linear.maxAttempts = null;
+      }
+    }
+  } else if (settingId === 'linearCompletion') {
+    next.linear.completionGate = cycleValue(next.linear.completionGate, STUDIO_LINEAR_COMPLETION_GATES, direction);
   } else if (settingId === 'linearAuth') {
     next.linear.authMethod = cycleValue(next.linear.authMethod, STUDIO_LINEAR_AUTH_METHODS, direction);
   } else if (settingId === 'linearWorkspace') {
@@ -2246,9 +2275,13 @@ export function applyStudioSetting(config, settingId, direction = 1) {
   } else if (settingId === 'linearConcurrency') {
     next.linear.maxConcurrency = Math.max(1, next.linear.maxConcurrency + direction);
   } else if (settingId === 'linearAttempts') {
-    next.linear.maxAttempts = Math.max(1, next.linear.maxAttempts + direction);
+    if (next.linear.maxAttempts === null) {
+      next.linear.maxAttempts = direction > 0 ? 1 : null;
+    } else {
+      next.linear.maxAttempts = Math.max(1, next.linear.maxAttempts + direction);
+    }
   } else if (settingId === 'linearFilter') {
-    next.linear.filterSlot = cycleValue(next.linear.filterSlot || 'issue', ['issue', 'query', 'team', 'state', 'media'], direction);
+    next.linear.filterSlot = cycleValue(next.linear.filterSlot || 'issue', ['issue', 'query', 'project', 'epic', 'team', 'state', 'review', 'media'], direction);
   }
 
   return sanitizeStudioConfig(next);
@@ -2524,7 +2557,10 @@ function createStudioLinearConfig(delivery: any = {}) {
   return sanitizeStudioLinearConfig({
     enabled: Boolean(delivery.enabled),
     watch: Boolean(delivery.watch),
+    untilComplete: Boolean(delivery.untilComplete),
     issueIds: [...(delivery.issueIds || [])],
+    projects: [...(delivery.projects || [])],
+    epics: [...(delivery.epics || [])],
     query: delivery.query || '',
     team: delivery.team || '',
     state: delivery.state || '',
@@ -2537,8 +2573,12 @@ function createStudioLinearConfig(delivery: any = {}) {
     pollIntervalMs: delivery.pollIntervalMs ?? 60_000,
     maxPolls: delivery.maxPolls ?? null,
     maxConcurrency: delivery.maxConcurrency ?? 1,
-    maxAttempts: delivery.maxAttempts ?? 3,
+    maxAttempts: delivery.maxAttempts === undefined ? 3 : delivery.maxAttempts,
     retryBaseMs: delivery.retryBaseMs ?? 60_000,
+    completionGate: delivery.completionGate || 'delivered',
+    ciTimeoutMs: delivery.ciTimeoutMs ?? 900_000,
+    ciPollIntervalMs: delivery.ciPollIntervalMs ?? 30_000,
+    reviewState: delivery.reviewState || '',
     stateFile: delivery.stateFile || '',
     workspaceRoot: delivery.workspaceRoot || '',
     observabilityDir: delivery.observabilityDir || '',
@@ -2557,7 +2597,14 @@ function sanitizeStudioLinearConfig(linear: any = {}) {
   const next = cloneStudioLinearConfig(linear);
   next.enabled = Boolean(next.enabled);
   next.watch = Boolean(next.watch);
+  next.untilComplete = Boolean(next.untilComplete);
+  if (next.untilComplete) {
+    next.enabled = true;
+    next.watch = true;
+  }
   next.issueIds = normalizeStudioList(next.issueIds);
+  next.projects = normalizeStudioList(next.projects);
+  next.epics = normalizeStudioList(next.epics);
   next.query = String(next.query || '').trim();
   next.team = String(next.team || '').trim();
   next.state = String(next.state || '').trim();
@@ -2574,8 +2621,16 @@ function sanitizeStudioLinearConfig(linear: any = {}) {
     ? null
     : Math.max(1, Number(next.maxPolls) || 1);
   next.maxConcurrency = Math.max(1, Number(next.maxConcurrency) || 1);
-  next.maxAttempts = Math.max(1, Number(next.maxAttempts) || 3);
+  next.maxAttempts = next.maxAttempts === null || next.maxAttempts === 'unlimited'
+    ? null
+    : Math.max(1, Number(next.maxAttempts) || 3);
   next.retryBaseMs = Math.max(1_000, Number(next.retryBaseMs) || 60_000);
+  next.completionGate = STUDIO_LINEAR_COMPLETION_GATES.includes(next.completionGate)
+    ? next.completionGate
+    : 'delivered';
+  next.ciTimeoutMs = Math.max(1_000, Number(next.ciTimeoutMs) || 900_000);
+  next.ciPollIntervalMs = Math.max(1_000, Number(next.ciPollIntervalMs) || 30_000);
+  next.reviewState = String(next.reviewState || '').trim();
   next.stateFile = String(next.stateFile || '').trim();
   next.workspaceRoot = String(next.workspaceRoot || '').trim();
   next.observabilityDir = String(next.observabilityDir || '').trim();
@@ -2588,7 +2643,7 @@ function sanitizeStudioLinearConfig(linear: any = {}) {
   next.phases = normalizeStudioList(next.phases).length > 0
     ? normalizeStudioList(next.phases)
     : [...DEFAULT_STUDIO_LINEAR_PHASES];
-  next.filterSlot = ['issue', 'query', 'team', 'state', 'media'].includes(next.filterSlot)
+  next.filterSlot = ['issue', 'query', 'project', 'epic', 'team', 'state', 'review', 'media'].includes(next.filterSlot)
     ? next.filterSlot
     : 'issue';
   return next;
@@ -2598,6 +2653,8 @@ function cloneStudioLinearConfig(linear: any = {}) {
   return {
     ...linear,
     issueIds: [...(linear.issueIds || [])],
+    projects: [...(linear.projects || [])],
+    epics: [...(linear.epics || [])],
     attachMedia: [...(linear.attachMedia || [])],
     phases: [...(linear.phases || DEFAULT_STUDIO_LINEAR_PHASES)]
   };
@@ -2605,7 +2662,7 @@ function cloneStudioLinearConfig(linear: any = {}) {
 
 function setStudioLinearField(config, field, value) {
   const next = cloneStudioConfig(config);
-  if (field === 'issueIds' || field === 'attachMedia') {
+  if (['issueIds', 'attachMedia', 'projects', 'epics'].includes(field)) {
     next.linear[field] = normalizeStudioList(value);
   } else {
     next.linear[field] = String(value || '').trim();
@@ -2650,7 +2707,10 @@ export function buildStudioLinearDelivery(config, overrides: any = {}) {
     setup: false,
     status: false,
     watch: Boolean(linear.watch),
+    untilComplete: Boolean(linear.untilComplete),
     issueIds: [...linear.issueIds],
+    projects: [...linear.projects],
+    epics: [...linear.epics],
     query: linear.query || null,
     team: linear.team || null,
     state: linear.state || null,
@@ -2666,6 +2726,10 @@ export function buildStudioLinearDelivery(config, overrides: any = {}) {
     maxConcurrency: linear.maxConcurrency,
     maxAttempts: linear.maxAttempts,
     retryBaseMs: linear.retryBaseMs,
+    completionGate: linear.completionGate,
+    ciTimeoutMs: linear.ciTimeoutMs,
+    ciPollIntervalMs: linear.ciPollIntervalMs,
+    reviewState: linear.reviewState || null,
     stateFile: linear.stateFile || null,
     workspaceRoot: linear.workspaceRoot || null,
     observabilityDir: linear.observabilityDir || null,
@@ -2700,6 +2764,8 @@ function createInitialStudioLinearStatus(linear, cwd, env: any = {}) {
     counts: {
       total: 0,
       delivered: 0,
+      review_ready: 0,
+      ci_passed: 0,
       running: 0,
       retry_wait: 0,
       failed: 0,
@@ -2724,11 +2790,20 @@ function formatStudioLinearFilter(linear: any = {}) {
   if (slot === 'query') {
     return `query:${linear.query || 'none'}`;
   }
+  if (slot === 'project') {
+    return `project:${linear.projects?.join(',') || 'any'}`;
+  }
+  if (slot === 'epic') {
+    return `epic:${linear.epics?.join(',') || 'any'}`;
+  }
   if (slot === 'team') {
     return `team:${linear.team || 'any'}`;
   }
   if (slot === 'state') {
     return `state:${linear.state || 'any'}`;
+  }
+  if (slot === 'review') {
+    return `review:${linear.reviewState || 'pr/branch'}`;
   }
   return `media:${linear.attachMedia?.length || 0}`;
 }
@@ -2737,6 +2812,8 @@ function formatStudioLinearCounts(counts: any = {}) {
   return [
     `total:${counts.total || 0}`,
     `done:${counts.delivered || 0}`,
+    `review:${counts.review_ready || 0}`,
+    `ci:${counts.ci_passed || 0}`,
     `run:${counts.running || 0}`,
     `retry:${counts.retry_wait || 0}`,
     `fail:${counts.failed || 0}`
