@@ -72,6 +72,17 @@ test('renderProgressEvent describes member completion', () => {
   assert.match(line, /claude/);
 });
 
+test('renderProgressEvent handles auth login commands without arguments', () => {
+  const line = renderProgressEvent({
+    type: 'auth_login_started',
+    provider: 'gemini',
+    bin: 'gemini',
+    args: []
+  });
+
+  assert.equal(line, '[auth] gemini: opening social login (gemini)');
+});
+
 test('renderHumanResult shows summary failure details in summary-only mode', () => {
   const output = renderHumanResult(
     {

@@ -12,6 +12,7 @@ import {
   PROVIDER_AUTH_METHODS,
   PROVIDER_EFFORT_LEVELS
 } from './engines.js';
+import { DEFAULT_AUTH_LOGIN_TIMEOUT_MS } from './provider-auth.js';
 const OPTIONS = {
   help: { type: 'boolean', short: 'h' },
   version: { type: 'boolean', short: 'v' },
@@ -43,6 +44,11 @@ const OPTIONS = {
   'codex-auth': { type: 'string' },
   'claude-auth': { type: 'string' },
   'gemini-auth': { type: 'string' },
+  'auth-login': { type: 'boolean' },
+  'auth-login-providers': { type: 'string' },
+  'auth-device-code': { type: 'boolean' },
+  'auth-open-browser': { type: 'boolean', default: true },
+  'auth-timeout': { type: 'string' },
   file: { type: 'string' },
   'tag-file': { type: 'string' },
   cmd: { type: 'string' },
@@ -154,6 +160,12 @@ export function usageText(version) {
     `  --codex-auth <method>     Codex auth preference: ${PROVIDER_AUTH_METHODS.codex.join(', ')}`,
     `  --claude-auth <method>    Claude auth preference: ${PROVIDER_AUTH_METHODS.claude.join(', ')}`,
     `  --gemini-auth <method>    Gemini auth preference: ${PROVIDER_AUTH_METHODS.gemini.join(', ')}`,
+    '  --auth-login              Launch social-login auth for selected providers before running',
+    '  --auth-login-providers <list>',
+    '                            Comma-separated providers to authenticate; defaults to social-login members, then all enabled members',
+    '  --auth-device-code        Prefer provider code-paste flow where available',
+    '  --no-auth-open-browser    Do not open detected auth URLs in a browser tab',
+    '  --auth-timeout <seconds>  Social-login auth timeout (default: 300)',
     '  --file <path>             Tag a local file into the prompt context (repeatable)',
     '  --tag-file <path>         Alias for --file',
     '  --cmd <command>           Run a shell command and include its output in the prompt (repeatable)',
@@ -246,6 +258,7 @@ export function parseArgs(argv) {
     efforts: parseProviderEfforts(values),
     permissions: parseProviderPermissions(values),
     auths: parseProviderAuths(values),
+    authLogin: parseAuthLoginOptions(values),
     promptContext: parsePromptContextOptions(parsed.tokens),
     handoff: Boolean(values.handoff),
     lead: parseOptionalEngine(values.lead, '--lead'),
@@ -411,6 +424,18 @@ function parseProviderAuths(values) {
     codex: parseEnumValue(values['codex-auth'], '--codex-auth', PROVIDER_AUTH_METHODS.codex),
     claude: parseEnumValue(values['claude-auth'], '--claude-auth', PROVIDER_AUTH_METHODS.claude),
     gemini: parseEnumValue(values['gemini-auth'], '--gemini-auth', PROVIDER_AUTH_METHODS.gemini)
+  };
+}
+
+function parseAuthLoginOptions(values) {
+  return {
+    enabled: Boolean(values['auth-login']),
+    providers: parseOptionalList(values['auth-login-providers']).map((provider) => provider.toLowerCase()),
+    deviceCode: Boolean(values['auth-device-code']),
+    openBrowser: values['auth-open-browser'] !== false,
+    timeoutMs: values['auth-timeout']
+      ? parsePositiveSecondsMs(values['auth-timeout'], '--auth-timeout')
+      : DEFAULT_AUTH_LOGIN_TIMEOUT_MS
   };
 }
 

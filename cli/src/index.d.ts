@@ -35,6 +35,14 @@ export interface ProviderAuths {
   gemini?: GeminiAuthMethod | null;
 }
 
+export interface AuthLoginOptions {
+  enabled: boolean;
+  providers: EngineName[];
+  deviceCode: boolean;
+  openBrowser: boolean;
+  timeoutMs: number;
+}
+
 export interface ProviderTeamSizes {
   codex?: number | null;
   claude?: number | null;
@@ -110,6 +118,7 @@ export interface ParsedArgs {
   efforts: ProviderEfforts;
   permissions: ProviderPermissions;
   auths: ProviderAuths;
+  authLogin: AuthLoginOptions;
   promptContext: PromptContextOptions;
   handoff: boolean;
   lead: EngineName | null;
@@ -351,6 +360,54 @@ export interface RunCompletedEvent {
   result: CouncilResult;
 }
 
+export interface AuthLoginStartedEvent {
+  type: 'auth_login_started';
+  at: string;
+  provider: EngineName;
+  bin: string;
+  args: string[];
+  command: string;
+  stdioMode: 'pipe' | 'inherit';
+  launchMode: 'dedicated-login' | 'native-interactive';
+  openBrowser: boolean;
+  deviceCode: boolean;
+  supportsCodePaste: boolean;
+  supportsBrowserDeeplink: boolean;
+  instruction: string;
+}
+
+export interface AuthLoginUrlOpenedEvent {
+  type: 'auth_login_url_opened';
+  at: string;
+  provider: EngineName;
+  url: string;
+}
+
+export interface AuthLoginUrlOpenFailedEvent {
+  type: 'auth_login_url_open_failed';
+  at: string;
+  provider: EngineName;
+  url: string;
+  detail: string;
+}
+
+export interface AuthLoginCompletedEvent {
+  type: 'auth_login_completed';
+  at: string;
+  provider: EngineName;
+  bin: string;
+  args: string[];
+  status: EngineStatus | 'timeout';
+  durationMs: number;
+  detail: string;
+  exitCode: number | null;
+  signal: string | null;
+  stdout: string;
+  stderr: string;
+  openedUrls: string[];
+  stdioMode: 'pipe' | 'inherit';
+}
+
 export type CouncilEvent =
   | RunStartedEvent
   | IterationStartedEvent
@@ -361,11 +418,82 @@ export type CouncilEvent =
   | SummaryStartedEvent
   | SummaryProgressEvent
   | SummaryCompletedEvent
-  | RunCompletedEvent;
+  | RunCompletedEvent
+  | AuthLoginStartedEvent
+  | AuthLoginUrlOpenedEvent
+  | AuthLoginUrlOpenFailedEvent
+  | AuthLoginCompletedEvent;
+
+export interface ProviderSocialLoginCommand {
+  provider: EngineName;
+  args: string[];
+  launchMode: 'dedicated-login' | 'native-interactive';
+  supportsDeviceCode: boolean;
+  supportsBrowserDeeplink: boolean;
+  supportsCodePaste: boolean;
+  instruction: string;
+}
+
+export interface ProviderSocialLoginResult {
+  provider: EngineName;
+  bin: string;
+  args: string[];
+  status: EngineStatus | 'timeout';
+  durationMs: number;
+  detail: string;
+  exitCode: number | null;
+  signal: string | null;
+  stdout: string;
+  stderr: string;
+  openedUrls: string[];
+  stdioMode: 'pipe' | 'inherit';
+}
+
+export interface ProviderSocialLoginsResult {
+  success: boolean;
+  providers: ProviderSocialLoginResult[];
+}
 
 export function usageText(version: string): string;
 export function parseArgs(argv: string[]): ParsedArgs;
 export function runCouncil(options: RunCouncilOptions): Promise<CouncilResult>;
+export function resolveSocialLoginProviders(options?: {
+  members?: EngineName[];
+  auths?: ProviderAuths;
+  providers?: EngineName[] | string;
+}): EngineName[];
+export function socialLoginCommandForProvider(
+  provider: EngineName,
+  options?: { deviceCode?: boolean }
+): ProviderSocialLoginCommand;
+export function runProviderSocialLogins(options: {
+  providers: EngineName[];
+  cwd?: string;
+  env?: Record<string, string | undefined>;
+  timeoutMs?: number;
+  openBrowser?: boolean;
+  deviceCode?: boolean;
+  input?: NodeJS.ReadableStream | null;
+  output?: NodeJS.WritableStream;
+  opener?: (url: string) => Promise<void> | void;
+  stdioMode?: 'auto' | 'pipe' | 'inherit';
+  onEvent?: (event: CouncilEvent) => void;
+}): Promise<ProviderSocialLoginsResult>;
+export function runProviderSocialLogin(options: {
+  provider: EngineName;
+  cwd?: string;
+  env?: Record<string, string | undefined>;
+  timeoutMs?: number;
+  openBrowser?: boolean;
+  deviceCode?: boolean;
+  input?: NodeJS.ReadableStream | null;
+  output?: NodeJS.WritableStream;
+  opener?: (url: string) => Promise<void> | void;
+  stdioMode?: 'auto' | 'pipe' | 'inherit';
+  onEvent?: (event: CouncilEvent) => void;
+}): Promise<ProviderSocialLoginResult>;
+export function renderProviderSocialLoginResult(result: ProviderSocialLoginsResult): string;
+export function openBrowserUrl(url: string): Promise<void>;
 export function runLinearDelivery(options?: any): Promise<any>;
 export function getLinearDeliveryStatus(options?: any): Promise<any>;
 export function renderLinearDeliveryStatus(status: any): string;

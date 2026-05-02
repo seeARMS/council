@@ -256,6 +256,20 @@ council \
 
 Codex auth preferences are `auto`, `social-login`, `login`, and `api-key`. Claude auth preferences are `auto`, `social-login`, `oauth`, `api-key`, and `keychain`; `api-key` forces Claude `--bare`, while `social-login`, `oauth`, and `keychain` omit `--bare`. Gemini auth preferences are `auto`, `social-login`, `login`, and `api-key`. Studio exposes these settings directly in the Settings pane so you can change them before each run.
 
+To authenticate the provider CLIs before a run, use `--auth-login`. Council launches each selected provider's native social-login flow, lets the provider open browser tabs for local deeplinks, opens detected auth URLs when they are printed, and keeps terminal input connected so paste-back codes work:
+
+```bash
+council \
+  --auth-login \
+  --auth-login-providers codex,claude,gemini \
+  --codex-auth social-login \
+  --claude-auth social-login \
+  --gemini-auth social-login \
+  "Review this plan"
+```
+
+`--auth-login-providers` defaults to members configured for `social-login`, then all enabled members. `--auth-device-code` asks Codex to use its device-code paste flow where available. Claude uses `claude auth login`; Gemini uses Gemini CLI's native interactive auth selector because current Gemini CLI releases open "Login with Google" from the normal interactive entrypoint rather than a dedicated `auth login` subcommand. In Studio, choose Social login from the command menu; it runs the same provider flows while preserving code paste and browser deeplink callbacks.
+
 ## Linear setup and delivery
 
 Council can connect to Linear with either a personal API key or an OAuth token. Check setup and local state without running any task:

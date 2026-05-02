@@ -30,6 +30,16 @@ export {
   summarizePromptContext
 } from './prompt-context.js';
 export {
+  DEFAULT_AUTH_LOGIN_TIMEOUT_MS,
+  SOCIAL_LOGIN_PROVIDERS,
+  openBrowserUrl,
+  renderProviderSocialLoginResult,
+  resolveSocialLoginProviders,
+  runProviderSocialLogin,
+  runProviderSocialLogins,
+  socialLoginCommandForProvider
+} from './provider-auth.js';
+export {
   buildDeliveryPhasePrompt,
   getLinearDeliveryStatus,
   renderDeliveryProgressEvent,

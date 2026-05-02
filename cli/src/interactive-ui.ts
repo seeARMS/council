@@ -25,6 +25,11 @@ import {
   runPromptCommand
 } from './prompt-context.js';
 import {
+  renderProviderSocialLoginResult,
+  resolveSocialLoginProviders,
+  runProviderSocialLogins
+} from './provider-auth.js';
+import {
   buildHotkeyParts,
   formatTelemetrySuffix,
   buildSessionBlocks
@@ -43,6 +48,7 @@ const STUDIO_ENGINES = ['codex', 'claude', 'gemini'];
 const STUDIO_MENU = [
   { id: 'run', label: 'Run / re-run' },
   { id: 'prompt', label: 'Edit prompt' },
+  { id: 'socialLogin', label: 'Social login' },
   { id: 'tagFile', label: 'Tag local file' },
   { id: 'runCommand', label: 'Run command' },
   { id: 'settings', label: 'Settings' },
@@ -149,6 +155,7 @@ function StudioApp(props) {
   const promptContextRef = useRef(promptContext);
   const [promptAction, setPromptAction] = useState(null);
   const [actionStatus, setActionStatus] = useState('');
+  const [authFlowActive, setAuthFlowActive] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [focusPane, setFocusPane] = useState('menu');
   const [paneOrder, setPaneOrder] = useState([...STUDIO_PANES]);
@@ -335,6 +342,11 @@ function StudioApp(props) {
       return;
     }
 
+    if (actionId === 'socialLogin') {
+      startStudioSocialLogin();
+      return;
+    }
+
     if (actionId === 'tagFile') {
       startPromptAction('file');
       return;
@@ -444,6 +456,47 @@ function StudioApp(props) {
     setActionStatus(kind === 'file' ? 'Enter a local file path to tag.' : 'Enter a shell command to run before the prompt.');
     setEditingPrompt(false);
     setFocusPane('prompt');
+  };
+
+  const startStudioSocialLogin = () => {
+    if (phase === 'running' || authFlowActive) {
+      return;
+    }
+
+    const nextConfig = sanitizeStudioConfig(configRef.current);
+    const providers = resolveSocialLoginProviders({
+      members: enabledStudioMembers(nextConfig),
+      auths: nextConfig.auths
+    });
+    setConfig(nextConfig);
+    setActionStatus(`Opening social login for ${providers.join(', ')}. Complete browser deeplinks or paste returned codes in this terminal.`);
+    setAuthFlowActive(true);
+    void runProviderSocialLogins({
+      providers,
+      cwd,
+      env: process.env,
+      input: process.stdin,
+      output: process.stderr,
+      openBrowser: true,
+      onEvent: (event) => {
+        onEvent?.(event);
+        if (event.type === 'auth_login_started') {
+          setActionStatus(`Social login running: ${event.provider}. Browser deeplink and terminal code paste are supported.`);
+        }
+        if (event.type === 'auth_login_url_opened') {
+          setActionStatus(`Opened browser tab for ${event.provider}. Finish in the browser or paste the code here.`);
+        }
+      }
+    })
+      .then((result) => {
+        setActionStatus(renderProviderSocialLoginResult(result).replace(/\n/g, ' | '));
+      })
+      .catch((error) => {
+        setActionStatus(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        setAuthFlowActive(false);
+      });
   };
 
   const setPromptActionValue = (nextValue, nextCursorOffset = nextValue.length) => {
@@ -564,6 +617,10 @@ function StudioApp(props) {
     (input, key) => {
       if (key.ctrl && input === 'c') {
         requestExit();
+        return;
+      }
+
+      if (authFlowActive) {
         return;
       }
 
@@ -1334,6 +1391,7 @@ function StudioHelpPanel() {
     'Enter: activate selected menu item, toggle provider, expand selected result, or start prompt editing',
     'Agents pane: l lead, p planner, +/- provider team size',
     'Settings pane: choose handoff, lead/planner, synthesis, auth methods, permissions, efforts, iterations',
+    'Social login: opens each selected provider auth flow in browser tabs; paste returned codes here if prompted',
     'Command Palette: tag local files or run shell commands into prompt context',
     '[ and ]: move the focused pane left/right',
     'r: run or re-run without restarting node',
@@ -1360,7 +1418,7 @@ function StudioHelpPanel() {
 function StudioFooter({ phase, focusPane, editingPrompt, exitArmedUntil = 0 }) {
   const detail = editingPrompt
     ? 'typing prompt | Enter run | Esc keep'
-    : 'Tab focus | arrows select/change | Enter action | tag files/run commands from menu | [ ] move pane | r run | e edit | ? help | q quit';
+    : 'Tab focus | arrows select/change | Enter action | social login/tag files/run commands from menu | [ ] move pane | r run | e edit | ? help | q quit';
   const exitHint = Date.now() < exitArmedUntil
     ? 'Ctrl-C again to close'
     : 'Ctrl-C twice to close';

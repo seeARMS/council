@@ -19,6 +19,11 @@ import {
   buildPromptContext,
   buildPromptWithContext
 } from './prompt-context.js';
+import {
+  renderProviderSocialLoginResult,
+  resolveSocialLoginProviders,
+  runProviderSocialLogins
+} from './provider-auth.js';
 import { renderHumanResult } from './render.js';
 import {
   renderBanner,
@@ -82,7 +87,7 @@ export async function main(argv = process.argv.slice(2)) {
   const interactiveMode = shouldUseInteractiveDashboard(ui);
   const initialPrompt = await readPromptFromArgsAndStdin(parsed.promptParts);
 
-  if (!initialPrompt && !interactiveMode && !parsed.delivery.enabled) {
+  if (!initialPrompt && !interactiveMode && !parsed.delivery.enabled && !parsed.authLogin.enabled) {
     process.stderr.write('No query provided.\n\n');
     process.stderr.write(`${usageText(readVersion())}\n`);
     process.exitCode = EXIT_CODES.USAGE_ERROR;
@@ -110,6 +115,38 @@ export async function main(argv = process.argv.slice(2)) {
       }
     }
   };
+
+  if (parsed.authLogin.enabled) {
+    const providers = resolveSocialLoginProviders({
+      members: parsed.members,
+      auths: parsed.auths,
+      providers: parsed.authLogin.providers
+    });
+    const authResult = await runProviderSocialLogins({
+      providers,
+      cwd: resolvedCwd,
+      env: process.env,
+      timeoutMs: parsed.authLogin.timeoutMs,
+      openBrowser: parsed.authLogin.openBrowser,
+      deviceCode: parsed.authLogin.deviceCode,
+      input: process.stdin.isTTY ? process.stdin : null,
+      output: process.stderr,
+      stdioMode: ui.outputMode === 'text' ? 'auto' : 'pipe',
+      onEvent: emitCliEvent
+    });
+
+    if (!initialPrompt && !interactiveMode && !parsed.delivery.enabled) {
+      if (ui.outputMode === 'json' || ui.outputMode === 'json-stream') {
+        if (ui.outputMode === 'json') {
+          process.stdout.write(`${JSON.stringify(authResult, null, 2)}\n`);
+        }
+      } else {
+        process.stdout.write(`${renderProviderSocialLoginResult(authResult)}\n`);
+      }
+      process.exitCode = authResult.success ? EXIT_CODES.OK : EXIT_CODES.RUNTIME_ERROR;
+      return;
+    }
+  }
   const promptContext = await buildPromptContext({
     cwd: resolvedCwd,
     files: parsed.promptContext.files,

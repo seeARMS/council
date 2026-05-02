@@ -73,6 +73,41 @@ test('json-stream mode emits JSONL lifecycle events', async () => {
   }
 });
 
+test('auth-login can run by itself without corrupting JSON output', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    codex: {
+      member: {
+        stdoutPrefix: 'Visit https://example.com/auth\\n',
+        output: 'unused'
+      }
+    }
+  });
+
+  try {
+    const result = await runCli([
+      '--json',
+      '--auth-login',
+      '--auth-login-providers',
+      'codex',
+      '--no-auth-open-browser',
+      '--no-claude',
+      '--no-gemini'
+    ], {
+      cwd,
+      env: fake.env
+    });
+
+    assert.equal(result.code, 0);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.success, true);
+    assert.equal(parsed.providers[0].provider, 'codex');
+    assert.equal(parsed.providers[0].status, 'ok');
+    assert.match(result.stderr, /Visit https:\/\/example\.com\/auth/);
+  } finally {
+    await fake.cleanup();
+  }
+});
+
 test('per-tool flags disable unselected tools', async () => {
   const fake = await createFakeCouncilEnvironment({
     codex: {

@@ -185,6 +185,27 @@ test('validates provider-specific auth values', () => {
   );
 });
 
+test('parses social-login bootstrap flags', () => {
+  const parsed = parseArgs([
+    '--auth-login',
+    '--auth-login-providers',
+    'codex,GEMINI',
+    '--auth-device-code',
+    '--no-auth-open-browser',
+    '--auth-timeout',
+    '12',
+    'question'
+  ]);
+
+  assert.deepEqual(parsed.authLogin, {
+    enabled: true,
+    providers: ['codex', 'gemini'],
+    deviceCode: true,
+    openBrowser: false,
+    timeoutMs: 12_000
+  });
+});
+
 test('validates provider-specific permission values', () => {
   assert.throws(
     () => parseArgs(['--codex-sandbox', 'auto', 'q']),

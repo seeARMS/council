@@ -62,6 +62,22 @@ export function renderBanner({ colorEnabled = false } = {}) {
 
 export function renderProgressEvent(event, { colorEnabled = false } = {}) {
   switch (event.type) {
+    case 'auth_login_started':
+      return style(
+        `[auth] ${event.provider}: opening social login (${event.command || formatEventCommand(event)})`,
+        '36',
+        colorEnabled
+      );
+    case 'auth_login_url_opened':
+      return style(`[auth] ${event.provider}: opened browser tab ${event.url}`, '36', colorEnabled);
+    case 'auth_login_url_open_failed':
+      return style(`[auth] ${event.provider}: browser open failed (${event.detail})`, '31', colorEnabled);
+    case 'auth_login_completed':
+      return style(
+        `[auth] ${event.provider}: ${event.status}${event.detail ? ` (${event.detail})` : ''}`,
+        event.status === 'ok' ? '32' : '31',
+        colorEnabled
+      );
     case 'prompt_file_loaded':
       return style(
         `[ctx] file ${event.file.displayPath}: ${event.file.status}${event.file.truncated ? ' truncated' : ''}`,
@@ -127,6 +143,10 @@ function formatEventRole(event) {
   }
 
   return parts.length > 0 ? ` [${parts.join(',')}]` : '';
+}
+
+function formatEventCommand(event) {
+  return [event.bin, ...(event.args || [])].filter(Boolean).join(' ');
 }
 
 function renderStatusLine(result, colorEnabled) {
