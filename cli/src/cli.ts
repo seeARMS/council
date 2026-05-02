@@ -8,6 +8,11 @@ import {
 } from './interactive-ui.js';
 import { readPromptFromArgsAndStdin } from './utils.js';
 import { runCouncil } from './council.js';
+import {
+  renderDeliveryProgressEvent,
+  renderDeliveryResult,
+  runLinearDelivery
+} from './delivery.js';
 import { renderHumanResult } from './render.js';
 import {
   renderBanner,
@@ -54,7 +59,7 @@ export async function main(argv = process.argv.slice(2)) {
   const interactiveMode = shouldUseInteractiveDashboard(ui);
   const initialPrompt = await readPromptFromArgsAndStdin(parsed.promptParts);
 
-  if (!initialPrompt && !interactiveMode) {
+  if (!initialPrompt && !interactiveMode && !parsed.delivery.enabled) {
     process.stderr.write('No query provided.\n\n');
     process.stderr.write(`${usageText(readVersion())}\n`);
     process.exitCode = EXIT_CODES.USAGE_ERROR;
@@ -69,6 +74,54 @@ export async function main(argv = process.argv.slice(2)) {
 
   const resolvedCwd = resolve(parsed.cwd);
 
+  if (parsed.delivery.enabled) {
+    const result = await runLinearDelivery({
+      baseQuery: initialPrompt,
+      cwd: resolvedCwd,
+      delivery: parsed.delivery,
+      members: parsed.members,
+      summarizer: parsed.summarizer,
+      timeoutMs: parsed.timeoutMs,
+      maxMemberChars: parsed.maxMemberChars,
+      effort: parsed.effort,
+      models: parsed.models,
+      efforts: parsed.efforts,
+      permissions: parsed.permissions,
+      auths: parsed.auths,
+      handoff: parsed.handoff,
+      lead: parsed.lead,
+      planner: parsed.planner,
+      iterations: parsed.iterations,
+      teamWork: parsed.teamWork,
+      teams: parsed.teams,
+      env: process.env,
+      onEvent: (event) => {
+        if (ui.outputMode === 'json-stream') {
+          process.stdout.write(`${JSON.stringify(event)}\n`);
+          return;
+        }
+
+        if (ui.showProgress) {
+          const line = renderDeliveryProgressEvent(event);
+          if (line) {
+            process.stderr.write(`${line}\n`);
+          }
+        }
+      }
+    });
+
+    if (ui.outputMode === 'json' || ui.outputMode === 'json-stream') {
+      if (ui.outputMode === 'json') {
+        process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+      }
+    } else {
+      process.stdout.write(`${renderDeliveryResult(result)}\n`);
+    }
+
+    process.exitCode = result.success ? EXIT_CODES.OK : EXIT_CODES.RUNTIME_ERROR;
+    return;
+  }
+
   if (interactiveMode) {
     const result = await runInteractiveSession({
       initialPrompt,
@@ -81,6 +134,7 @@ export async function main(argv = process.argv.slice(2)) {
       models: parsed.models,
       efforts: parsed.efforts,
       permissions: parsed.permissions,
+      auths: parsed.auths,
       handoff: parsed.handoff,
       lead: parsed.lead,
       planner: parsed.planner,
@@ -109,6 +163,7 @@ export async function main(argv = process.argv.slice(2)) {
     models: parsed.models,
     efforts: parsed.efforts,
     permissions: parsed.permissions,
+    auths: parsed.auths,
     handoff: parsed.handoff,
     lead: parsed.lead,
     planner: parsed.planner,

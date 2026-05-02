@@ -140,8 +140,9 @@ In a real TTY, `council` uses a live dashboard:
 - press the number shown next to a row to expand or collapse the full result
 - just start typing to ask a follow-up in the same session
 - press `q` or `Esc` to exit the interactive view
+- press `Ctrl-C` twice to close from the keyboard interrupt path
 
-For a fuller terminal app, use `--studio`. Studio mode opens focusable panes for the command menu, workflow settings, agents, results, and prompt. You can move focus with `Tab`, change settings with the arrow keys, toggle providers in the agents pane, mark lead/planner roles, resize the provider teams, reorder panes with `[` and `]`, edit the prompt, and run or re-run from inside the UI.
+For a fuller terminal app, use `--studio`. Studio mode opens focusable panes for the command menu, workflow settings, agents, results, help, and prompt. You can move focus with `Tab`, change settings with the arrow keys, toggle providers in the agents pane, mark lead/planner roles, select auth mode per provider, resize the provider teams, reorder panes with `[` and `]`, edit the prompt, and run or re-run from inside the UI. The command palette includes a Help action, and `?` toggles help from anywhere.
 
 ## Tool selection
 
@@ -217,6 +218,45 @@ council \
 
 Codex sandbox modes are `read-only`, `workspace-write`, and `danger-full-access`. Claude permission modes are passed through to Claude Code as `--permission-mode` and may be `plan`, `default`, `acceptEdits`, `auto`, `dontAsk`, or `bypassPermissions`.
 
+## Auth selection
+
+Use provider-specific auth preferences when you want Council or Studio mode to avoid guessing from the current environment:
+
+```bash
+council \
+  --codex-auth login \
+  --claude-auth oauth \
+  --gemini-auth api-key \
+  "Review this plan"
+```
+
+Codex auth preferences are `auto`, `login`, and `api-key`. Claude auth preferences are `auto`, `oauth`, `api-key`, and `keychain`; `api-key` forces Claude `--bare`, while `oauth` and `keychain` omit `--bare`. Gemini auth preferences are `auto`, `login`, and `api-key`. Studio exposes these settings directly in the Settings pane so you can change them before each run.
+
+## Linear delivery
+
+Council can optionally fetch Linear work and run each issue through delivery phases inspired by Symphony-style work orchestration:
+
+```bash
+council \
+  --deliver-linear \
+  --linear-issue ENG-123 \
+  --planner codex \
+  --lead claude \
+  --team-work 2 \
+  "Keep the patch small and open a PR when tests pass"
+```
+
+Set `LINEAR_API_KEY` or use `--linear-api-key-env <env-var>`. If you do not pass explicit issue IDs, use `--linear-query`, `--linear-team`, `--linear-state`, `--linear-assignee`, and `--linear-limit` to fetch candidate tasks. Delivery phases default to `plan,implement,verify,ship`; override with `--delivery-phases`.
+
+Each Linear issue is normalized into a task prompt. Council then runs phase-specific prompts:
+
+- `plan`: produce a concrete implementation and validation plan.
+- `implement`: make the scoped code changes.
+- `verify`: run tests, typechecks, builds, linters, or targeted checks and fix in-scope failures.
+- `ship`: inspect git state, scan for secrets, commit, push, open or update a GitHub PR, and leave Linear/GitHub-ready proof of work.
+
+This is intentionally a lightweight runner, not a long-running daemon. Symphony remains the better fit for continuous polling, per-issue isolated workspaces, retry queues, and service-level observability.
+
 ## Safe defaults
 
 `council` intentionally runs the upstream tools in consultation-oriented modes:
@@ -241,6 +281,7 @@ That keeps the default behavior closer to analysis than autonomous mutation.
 - `COUNCIL_CODEX_BIN`: override the `codex` executable path
 - `COUNCIL_CLAUDE_BIN`: override the `claude` executable path
 - `COUNCIL_GEMINI_BIN`: override the `gemini` executable path
+- `LINEAR_API_KEY`: Linear API key used by `--deliver-linear`
 - `CLAUDE_CODE_OAUTH_TOKEN`: enables Claude Code OAuth-token auth and disables Claude's incompatible `--bare` mode
 - `CLAUDE_CODE_EFFORT_LEVEL`: used as Claude's `--effort` value when no Council effort flag is provided for Claude
 

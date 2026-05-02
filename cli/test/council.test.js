@@ -164,6 +164,9 @@ test('runCouncil applies provider-specific model, effort, and permission overrid
       permissions: {
         codex: 'workspace-write',
         claude: 'acceptEdits'
+      },
+      auths: {
+        claude: 'oauth'
       }
     });
 
@@ -190,6 +193,11 @@ test('runCouncil applies provider-specific model, effort, and permission overrid
       codex: 'workspace-write',
       claude: 'acceptEdits',
       gemini: null
+    });
+    assert.deepEqual(result.auths, {
+      codex: 'auto',
+      claude: 'oauth',
+      gemini: 'auto'
     });
   } finally {
     await fake.cleanup();

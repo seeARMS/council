@@ -23,6 +23,16 @@ export const DEFAULT_PROVIDER_PERMISSIONS = {
   claude: 'plan',
   gemini: null
 };
+export const PROVIDER_AUTH_METHODS = {
+  codex: ['auto', 'login', 'api-key'],
+  claude: ['auto', 'oauth', 'api-key', 'keychain'],
+  gemini: ['auto', 'login', 'api-key']
+};
+export const DEFAULT_PROVIDER_AUTHS = {
+  codex: 'auto',
+  claude: 'auto',
+  gemini: 'auto'
+};
 export const DEFAULT_PROVIDER_TEAM_SIZES = {
   codex: DEFAULT_TEAM_SIZE,
   claude: DEFAULT_TEAM_SIZE,
@@ -62,6 +72,7 @@ export async function runEngine(
     effort = null,
     model = null,
     permission = null,
+    auth = DEFAULT_PROVIDER_AUTHS[name],
     onProgress = () => {}
   }
 ) {
@@ -70,14 +81,14 @@ export async function runEngine(
   }
 
   if (name === 'codex') {
-    return runCodex({ prompt, cwd, timeoutMs, env, effort, model, permission, onProgress });
+    return runCodex({ prompt, cwd, timeoutMs, env, effort, model, permission, auth, onProgress });
   }
 
   if (name === 'claude') {
-    return runClaude({ prompt, cwd, timeoutMs, env, effort, model, permission, onProgress });
+    return runClaude({ prompt, cwd, timeoutMs, env, effort, model, permission, auth, onProgress });
   }
 
-  return runGemini({ prompt, cwd, timeoutMs, env, effort, model, permission, onProgress });
+  return runGemini({ prompt, cwd, timeoutMs, env, effort, model, permission, auth, onProgress });
 }
 
 export function buildMemberPrompt(
@@ -271,7 +282,7 @@ export function parseGeminiOutput(stdout) {
   return trimmed;
 }
 
-async function runCodex({ prompt, cwd, timeoutMs, env, effort, model, permission, onProgress }) {
+async function runCodex({ prompt, cwd, timeoutMs, env, effort, model, permission, auth, onProgress }) {
   const bin = resolveBinary('codex', env);
   const tempDir = await mkdtemp(path.join(tmpdir(), 'council-codex-'));
   const outputPath = path.join(tempDir, 'last-message.txt');
@@ -330,7 +341,7 @@ async function runCodex({ prompt, cwd, timeoutMs, env, effort, model, permission
   }
 }
 
-async function runClaude({ prompt, cwd, timeoutMs, env, effort, model, permission, onProgress }) {
+async function runClaude({ prompt, cwd, timeoutMs, env, effort, model, permission, auth, onProgress }) {
   const bin = resolveBinary('claude', env);
   const startedAt = Date.now();
   let lastProgressDetail = '';
@@ -343,7 +354,7 @@ async function runClaude({ prompt, cwd, timeoutMs, env, effort, model, permissio
     onProgress(progress);
   });
   const resolvedEffort = effort || readEnvValue(env, 'CLAUDE_CODE_EFFORT_LEVEL');
-  const authArgs = shouldUseClaudeBareMode(env) ? ['--bare'] : [];
+  const authArgs = shouldUseClaudeBareMode(env, auth) ? ['--bare'] : [];
   const modelArgs = model ? ['--model', model] : [];
   const effortArgs = resolvedEffort ? ['--effort', resolvedEffort] : [];
   const permissionMode = permission || DEFAULT_PROVIDER_PERMISSIONS.claude;
@@ -383,7 +394,7 @@ async function runClaude({ prompt, cwd, timeoutMs, env, effort, model, permissio
   });
 }
 
-async function runGemini({ prompt, cwd, timeoutMs, env, effort, model, permission, onProgress }) {
+async function runGemini({ prompt, cwd, timeoutMs, env, effort, model, permission, auth, onProgress }) {
   const bin = resolveBinary('gemini', env);
   const startedAt = Date.now();
   let lastProgressDetail = '';
@@ -483,7 +494,15 @@ async function mergeGeminiSettings({ settingsPath, thinkingBudget }) {
   return nextSettings;
 }
 
-function shouldUseClaudeBareMode(env) {
+function shouldUseClaudeBareMode(env, auth = 'auto') {
+  if (auth === 'api-key') {
+    return true;
+  }
+
+  if (auth === 'oauth' || auth === 'keychain') {
+    return false;
+  }
+
   if (readEnvValue(env, 'CLAUDE_CODE_OAUTH_TOKEN')) {
     return false;
   }

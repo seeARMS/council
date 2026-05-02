@@ -3,6 +3,7 @@ import {
   AUTO_SUMMARIZER,
   DEFAULT_ITERATIONS,
   DEFAULT_MAX_MEMBER_CHARS,
+  DEFAULT_PROVIDER_AUTHS,
   DEFAULT_PROVIDER_PERMISSIONS,
   DEFAULT_TEAM_SIZE,
   DEFAULT_SUMMARIZER_ORDER,
@@ -25,6 +26,7 @@ export async function runCouncil(options: any = {}) {
   models = {},
   efforts = {},
   permissions = {},
+  auths = {},
   handoff = false,
   lead = null,
   planner = null,
@@ -39,6 +41,11 @@ export async function runCouncil(options: any = {}) {
     permissions,
     null,
     DEFAULT_PROVIDER_PERMISSIONS
+  );
+  const resolvedAuths = resolveEngineSettings(
+    auths,
+    null,
+    DEFAULT_PROVIDER_AUTHS
   );
   const iterationCount = normalizeIterationCount(iterations);
   const teamWorkSize = normalizeTeamSize(teamWork);
@@ -64,6 +71,7 @@ export async function runCouncil(options: any = {}) {
     models: resolvedModels,
     efforts: resolvedEfforts,
     permissions: resolvedPermissions,
+    auths: resolvedAuths,
     workflow
   });
 
@@ -88,6 +96,7 @@ export async function runCouncil(options: any = {}) {
       resolvedEfforts,
       resolvedModels,
       resolvedPermissions,
+      resolvedAuths,
       workflow,
       iteration,
       previousIterationMembers,
@@ -136,6 +145,7 @@ export async function runCouncil(options: any = {}) {
         effort: resolvedEfforts[candidate],
         model: resolvedModels[candidate],
         permission: resolvedPermissions[candidate],
+        auth: resolvedAuths[candidate],
         role: roleForEngine(candidate, workflow),
         iteration: iterationCount,
         totalIterations: iterationCount,
@@ -179,6 +189,7 @@ export async function runCouncil(options: any = {}) {
     models: resolvedModels,
     efforts: resolvedEfforts,
     permissions: resolvedPermissions,
+    auths: resolvedAuths,
     workflow,
     iterations: iterationCount,
     iterationResults,
@@ -241,6 +252,7 @@ async function runCouncilIteration({
   resolvedEfforts,
   resolvedModels,
   resolvedPermissions,
+  resolvedAuths,
   workflow,
   iteration,
   previousIterationMembers,
@@ -277,6 +289,7 @@ async function runCouncilIteration({
         effort: resolvedEfforts[name],
         model: resolvedModels[name],
         permission: resolvedPermissions[name],
+        auth: resolvedAuths[name],
         role,
         iteration,
         totalIterations: workflow.iterations,
@@ -320,6 +333,7 @@ async function runCouncilIteration({
       effort: resolvedEfforts[plannerName],
       model: resolvedModels[plannerName],
       permission: resolvedPermissions[plannerName],
+      auth: resolvedAuths[plannerName],
       role,
       iteration,
       totalIterations: workflow.iterations,
@@ -356,6 +370,7 @@ async function runCouncilIteration({
         effort: resolvedEfforts[name],
         model: resolvedModels[name],
         permission: resolvedPermissions[name],
+        auth: resolvedAuths[name],
         role,
         iteration,
         totalIterations: workflow.iterations,
@@ -378,6 +393,7 @@ async function runMember(
     effort,
     model,
     permission,
+    auth,
     role,
     iteration,
     totalIterations,
@@ -390,7 +406,8 @@ async function runMember(
     role,
     iteration,
     totalIterations,
-    teamSize
+    teamSize,
+    auth
   });
 
   const result = await runEngineTask({
@@ -403,6 +420,7 @@ async function runMember(
     effort,
     model,
     permission,
+    auth,
     role,
     iteration,
     totalIterations,
@@ -427,6 +445,7 @@ async function runSummaryAttempt(
     effort,
     model,
     permission,
+    auth,
     role,
     iteration,
     totalIterations,
@@ -439,7 +458,8 @@ async function runSummaryAttempt(
     role,
     iteration,
     totalIterations,
-    teamSize
+    teamSize,
+    auth
   });
 
   const result = await runEngineTask({
@@ -452,6 +472,7 @@ async function runSummaryAttempt(
     effort,
     model,
     permission,
+    auth,
     role,
     iteration,
     totalIterations,
@@ -508,6 +529,7 @@ async function runEngineTask({
   effort,
   model,
   permission,
+  auth,
   role,
   iteration,
   totalIterations,
@@ -530,6 +552,7 @@ async function runEngineTask({
           effort,
           model,
           permission,
+          auth,
           onProgress
         })
     });
@@ -538,7 +561,8 @@ async function runEngineTask({
       role,
       iteration,
       totalIterations,
-      teamSize
+      teamSize,
+      auth
     };
   } catch (error) {
     return {
@@ -546,7 +570,8 @@ async function runEngineTask({
       role,
       iteration,
       totalIterations,
-      teamSize
+      teamSize,
+      auth
     };
   }
 }

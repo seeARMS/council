@@ -160,6 +160,31 @@ test('parses provider-specific permission flags', () => {
   });
 });
 
+test('parses provider-specific auth flags', () => {
+  const parsed = parseArgs([
+    '--codex-auth',
+    'api-key',
+    '--claude-auth',
+    'oauth',
+    '--gemini-auth',
+    'login',
+    'question'
+  ]);
+
+  assert.deepEqual(parsed.auths, {
+    codex: 'api-key',
+    claude: 'oauth',
+    gemini: 'login'
+  });
+});
+
+test('validates provider-specific auth values', () => {
+  assert.throws(
+    () => parseArgs(['--claude-auth', 'saml', 'q']),
+    /Unsupported --claude-auth value/
+  );
+});
+
 test('validates provider-specific permission values', () => {
   assert.throws(
     () => parseArgs(['--codex-sandbox', 'auto', 'q']),
@@ -169,6 +194,36 @@ test('validates provider-specific permission values', () => {
     () => parseArgs(['--claude-permission-mode', 'root', 'q']),
     /Unsupported --claude-permission-mode value/
   );
+});
+
+test('parses Linear delivery options', () => {
+  const parsed = parseArgs([
+    '--deliver-linear',
+    '--linear-issue',
+    'ABC-1,ABC-2',
+    '--linear-team',
+    'ENG',
+    '--linear-state',
+    'Todo',
+    '--linear-assignee',
+    'Dvir',
+    '--linear-limit',
+    '2',
+    '--linear-api-key-env',
+    'TEST_LINEAR_KEY',
+    '--delivery-phases',
+    'plan,verify',
+    'ship it'
+  ]);
+
+  assert.equal(parsed.delivery.enabled, true);
+  assert.deepEqual(parsed.delivery.issueIds, ['ABC-1', 'ABC-2']);
+  assert.equal(parsed.delivery.team, 'ENG');
+  assert.equal(parsed.delivery.state, 'Todo');
+  assert.equal(parsed.delivery.assignee, 'Dvir');
+  assert.equal(parsed.delivery.limit, 2);
+  assert.equal(parsed.delivery.apiKeyEnv, 'TEST_LINEAR_KEY');
+  assert.deepEqual(parsed.delivery.phases, ['plan', 'verify']);
 });
 
 test('parses workflow, iteration, and team-work flags', () => {

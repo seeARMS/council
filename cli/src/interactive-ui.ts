@@ -1,6 +1,7 @@
 import {
   createElement as h,
   Fragment,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -38,10 +39,16 @@ const STUDIO_MENU = [
   { id: 'settings', label: 'Settings' },
   { id: 'agents', label: 'Agents' },
   { id: 'results', label: 'Results' },
+  { id: 'help', label: 'Help' },
   { id: 'quit', label: 'Quit' }
 ];
 const STUDIO_CODEX_SANDBOXES = ['read-only', 'workspace-write', 'danger-full-access'];
 const STUDIO_CLAUDE_PERMISSIONS = ['plan', 'default', 'acceptEdits', 'auto', 'dontAsk', 'bypassPermissions'];
+const STUDIO_AUTHS = {
+  codex: ['auto', 'login', 'api-key'],
+  claude: ['auto', 'oauth', 'api-key', 'keychain'],
+  gemini: ['auto', 'login', 'api-key']
+};
 const STUDIO_EFFORTS = {
   codex: [null, 'low', 'medium', 'high', 'xhigh'],
   claude: [null, 'low', 'medium', 'high', 'xhigh', 'max'],
@@ -72,6 +79,41 @@ export async function runInteractiveSession(options) {
   return app.waitUntilExit();
 }
 
+function useDoubleCtrlCExit(exit, lastResult) {
+  const [exitArmedUntil, setExitArmedUntil] = useState(0);
+  const exitArmedUntilRef = useRef(0);
+  const lastResultRef = useRef(lastResult);
+
+  useEffect(() => {
+    lastResultRef.current = lastResult;
+  }, [lastResult]);
+
+  const requestExit = useCallback(() => {
+    const now = Date.now();
+    if (now < exitArmedUntilRef.current) {
+      process.exitCode = 130;
+      exit(lastResultRef.current);
+      setImmediate(() => {
+        process.exit(130);
+      });
+      return;
+    }
+
+    const nextExitArmedUntil = now + 5_000;
+    exitArmedUntilRef.current = nextExitArmedUntil;
+    setExitArmedUntil(nextExitArmedUntil);
+  }, [exit]);
+
+  useEffect(() => {
+    process.on('SIGINT', requestExit);
+    return () => {
+      process.off('SIGINT', requestExit);
+    };
+  }, [requestExit]);
+
+  return { exitArmedUntil, requestExit };
+}
+
 function StudioApp(props) {
   const {
     initialPrompt = '',
@@ -91,6 +133,7 @@ function StudioApp(props) {
   const [promptValue, setPromptValue] = useState(initialPrompt.trim());
   const [cursorOffset, setCursorOffset] = useState(initialPrompt.trim().length);
   const [editingPrompt, setEditingPrompt] = useState(!initialPrompt.trim());
+  const [showHelp, setShowHelp] = useState(false);
   const [focusPane, setFocusPane] = useState('menu');
   const [paneOrder, setPaneOrder] = useState([...STUDIO_PANES]);
   const [menuIndex, setMenuIndex] = useState(0);
@@ -106,6 +149,7 @@ function StudioApp(props) {
     createSessionState(enabledStudioMembers(config))
   );
   const [lastResult, setLastResult] = useState(null);
+  const { exitArmedUntil, requestExit } = useDoubleCtrlCExit(exit, lastResult);
   const [, setRunSequence] = useState(0);
   const [activeRun, setActiveRun] = useState(null);
   const [, setTick] = useState(0);
@@ -155,6 +199,7 @@ function StudioApp(props) {
       models: runConfig.models,
       efforts: runConfig.efforts,
       permissions: runConfig.permissions,
+      auths: runConfig.auths,
       handoff: runConfig.handoff,
       lead: runConfig.lead,
       planner: runConfig.planner,
@@ -273,6 +318,11 @@ function StudioApp(props) {
       return;
     }
 
+    if (actionId === 'help') {
+      setShowHelp((current) => !current);
+      return;
+    }
+
     if (STUDIO_FOCUS_ORDER.includes(actionId)) {
       setFocusPane(actionId);
     }
@@ -356,8 +406,7 @@ function StudioApp(props) {
   useInput(
     (input, key) => {
       if (key.ctrl && input === 'c') {
-        process.exitCode = 130;
-        exit(lastResult);
+        requestExit();
         return;
       }
 
@@ -366,8 +415,18 @@ function StudioApp(props) {
         return;
       }
 
+      if (showHelp && (key.escape || key.return || input === '?')) {
+        setShowHelp(false);
+        return;
+      }
+
       if (input === 'q' || key.escape) {
         exit(lastResult);
+        return;
+      }
+
+      if (input === '?') {
+        setShowHelp((current) => !current);
         return;
       }
 
@@ -534,7 +593,8 @@ function StudioApp(props) {
       promptValue,
       cursorOffset
     }),
-    h(StudioFooter, { phase, focusPane, editingPrompt })
+    showHelp ? h(StudioHelpPanel) : null,
+    h(StudioFooter, { phase, focusPane, editingPrompt, exitArmedUntil })
   );
 }
 
@@ -549,6 +609,7 @@ function SessionApp({
   models = {},
   efforts = {},
   permissions = {},
+  auths = {},
   handoff = false,
   lead = null,
   planner = null,
@@ -576,6 +637,7 @@ function SessionApp({
     createSessionState(members)
   );
   const [lastResult, setLastResult] = useState(null);
+  const { exitArmedUntil, requestExit } = useDoubleCtrlCExit(exit, lastResult);
   const [, setRunSequence] = useState(initialQuery ? 1 : 0);
   const [activeRun, setActiveRun] = useState(
     initialQuery ? { id: 1, prompt: initialQuery } : null
@@ -631,6 +693,7 @@ function SessionApp({
       models,
       efforts,
       permissions,
+      auths,
       handoff,
       lead,
       planner,
@@ -706,6 +769,7 @@ function SessionApp({
     models,
     efforts,
     permissions,
+    auths,
     handoff,
     lead,
     planner,
@@ -723,8 +787,7 @@ function SessionApp({
   useInput(
     (input, key) => {
       if (key.ctrl && input === 'c') {
-        process.exitCode = 130;
-        exit(lastResult);
+        requestExit();
         return;
       }
 
@@ -841,7 +904,8 @@ function SessionApp({
           detailText:
             phase === 'running'
               ? 'Press a number to toggle any completed output inline. Ctrl-C to exit.'
-              : 'Press a number to toggle full output inline. Type to start a follow-up. q or Esc to exit.'
+              : 'Press a number to toggle full output inline. Type to start a follow-up. q or Esc to exit.',
+          exitArmedUntil
         })
   );
 }
@@ -965,18 +1029,24 @@ function StudioAgentsPane({ config, selectedIndex, focused }) {
   return h(
     Box,
     { flexDirection: 'column' },
-    STUDIO_ENGINES.map((engine, index) => {
+    ...STUDIO_ENGINES.map((engine, index) => {
       const enabled = config.members.includes(engine);
       const role = studioRoleForEngine(config, engine);
       const selected = focused && index === selectedIndex;
+      const detail = `${role}  team:${config.teams[engine] ?? config.teamWork}  auth:${config.auths[engine]}`;
+
       return h(
-        Text,
-        {
-          key: engine,
-          color: selected ? 'black' : enabled ? 'green' : 'gray',
-          backgroundColor: selected ? 'green' : undefined
-        },
-        `${selected ? '>' : ' '} [${enabled ? 'x' : ' '}] ${engine}  ${role}  team:${config.teams[engine] ?? config.teamWork}`
+        Fragment,
+        { key: engine },
+        h(
+          Text,
+          {
+            color: selected ? 'black' : enabled ? 'green' : 'gray',
+            backgroundColor: selected ? 'green' : undefined
+          },
+          `${selected ? '>' : ' '} [${enabled ? 'x' : ' '}] ${engine}`
+        ),
+        h(Text, { color: enabled ? 'gray' : 'gray' }, `    ${detail}`)
       );
     })
   );
@@ -1041,16 +1111,48 @@ function StudioPromptPanel({ focused, editing, promptValue, cursorOffset }) {
   );
 }
 
-function StudioFooter({ phase, focusPane, editingPrompt }) {
+function StudioHelpPanel() {
+  const lines = [
+    'Tab / Shift-Tab: move focus between panes',
+    'Arrow keys: move selection; left/right changes selected setting',
+    'Enter: activate selected menu item, toggle provider, expand selected result, or start prompt editing',
+    'Agents pane: l lead, p planner, +/- provider team size',
+    'Settings pane: choose handoff, lead/planner, synthesis, auth methods, permissions, efforts, iterations',
+    '[ and ]: move the focused pane left/right',
+    'r: run or re-run without restarting node',
+    'e: edit prompt',
+    '1-4: expand provider/synthesis results',
+    '?: toggle this help panel',
+    'Ctrl-C once arms exit; Ctrl-C again closes'
+  ];
+
+  return h(
+    Box,
+    {
+      borderStyle: 'single',
+      borderColor: 'yellow',
+      marginTop: 1,
+      paddingX: 1,
+      flexDirection: 'column'
+    },
+    h(Text, { color: 'yellow', bold: true }, 'Help'),
+    ...lines.map((line) => h(Text, { key: line }, line))
+  );
+}
+
+function StudioFooter({ phase, focusPane, editingPrompt, exitArmedUntil = 0 }) {
   const detail = editingPrompt
     ? 'typing prompt | Enter run | Esc keep'
-    : 'Tab focus | arrows select/change | Enter action | [ ] move pane | r run | e edit | 1-4 expand | q quit';
+    : 'Tab focus | arrows select/change | Enter action | [ ] move pane | r run | e edit | ? help | q quit';
+  const exitHint = Date.now() < exitArmedUntil
+    ? 'Ctrl-C again to close'
+    : 'Ctrl-C twice to close';
 
   return h(
     Box,
     { flexDirection: 'column', marginTop: 1 },
     h(Text, { color: 'gray' }, `${phase} | focus:${focusPane}`),
-    h(Text, { color: 'gray' }, detail)
+    h(Text, { color: 'gray' }, `${detail} | ${exitHint}`)
   );
 }
 
@@ -1218,7 +1320,11 @@ function SessionBlock({ block }) {
   return null;
 }
 
-function HotkeyFooter({ members, expanded, detailText }) {
+function HotkeyFooter({ members, expanded, detailText, exitArmedUntil = 0 }) {
+  const exitHint = Date.now() < exitArmedUntil
+    ? 'Ctrl-C again to close.'
+    : 'Ctrl-C twice to close.';
+
   return h(
     Box,
     { flexDirection: 'column', marginTop: 1 },
@@ -1227,7 +1333,7 @@ function HotkeyFooter({ members, expanded, detailText }) {
       { color: 'gray' },
       `Hotkeys: ${buildHotkeyParts(members, expanded).join('  ')}`
     ),
-    h(Text, { color: 'gray' }, detailText)
+    h(Text, { color: 'gray' }, `${detailText} ${exitHint}`)
   );
 }
 
@@ -1324,6 +1430,11 @@ export function createStudioConfig(options = {}) {
       codex: (options as any).permissions?.codex ?? 'read-only',
       claude: (options as any).permissions?.claude ?? 'plan',
       gemini: null
+    },
+    auths: {
+      codex: (options as any).auths?.codex ?? 'auto',
+      claude: (options as any).auths?.claude ?? 'auto',
+      gemini: (options as any).auths?.gemini ?? 'auto'
     }
   });
 }
@@ -1336,6 +1447,9 @@ export function buildStudioSettings(config) {
     { id: 'summarizer', label: 'Synthesis', value: config.summarizer || 'auto' },
     { id: 'iterations', label: 'Iterations', value: String(config.iterations) },
     { id: 'teamWork', label: 'Team default', value: String(config.teamWork) },
+    { id: 'codexAuth', label: 'Codex auth', value: config.auths.codex },
+    { id: 'claudeAuth', label: 'Claude auth', value: config.auths.claude },
+    { id: 'geminiAuth', label: 'Gemini auth', value: config.auths.gemini },
     { id: 'codexSandbox', label: 'Codex sandbox', value: config.permissions.codex },
     { id: 'claudePermission', label: 'Claude permission', value: config.permissions.claude },
     { id: 'codexEffort', label: 'Codex effort', value: config.efforts.codex || 'default' },
@@ -1369,6 +1483,12 @@ export function applyStudioSetting(config, settingId, direction = 1) {
     next.permissions.codex = cycleValue(next.permissions.codex, STUDIO_CODEX_SANDBOXES, direction);
   } else if (settingId === 'claudePermission') {
     next.permissions.claude = cycleValue(next.permissions.claude, STUDIO_CLAUDE_PERMISSIONS, direction);
+  } else if (settingId === 'codexAuth') {
+    next.auths.codex = cycleValue(next.auths.codex, STUDIO_AUTHS.codex, direction);
+  } else if (settingId === 'claudeAuth') {
+    next.auths.claude = cycleValue(next.auths.claude, STUDIO_AUTHS.claude, direction);
+  } else if (settingId === 'geminiAuth') {
+    next.auths.gemini = cycleValue(next.auths.gemini, STUDIO_AUTHS.gemini, direction);
   } else if (settingId === 'codexEffort') {
     next.efforts.codex = cycleNullableValue(next.efforts.codex, STUDIO_EFFORTS.codex, direction);
   } else if (settingId === 'claudeEffort') {
@@ -1422,6 +1542,9 @@ function sanitizeStudioConfig(config) {
 
   for (const engine of STUDIO_ENGINES) {
     next.teams[engine] = Math.max(0, Number(next.teams[engine] ?? next.teamWork) || 0);
+    if (!STUDIO_AUTHS[engine].includes(next.auths[engine])) {
+      next.auths[engine] = 'auto';
+    }
   }
 
   return next;
@@ -1434,7 +1557,8 @@ function cloneStudioConfig(config) {
     teams: { ...(config.teams || {}) },
     models: { ...(config.models || {}) },
     efforts: { ...(config.efforts || {}) },
-    permissions: { ...(config.permissions || {}) }
+    permissions: { ...(config.permissions || {}) },
+    auths: { ...(config.auths || {}) }
   };
 }
 

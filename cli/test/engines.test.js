@@ -397,6 +397,56 @@ test('runEngine omits claude --bare when CLAUDE_CODE_OAUTH_TOKEN is present', as
   }
 });
 
+test('runEngine can force Claude API-key auth mode', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    claude: { member: { mode: 'echo-argv' } }
+  });
+
+  try {
+    const result = await runEngine('claude', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: {
+        ...fake.env,
+        CLAUDE_CODE_OAUTH_TOKEN: 'test-oauth-token'
+      },
+      auth: 'api-key'
+    });
+
+    assert.equal(result.status, 'ok');
+    const argv = JSON.parse(result.output);
+    assert.equal(argv.includes('--bare'), true);
+  } finally {
+    await fake.cleanup();
+  }
+});
+
+test('runEngine can force Claude OAuth auth mode', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    claude: { member: { mode: 'echo-argv' } }
+  });
+
+  try {
+    const result = await runEngine('claude', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: {
+        ...fake.env,
+        ANTHROPIC_API_KEY: 'test-api-key'
+      },
+      auth: 'oauth'
+    });
+
+    assert.equal(result.status, 'ok');
+    const argv = JSON.parse(result.output);
+    assert.equal(argv.includes('--bare'), false);
+  } finally {
+    await fake.cleanup();
+  }
+});
+
 test('runEngine forwards CLAUDE_CODE_EFFORT_LEVEL to claude when no effort option is set', async () => {
   const fake = await createFakeCouncilEnvironment({
     claude: { member: { mode: 'echo-argv' } }

@@ -6,6 +6,9 @@ export type EffortLevel = 'low' | 'medium' | 'high';
 export type ProviderEffortLevel = EffortLevel | 'xhigh' | 'max';
 export type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
 export type ClaudePermissionMode = 'acceptEdits' | 'auto' | 'bypassPermissions' | 'default' | 'dontAsk' | 'plan';
+export type CodexAuthMethod = 'auto' | 'login' | 'api-key';
+export type ClaudeAuthMethod = 'auto' | 'oauth' | 'api-key' | 'keychain';
+export type GeminiAuthMethod = 'auto' | 'login' | 'api-key';
 export type CouncilRole = 'planner' | 'lead' | 'lead+planner' | 'executor';
 
 export interface ProviderModels {
@@ -26,10 +29,30 @@ export interface ProviderPermissions {
   gemini?: null;
 }
 
+export interface ProviderAuths {
+  codex?: CodexAuthMethod | null;
+  claude?: ClaudeAuthMethod | null;
+  gemini?: GeminiAuthMethod | null;
+}
+
 export interface ProviderTeamSizes {
   codex?: number | null;
   claude?: number | null;
   gemini?: number | null;
+}
+
+export interface DeliveryOptions {
+  enabled: boolean;
+  provider: 'linear' | null;
+  issueIds: string[];
+  query?: string | null;
+  team?: string | null;
+  state?: string | null;
+  assignee?: string | null;
+  limit: number;
+  endpoint?: string | null;
+  apiKeyEnv: string;
+  phases: string[];
 }
 
 export interface CouncilWorkflow {
@@ -64,12 +87,14 @@ export interface ParsedArgs {
   models: ProviderModels;
   efforts: ProviderEfforts;
   permissions: ProviderPermissions;
+  auths: ProviderAuths;
   handoff: boolean;
   lead: EngineName | null;
   planner: EngineName | null;
   iterations: number;
   teamWork: number;
   teams: ProviderTeamSizes;
+  delivery: DeliveryOptions;
   timeoutMs: number;
   maxMemberChars: number;
   cwd: string;
@@ -96,6 +121,7 @@ export interface CouncilEngineResult {
   iteration?: number;
   totalIterations?: number;
   teamSize?: number;
+  auth?: string | null;
 }
 
 export interface RunEngineOptions {
@@ -106,6 +132,7 @@ export interface RunEngineOptions {
   effort?: ProviderEffortLevel | null;
   model?: string | null;
   permission?: CodexSandboxMode | ClaudePermissionMode | null;
+  auth?: string | null;
   onProgress?: (progress: EngineProgress) => void;
 }
 
@@ -139,6 +166,7 @@ export interface RunCouncilOptions {
   models?: ProviderModels;
   efforts?: ProviderEfforts;
   permissions?: ProviderPermissions;
+  auths?: ProviderAuths;
   handoff?: boolean;
   lead?: EngineName | null;
   planner?: EngineName | null;
@@ -159,6 +187,7 @@ export interface CouncilResult {
   models: ProviderModels;
   efforts: ProviderEfforts;
   permissions: ProviderPermissions;
+  auths: ProviderAuths;
   workflow: CouncilWorkflow;
   iterations: number;
   iterationResults: Array<{
@@ -186,6 +215,7 @@ export interface RunStartedEvent {
   models: ProviderModels;
   efforts: ProviderEfforts;
   permissions: ProviderPermissions;
+  auths: ProviderAuths;
   workflow: CouncilWorkflow;
 }
 
@@ -213,6 +243,7 @@ export interface MemberStartedEvent {
   iteration: number;
   totalIterations: number;
   teamSize: number;
+  auth?: string | null;
 }
 
 export interface MemberProgressEvent {
@@ -223,6 +254,7 @@ export interface MemberProgressEvent {
   iteration?: number;
   totalIterations?: number;
   teamSize?: number;
+  auth?: string | null;
   detail?: string;
   elapsedMs?: number;
 }
@@ -241,6 +273,7 @@ export interface SummaryStartedEvent {
   iteration: number;
   totalIterations: number;
   teamSize: number;
+  auth?: string | null;
 }
 
 export interface SummaryProgressEvent {
@@ -251,6 +284,7 @@ export interface SummaryProgressEvent {
   iteration?: number;
   totalIterations?: number;
   teamSize?: number;
+  auth?: string | null;
   detail?: string;
   elapsedMs?: number;
 }
@@ -283,6 +317,11 @@ export type CouncilEvent =
 export function usageText(version: string): string;
 export function parseArgs(argv: string[]): ParsedArgs;
 export function runCouncil(options: RunCouncilOptions): Promise<CouncilResult>;
+export function runLinearDelivery(options?: any): Promise<any>;
+export function renderDeliveryResult(result: any): string;
+export function renderDeliveryProgressEvent(event: any): string;
+export function buildDeliveryPhasePrompt(options: any): string;
+export function fetchLinearIssues(options?: any): Promise<any[]>;
 export function isCouncilSuccess(result: CouncilResult): boolean;
 export function runEngine(name: EngineName, options: RunEngineOptions): Promise<CouncilEngineResult>;
 export function buildMemberPrompt(query: string, options?: BuildPromptOptions): string;
@@ -301,12 +340,22 @@ export const PROVIDER_EFFORT_LEVELS: {
   readonly claude: readonly ('low' | 'medium' | 'high' | 'xhigh' | 'max')[];
   readonly gemini: readonly EffortLevel[];
 };
+export const PROVIDER_AUTH_METHODS: {
+  readonly codex: readonly CodexAuthMethod[];
+  readonly claude: readonly ClaudeAuthMethod[];
+  readonly gemini: readonly GeminiAuthMethod[];
+};
 export const CODEX_SANDBOX_MODES: readonly CodexSandboxMode[];
 export const CLAUDE_PERMISSION_MODES: readonly ClaudePermissionMode[];
 export const DEFAULT_PROVIDER_PERMISSIONS: {
   readonly codex: 'read-only';
   readonly claude: 'plan';
   readonly gemini: null;
+};
+export const DEFAULT_PROVIDER_AUTHS: {
+  readonly codex: 'auto';
+  readonly claude: 'auto';
+  readonly gemini: 'auto';
 };
 export const DEFAULT_PROVIDER_TEAM_SIZES: {
   readonly codex: 0;

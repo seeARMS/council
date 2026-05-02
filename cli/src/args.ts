@@ -9,6 +9,7 @@ import {
   DEFAULT_TEAM_SIZE,
   DEFAULT_TIMEOUT_MS,
   EFFORT_LEVELS,
+  PROVIDER_AUTH_METHODS,
   PROVIDER_EFFORT_LEVELS
 } from './engines.js';
 const OPTIONS = {
@@ -39,6 +40,9 @@ const OPTIONS = {
   'gemini-effort': { type: 'string' },
   'codex-sandbox': { type: 'string' },
   'claude-permission-mode': { type: 'string' },
+  'codex-auth': { type: 'string' },
+  'claude-auth': { type: 'string' },
+  'gemini-auth': { type: 'string' },
   handoff: { type: 'boolean' },
   lead: { type: 'string' },
   planner: { type: 'string' },
@@ -49,6 +53,17 @@ const OPTIONS = {
   'codex-sub-agents': { type: 'string' },
   'claude-sub-agents': { type: 'string' },
   'gemini-sub-agents': { type: 'string' },
+  linear: { type: 'boolean' },
+  'deliver-linear': { type: 'boolean' },
+  'linear-issue': { type: 'string' },
+  'linear-query': { type: 'string' },
+  'linear-team': { type: 'string' },
+  'linear-state': { type: 'string' },
+  'linear-assignee': { type: 'string' },
+  'linear-limit': { type: 'string' },
+  'linear-endpoint': { type: 'string' },
+  'linear-api-key-env': { type: 'string' },
+  'delivery-phases': { type: 'string' },
   timeout: { type: 'string' },
   'max-member-chars': { type: 'string' },
   cwd: { type: 'string' },
@@ -77,6 +92,7 @@ export function usageText(version) {
     '  council --studio "Open a configurable terminal workbench"',
     '  council --effort high "Analyze the tradeoffs for this architecture"',
     '  council --planner codex --lead claude --handoff --iterations 2 "Plan and execute this change"',
+    '  council --deliver-linear --linear-issue ABC-123 --lead codex',
     '',
     'Selection:',
     '  --members <list>          Ordered subset of codex,claude,gemini',
@@ -112,6 +128,9 @@ export function usageText(version) {
     `  --codex-sandbox <mode>    Codex sandbox: ${CODEX_SANDBOX_MODES.join(', ')}`,
     `  --claude-permission-mode <mode>`,
     `                            Claude permission mode: ${CLAUDE_PERMISSION_MODES.join(', ')}`,
+    `  --codex-auth <method>     Codex auth preference: ${PROVIDER_AUTH_METHODS.codex.join(', ')}`,
+    `  --claude-auth <method>    Claude auth preference: ${PROVIDER_AUTH_METHODS.claude.join(', ')}`,
+    `  --gemini-auth <method>    Gemini auth preference: ${PROVIDER_AUTH_METHODS.gemini.join(', ')}`,
     '  --handoff                 Run members in order and pass each response to the next member',
     '  --lead <name>             Lead model for final synthesis preference: codex, claude, or gemini',
     '  --planner <name>          Planner model that runs before executor members',
@@ -120,6 +139,14 @@ export function usageText(version) {
     '  --codex-sub-agents <n>    Codex-specific team size override',
     '  --claude-sub-agents <n>   Claude-specific team size override',
     '  --gemini-sub-agents <n>   Gemini-specific team size override',
+    '  --deliver-linear          Fetch Linear tasks and run delivery phases for each task',
+    '  --linear-issue <ids>      Comma-separated Linear issue IDs/keys to deliver',
+    '  --linear-query <text>     Fetch matching Linear issues when explicit IDs are not provided',
+    '  --linear-team <key>       Restrict Linear fetches to a team key',
+    '  --linear-state <name>     Restrict Linear fetches to a state name',
+    '  --linear-assignee <text>  Restrict Linear fetches to an assignee name/email',
+    '  --linear-limit <n>        Max Linear issues to fetch (default: 3)',
+    '  --delivery-phases <list>  Comma-separated plan,implement,verify,ship',
     '',
     'Other:',
     '  -h, --help                Show help',
@@ -129,6 +156,7 @@ export function usageText(version) {
     '  COUNCIL_CODEX_BIN         Override the codex executable path',
     '  COUNCIL_CLAUDE_BIN        Override the claude executable path',
     '  COUNCIL_GEMINI_BIN        Override the gemini executable path',
+    '  LINEAR_API_KEY            Linear API key used by --deliver-linear',
     '  CLAUDE_CODE_OAUTH_TOKEN   Use Claude OAuth-token auth (omits Claude --bare mode)',
     '  ANTHROPIC_API_KEY         Use Claude API-key auth (keeps Claude --bare mode)',
     '  CLAUDE_CODE_EFFORT_LEVEL  Claude effort fallback when no Claude effort flag is set'
@@ -165,6 +193,7 @@ export function parseArgs(argv) {
     models: parseProviderModels(values),
     efforts: parseProviderEfforts(values),
     permissions: parseProviderPermissions(values),
+    auths: parseProviderAuths(values),
     handoff: Boolean(values.handoff),
     lead: parseOptionalEngine(values.lead, '--lead'),
     planner: parseOptionalEngine(values.planner, '--planner'),
@@ -173,6 +202,7 @@ export function parseArgs(argv) {
       : DEFAULT_ITERATIONS,
     teamWork: parseTeamWork(values),
     teams: parseProviderTeams(values),
+    delivery: parseDeliveryOptions(values),
     timeoutMs: values.timeout
       ? parseTimeoutMs(values.timeout)
       : DEFAULT_TIMEOUT_MS,
@@ -321,6 +351,56 @@ function parseProviderPermissions(values) {
     ),
     gemini: null
   };
+}
+
+function parseProviderAuths(values) {
+  return {
+    codex: parseEnumValue(values['codex-auth'], '--codex-auth', PROVIDER_AUTH_METHODS.codex),
+    claude: parseEnumValue(values['claude-auth'], '--claude-auth', PROVIDER_AUTH_METHODS.claude),
+    gemini: parseEnumValue(values['gemini-auth'], '--gemini-auth', PROVIDER_AUTH_METHODS.gemini)
+  };
+}
+
+function parseDeliveryOptions(values) {
+  const enabled = Boolean(values['deliver-linear'] || values.linear);
+  return {
+    enabled,
+    provider: enabled ? 'linear' : null,
+    issueIds: parseOptionalList(values['linear-issue']),
+    query: parseOptionalString(values['linear-query'], '--linear-query'),
+    team: parseOptionalString(values['linear-team'], '--linear-team'),
+    state: parseOptionalString(values['linear-state'], '--linear-state'),
+    assignee: parseOptionalString(values['linear-assignee'], '--linear-assignee'),
+    limit: values['linear-limit']
+      ? parsePositiveInteger(values['linear-limit'], '--linear-limit')
+      : 3,
+    endpoint: parseOptionalString(values['linear-endpoint'], '--linear-endpoint'),
+    apiKeyEnv: parseOptionalString(values['linear-api-key-env'], '--linear-api-key-env') || 'LINEAR_API_KEY',
+    phases: parseDeliveryPhases(values['delivery-phases'])
+  };
+}
+
+function parseOptionalList(value) {
+  if (value === undefined || value === null || value === '') {
+    return [];
+  }
+
+  return String(value)
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseDeliveryPhases(value) {
+  const phases = parseOptionalList(value || 'plan,implement,verify,ship');
+  const allowed = ['plan', 'implement', 'verify', 'ship'];
+  const invalid = phases.filter((phase) => !allowed.includes(phase));
+
+  if (invalid.length > 0) {
+    throw new Error(`Unsupported --delivery-phases value: ${invalid.join(', ')} (expected ${allowed.join(', ')})`);
+  }
+
+  return phases;
 }
 
 function parseTeamWork(values) {

@@ -226,6 +226,9 @@ test('studio config builds editable settings from CLI options', () => {
     permissions: {
       codex: 'workspace-write',
       claude: 'acceptEdits'
+    },
+    auths: {
+      claude: 'oauth'
     }
   });
   const settings = buildStudioSettings(config);
@@ -234,8 +237,10 @@ test('studio config builds editable settings from CLI options', () => {
   assert.equal(config.lead, 'claude');
   assert.equal(config.planner, 'codex');
   assert.equal(config.teams.claude, 3);
+  assert.equal(config.auths.claude, 'oauth');
   assert.equal(settings.find((setting) => setting.id === 'handoff')?.value, 'on');
   assert.equal(settings.find((setting) => setting.id === 'codexSandbox')?.value, 'workspace-write');
+  assert.equal(settings.find((setting) => setting.id === 'claudeAuth')?.value, 'oauth');
 });
 
 test('studio settings cycle workflow values and keep roles valid', () => {
@@ -247,10 +252,12 @@ test('studio settings cycle workflow values and keep roles valid', () => {
   const noLead = applyStudioSetting(config, 'lead', 1);
   const nextLead = applyStudioSetting(noLead, 'lead', 1);
   const moreIterations = applyStudioSetting(config, 'iterations', 1);
+  const nextClaudeAuth = applyStudioSetting(config, 'claudeAuth', 1);
 
   assert.equal(noLead.lead, null);
   assert.equal(nextLead.lead, 'codex');
   assert.equal(moreIterations.iterations, 2);
+  assert.equal(nextClaudeAuth.auths.claude, 'oauth');
 });
 
 test('studio pane movement reorders focused panes', () => {
