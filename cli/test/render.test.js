@@ -27,6 +27,31 @@ test('resolveUiOptions makes headless runs summary-only and suppresses the banne
   assert.equal(ui.showBanner, false);
 });
 
+test('resolveUiOptions suppresses the banner in studio mode', () => {
+  const ui = resolveUiOptions(
+    {
+      json: false,
+      jsonStream: false,
+      headless: false,
+      studio: true,
+      plain: false,
+      summaryOnly: false,
+      quiet: false,
+      noBanner: false,
+      color: 'auto'
+    },
+    {
+      stdoutIsTTY: true,
+      stderrIsTTY: true,
+      env: {}
+    }
+  );
+
+  assert.equal(ui.studio, true);
+  assert.equal(ui.showBanner, false);
+  assert.equal(ui.showProgress, true);
+});
+
 test('renderBanner includes the council title art', () => {
   const banner = renderBanner();
   assert.match(banner, /Council Studio/);

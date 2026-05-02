@@ -77,7 +77,7 @@ export function renderHumanResult(result, { summaryOnly = false, verbose = false
 function formatRoleSuffix(result) {
   const parts = [];
 
-  if (result.role) {
+  if (result.role && result.role !== 'executor') {
     parts.push(result.role);
   }
 

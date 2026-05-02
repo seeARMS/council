@@ -192,7 +192,7 @@ function buildSummaryBlock(item, hotkey, expanded, now) {
 function formatRoleSuffix(item) {
   const parts = [];
 
-  if (item.role) {
+  if (item.role && item.role !== 'executor') {
     parts.push(item.role);
   }
 

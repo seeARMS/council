@@ -60,8 +60,10 @@ test('json-stream mode emits JSONL lifecycle events', async () => {
 
     assert.deepEqual(eventTypes, [
       'run_started',
+      'iteration_started',
       'member_started',
       'member_completed',
+      'iteration_completed',
       'summary_started',
       'summary_completed',
       'run_completed'

@@ -98,6 +98,12 @@ Interactive human output:
 council "What is the cleanest implementation?"
 ```
 
+Interactive workbench:
+
+```bash
+council --studio "What is the cleanest implementation?"
+```
+
 Summary-only output:
 
 ```bash
@@ -134,6 +140,8 @@ In a real TTY, `council` uses a live dashboard:
 - press the number shown next to a row to expand or collapse the full result
 - just start typing to ask a follow-up in the same session
 - press `q` or `Esc` to exit the interactive view
+
+For a fuller terminal app, use `--studio`. Studio mode opens focusable panes for the command menu, workflow settings, agents, results, and prompt. You can move focus with `Tab`, change settings with the arrow keys, toggle providers in the agents pane, mark lead/planner roles, resize the provider teams, reorder panes with `[` and `]`, edit the prompt, and run or re-run from inside the UI.
 
 ## Tool selection
 

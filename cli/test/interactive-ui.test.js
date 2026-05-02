@@ -1,8 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  applyStudioSetting,
   buildInteractiveBlocks,
+  buildStudioSettings,
+  createStudioConfig,
   createInitialExpanded,
+  moveStudioPane,
   sanitizeImmediateFollowUpChunk,
   shouldUseInteractiveDashboard,
   toggleExpanded
@@ -206,4 +210,52 @@ test('buildInteractiveBlocks expands synthesis on its own row without adding a d
   assert.equal(summaryRow?.expanded, true);
   assert.equal(summaryRow?.body, 'Synthesized answer');
   assert.equal(summaryRow?.previewText, null);
+});
+
+test('studio config builds editable settings from CLI options', () => {
+  const config = createStudioConfig({
+    members: ['codex', 'claude'],
+    lead: 'claude',
+    planner: 'codex',
+    handoff: true,
+    iterations: 2,
+    teamWork: 1,
+    teams: {
+      claude: 3
+    },
+    permissions: {
+      codex: 'workspace-write',
+      claude: 'acceptEdits'
+    }
+  });
+  const settings = buildStudioSettings(config);
+
+  assert.deepEqual(config.members, ['codex', 'claude']);
+  assert.equal(config.lead, 'claude');
+  assert.equal(config.planner, 'codex');
+  assert.equal(config.teams.claude, 3);
+  assert.equal(settings.find((setting) => setting.id === 'handoff')?.value, 'on');
+  assert.equal(settings.find((setting) => setting.id === 'codexSandbox')?.value, 'workspace-write');
+});
+
+test('studio settings cycle workflow values and keep roles valid', () => {
+  const config = createStudioConfig({
+    members: ['codex', 'claude'],
+    lead: 'claude'
+  });
+
+  const noLead = applyStudioSetting(config, 'lead', 1);
+  const nextLead = applyStudioSetting(noLead, 'lead', 1);
+  const moreIterations = applyStudioSetting(config, 'iterations', 1);
+
+  assert.equal(noLead.lead, null);
+  assert.equal(nextLead.lead, 'codex');
+  assert.equal(moreIterations.iterations, 2);
+});
+
+test('studio pane movement reorders focused panes', () => {
+  assert.deepEqual(
+    moveStudioPane(['menu', 'settings', 'agents', 'results'], 'agents', -1),
+    ['menu', 'agents', 'settings', 'results']
+  );
 });

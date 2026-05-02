@@ -87,6 +87,7 @@ export async function main(argv = process.argv.slice(2)) {
       iterations: parsed.iterations,
       teamWork: parsed.teamWork,
       teams: parsed.teams,
+      studio: parsed.studio,
       conversation: [],
       onEvent: undefined
     });

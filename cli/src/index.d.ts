@@ -52,6 +52,7 @@ export interface ParsedArgs {
   json: boolean;
   jsonStream: boolean;
   headless: boolean;
+  studio: boolean;
   plain: boolean;
   verbose: boolean;
   quiet: boolean;

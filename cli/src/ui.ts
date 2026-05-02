@@ -24,6 +24,7 @@ export function resolveUiOptions(
   return {
     outputMode,
     headless,
+    studio: Boolean(parsed.studio),
     plain,
     summaryOnly,
     stdoutColor,
@@ -32,6 +33,7 @@ export function resolveUiOptions(
       outputMode === 'text' &&
       stderrIsTTY &&
       !headless &&
+      !parsed.studio &&
       !parsed.noBanner &&
       !plain,
     showProgress:
@@ -101,7 +103,7 @@ export function renderProgressEvent(event, { colorEnabled = false } = {}) {
 function formatEventRole(event) {
   const parts = [];
 
-  if (event.role) {
+  if (event.role && event.role !== 'executor') {
     parts.push(event.role);
   }
 

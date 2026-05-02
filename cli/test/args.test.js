@@ -56,6 +56,7 @@ test('help text documents the 10 minute default timeout', () => {
 test('supports headless automation flags and response caps', () => {
   const parsed = parseArgs([
     '--headless',
+    '--studio',
     '--json-stream',
     '--plain',
     '--no-banner',
@@ -65,6 +66,7 @@ test('supports headless automation flags and response caps', () => {
   ]);
 
   assert.equal(parsed.headless, true);
+  assert.equal(parsed.studio, true);
   assert.equal(parsed.jsonStream, true);
   assert.equal(parsed.plain, true);
   assert.equal(parsed.noBanner, true);
