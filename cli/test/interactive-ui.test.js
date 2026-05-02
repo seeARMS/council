@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {
   applyStudioSetting,
   buildInteractiveBlocks,
+  buildStudioLinearDelivery,
   buildStudioSettings,
+  buildStudioTelemetryLines,
   createStudioConfig,
   createInitialExpanded,
   moveStudioPane,
@@ -241,6 +243,7 @@ test('studio config builds editable settings from CLI options', () => {
   assert.equal(settings.find((setting) => setting.id === 'handoff')?.value, 'on');
   assert.equal(settings.find((setting) => setting.id === 'codexSandbox')?.value, 'workspace-write');
   assert.equal(settings.find((setting) => setting.id === 'claudeAuth')?.value, 'oauth');
+  assert.equal(settings.find((setting) => setting.id === 'linearMode')?.value, 'off');
 });
 
 test('studio settings cycle workflow values and keep roles valid', () => {
@@ -264,7 +267,77 @@ test('studio settings cycle workflow values and keep roles valid', () => {
 
 test('studio pane movement reorders focused panes', () => {
   assert.deepEqual(
-    moveStudioPane(['menu', 'settings', 'agents', 'results'], 'agents', -1),
-    ['menu', 'agents', 'settings', 'results']
+    moveStudioPane(['menu', 'settings', 'agents', 'linear', 'results'], 'linear', -1),
+    ['menu', 'settings', 'linear', 'agents', 'results']
   );
+});
+
+test('studio exposes Linear delivery settings and payload', () => {
+  const config = createStudioConfig({
+    delivery: {
+      enabled: true,
+      watch: true,
+      issueIds: ['ENG-123'],
+      team: 'ENG',
+      state: 'Todo',
+      authMethod: 'oauth',
+      maxConcurrency: 2,
+      workspaceStrategy: 'copy',
+      attachMedia: ['proof.png']
+    }
+  });
+  const settings = buildStudioSettings(config);
+  const nextMode = applyStudioSetting(config, 'linearMode', 1);
+  const delivery = buildStudioLinearDelivery(config);
+
+  assert.equal(settings.find((setting) => setting.id === 'linearMode')?.value, 'watch');
+  assert.equal(settings.find((setting) => setting.id === 'linearAuth')?.value, 'oauth');
+  assert.equal(settings.find((setting) => setting.id === 'linearWorkspace')?.value, 'copy');
+  assert.equal(nextMode.linear.enabled, false);
+  assert.deepEqual(delivery.issueIds, ['ENG-123']);
+  assert.equal(delivery.team, 'ENG');
+  assert.equal(delivery.state, 'Todo');
+  assert.equal(delivery.authMethod, 'oauth');
+  assert.equal(delivery.maxConcurrency, 2);
+  assert.deepEqual(delivery.attachMedia, ['proof.png']);
+});
+
+test('studio telemetry lines summarize token and tool usage', () => {
+  const state = hydrateSessionStateFromResult(
+    {
+      members: [
+        {
+          name: 'codex',
+          status: 'ok',
+          durationMs: 100,
+          output: 'done',
+          tokenUsage: {
+            input: 1200,
+            output: 300,
+            total: 1500,
+            estimated: true
+          },
+          toolUsage: [
+            {
+              name: 'shell',
+              command: 'npm test',
+              count: 2
+            }
+          ]
+        }
+      ],
+      summary: {
+        name: 'codex',
+        status: 'ok',
+        durationMs: 50,
+        output: 'summary'
+      }
+    },
+    ['codex']
+  );
+
+  const lines = buildStudioTelemetryLines(state);
+
+  assert.match(lines.join('\n'), /codex: tokens ~1\.5k total/);
+  assert.match(lines.join('\n'), /tools 2 shell/);
 });

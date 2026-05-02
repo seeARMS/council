@@ -142,7 +142,7 @@ In a real TTY, `council` uses a live dashboard:
 - press `q` or `Esc` to exit the interactive view
 - press `Ctrl-C` twice to close from the keyboard interrupt path
 
-For a fuller terminal app, use `--studio`. Studio mode opens focusable panes for the command menu, workflow settings, agents, results, help, and prompt. You can move focus with `Tab`, change settings with the arrow keys, toggle providers in the agents pane, mark lead/planner roles, select auth mode per provider, resize the provider teams, reorder panes with `[` and `]`, edit the prompt, and run or re-run from inside the UI. The command palette includes actions to tag local files, run shell commands into the prompt context, and open Help. `?` toggles help from anywhere.
+For a fuller terminal app, use `--studio`. Studio mode opens focusable panes for the command menu, workflow settings, agents, Linear, results/canvas, help, and prompt. You can move focus with `Tab`, change settings with the arrow keys, toggle providers in the agents pane, mark lead/planner roles, select auth mode per provider, resize the provider teams, configure Linear mode/auth/workspace/retry settings, reorder panes with `[` and `]`, edit the prompt, and run or re-run from inside the UI. The command palette includes actions to launch provider social login, check Linear setup/status, deliver Linear work, edit Linear issue/query/team/state/media fields, tag local files, run shell commands into the prompt context, and open Help. `?` toggles help from anywhere.
 
 ## Prompt context, files, and commands
 
@@ -166,7 +166,7 @@ council \
 
 `--file`/`--tag-file` and `--cmd`/`--prompt-command` are repeatable. In Studio mode, use the command palette to tag files or run commands while the Node process stays open; the prompt panel shows the active context. Council also streams command progress and provider tool usage so you can see shell commands being executed by prompt context and by upstream providers.
 
-Member rows include token usage as `tok:<n>` and tool usage as `tools:<n>` when available. Provider-reported token usage is used when the upstream CLI exposes it; otherwise Council shows a conservative estimate marked with `~`.
+Member rows include token usage as `tok:<n>` and tool usage as `tools:<n>` when available. Provider-reported token usage is used when the upstream CLI exposes it; otherwise Council shows a conservative estimate marked with `~`. In Studio mode, the Canvas pane also has a Telemetry section that lists token totals, input/output split, current progress, and tool/command counts per provider and synthesis agent.
 
 ## Tool selection
 
@@ -280,6 +280,13 @@ council --linear-status
 ```
 
 Set `LINEAR_API_KEY` for API-key auth, or set `LINEAR_OAUTH_TOKEN` and pass `--linear-auth oauth`. Linear status reports whether auth is configured, the authenticated viewer when available, the persistent state file, the per-issue workspace root, and the JSONL observability log.
+
+In Studio mode, Linear is managed from the Settings, Linear, and Command Palette panes:
+
+- Settings: cycle `Linear mode` (`off`, `deliver`, `watch`), `Linear auth` (`api-key`, `oauth`), workspace strategy, issue limit, concurrency, and retry attempts.
+- Linear pane: press `Enter` while focused to refresh setup/status, viewer, state counts, workspace root, and observability log.
+- Command Palette: use `Linear status`, `Deliver Linear`, `Set Linear issue`, `Set Linear query`, `Set Linear team`, `Set Linear state`, and `Attach Linear media` without restarting Node.
+- In a real TTY, `--studio --linear-status`, `--studio --deliver-linear`, and the other Linear flags pre-populate those Studio controls instead of bypassing the TUI.
 
 Council can fetch Linear work and run each issue through delivery phases:
 

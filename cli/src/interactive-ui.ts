@@ -25,6 +25,10 @@ import {
   runPromptCommand
 } from './prompt-context.js';
 import {
+  getLinearDeliveryStatus,
+  runLinearDelivery
+} from './delivery.js';
+import {
   renderProviderSocialLoginResult,
   resolveSocialLoginProviders,
   runProviderSocialLogins
@@ -42,17 +46,25 @@ import {
   summaryTextForConversation
 } from './session-core.js';
 
-const STUDIO_PANES = ['menu', 'settings', 'agents', 'results'];
-const STUDIO_FOCUS_ORDER = ['menu', 'settings', 'agents', 'results', 'prompt'];
+const STUDIO_PANES = ['menu', 'settings', 'agents', 'linear', 'results'];
+const STUDIO_FOCUS_ORDER = ['menu', 'settings', 'agents', 'linear', 'results', 'prompt'];
 const STUDIO_ENGINES = ['codex', 'claude', 'gemini'];
 const STUDIO_MENU = [
   { id: 'run', label: 'Run / re-run' },
   { id: 'prompt', label: 'Edit prompt' },
   { id: 'socialLogin', label: 'Social login' },
+  { id: 'linearStatus', label: 'Linear status' },
+  { id: 'linearDeliver', label: 'Deliver Linear' },
+  { id: 'linearIssue', label: 'Set Linear issue' },
+  { id: 'linearQuery', label: 'Set Linear query' },
+  { id: 'linearTeam', label: 'Set Linear team' },
+  { id: 'linearState', label: 'Set Linear state' },
+  { id: 'linearMedia', label: 'Attach Linear media' },
   { id: 'tagFile', label: 'Tag local file' },
   { id: 'runCommand', label: 'Run command' },
   { id: 'settings', label: 'Settings' },
   { id: 'agents', label: 'Agents' },
+  { id: 'linear', label: 'Linear' },
   { id: 'results', label: 'Results' },
   { id: 'help', label: 'Help' },
   { id: 'quit', label: 'Quit' }
@@ -69,6 +81,10 @@ const STUDIO_EFFORTS = {
   claude: [null, 'low', 'medium', 'high', 'xhigh', 'max'],
   gemini: [null, 'low', 'medium', 'high']
 };
+const STUDIO_LINEAR_AUTH_METHODS = ['api-key', 'oauth'];
+const STUDIO_LINEAR_MODES = ['off', 'deliver', 'watch'];
+const STUDIO_LINEAR_WORKSPACE_STRATEGIES = ['worktree', 'copy', 'none'];
+const DEFAULT_STUDIO_LINEAR_PHASES = ['plan', 'implement', 'verify', 'ship'];
 
 export function shouldUseInteractiveDashboard(
   ui,
@@ -156,6 +172,12 @@ function StudioApp(props) {
   const [promptAction, setPromptAction] = useState(null);
   const [actionStatus, setActionStatus] = useState('');
   const [authFlowActive, setAuthFlowActive] = useState(false);
+  const [linearBusy, setLinearBusy] = useState(false);
+  const [linearStatus, setLinearStatus] = useState(() =>
+    createInitialStudioLinearStatus(config.linear, cwd, process.env)
+  );
+  const [linearResult, setLinearResult] = useState(null);
+  const [linearEvents, setLinearEvents] = useState([]);
   const [showHelp, setShowHelp] = useState(false);
   const [focusPane, setFocusPane] = useState('menu');
   const [paneOrder, setPaneOrder] = useState([...STUDIO_PANES]);
@@ -347,6 +369,41 @@ function StudioApp(props) {
       return;
     }
 
+    if (actionId === 'linearStatus') {
+      startStudioLinearStatus();
+      return;
+    }
+
+    if (actionId === 'linearDeliver') {
+      startStudioLinearDelivery();
+      return;
+    }
+
+    if (actionId === 'linearIssue') {
+      startLinearFieldAction('issueIds', 'Set Linear issue IDs or keys');
+      return;
+    }
+
+    if (actionId === 'linearQuery') {
+      startLinearFieldAction('query', 'Set Linear query text');
+      return;
+    }
+
+    if (actionId === 'linearTeam') {
+      startLinearFieldAction('team', 'Set Linear team key');
+      return;
+    }
+
+    if (actionId === 'linearState') {
+      startLinearFieldAction('state', 'Set Linear state name');
+      return;
+    }
+
+    if (actionId === 'linearMedia') {
+      startLinearFieldAction('attachMedia', 'Attach Linear media paths or URLs');
+      return;
+    }
+
     if (actionId === 'tagFile') {
       startPromptAction('file');
       return;
@@ -459,7 +516,7 @@ function StudioApp(props) {
   };
 
   const startStudioSocialLogin = () => {
-    if (phase === 'running' || authFlowActive) {
+    if (phase === 'running' || authFlowActive || linearBusy) {
       return;
     }
 
@@ -499,6 +556,123 @@ function StudioApp(props) {
       });
   };
 
+  const startLinearFieldAction = (field, label) => {
+    const current = configRef.current.linear?.[field];
+    const value = Array.isArray(current) ? current.join(',') : String(current || '');
+    setPromptAction({
+      kind: 'linearField',
+      field,
+      label,
+      value,
+      cursorOffset: value.length
+    });
+    setActionStatus(`${label}. Press Enter to save.`);
+    setEditingPrompt(false);
+    setFocusPane('prompt');
+  };
+
+  const startStudioLinearStatus = () => {
+    if (linearBusy) {
+      return;
+    }
+
+    const nextConfig = sanitizeStudioConfig(configRef.current);
+    const delivery = buildStudioLinearDelivery(nextConfig);
+    setConfig(nextConfig);
+    setFocusPane('linear');
+    setLinearBusy(true);
+    setActionStatus('Checking Linear setup, auth, state, workspace, and observability...');
+    void getLinearDeliveryStatus({
+      cwd,
+      delivery,
+      env: process.env
+    })
+      .then((status) => {
+        setLinearStatus(status);
+        setActionStatus(status.configured
+          ? 'Linear auth is configured. Viewer/status loaded in the Linear pane.'
+          : `Linear auth missing. Set ${status.apiKeyEnv} or switch Linear auth to oauth and set ${status.oauthTokenEnv}.`);
+      })
+      .catch((error) => {
+        setActionStatus(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        setLinearBusy(false);
+      });
+  };
+
+  const startStudioLinearDelivery = () => {
+    if (phase === 'running' || linearBusy) {
+      return;
+    }
+
+    const prompt = promptValue.trim();
+    const nextConfig = sanitizeStudioConfig({
+      ...configRef.current,
+      linear: {
+        ...configRef.current.linear,
+        enabled: true
+      }
+    });
+    const members = enabledStudioMembers(nextConfig);
+    const delivery = buildStudioLinearDelivery(nextConfig, { enabled: true });
+    const baseQuery = buildPromptWithContext(prompt, promptContextRef.current);
+    setConfig(nextConfig);
+    setFocusPane('linear');
+    setLinearBusy(true);
+    setLinearResult(null);
+    setLinearEvents([]);
+    setActionStatus(`Delivering Linear work with ${members.join(', ')} through ${delivery.phases.join(' -> ')}.`);
+    void runLinearDelivery({
+      baseQuery,
+      cwd,
+      delivery,
+      members,
+      summarizer: nextConfig.summarizer,
+      timeoutMs,
+      maxMemberChars,
+      effort,
+      models: nextConfig.models,
+      efforts: nextConfig.efforts,
+      permissions: nextConfig.permissions,
+      auths: nextConfig.auths,
+      handoff: nextConfig.handoff,
+      lead: nextConfig.lead,
+      planner: nextConfig.planner,
+      iterations: nextConfig.iterations,
+      teamWork: nextConfig.teamWork,
+      teams: nextConfig.teams,
+      env: process.env,
+      onEvent: (event) => {
+        onEvent?.(event);
+        setLinearEvents((current) => [
+          formatStudioLinearEvent(event),
+          ...current
+        ].filter(Boolean).slice(0, 8));
+      }
+    })
+      .then((result) => {
+        setLinearResult(result);
+        setActionStatus(result.success
+          ? `Linear delivery completed: ${result.issueCount} issue(s).`
+          : `Linear delivery needs attention: ${result.issueCount} issue(s).`);
+        setLinearStatus((current) => current
+          ? {
+              ...current,
+              stateFile: result.stateFile || current.stateFile,
+              workspaceRoot: result.workspaceRoot || current.workspaceRoot,
+              observabilityLog: result.observabilityLog || current.observabilityLog
+            }
+          : current);
+      })
+      .catch((error) => {
+        setActionStatus(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        setLinearBusy(false);
+      });
+  };
+
   const setPromptActionValue = (nextValue, nextCursorOffset = nextValue.length) => {
     setPromptAction((current) => current
       ? {
@@ -524,6 +698,13 @@ function StudioApp(props) {
     const kind = promptAction.kind;
     setActionStatus(kind === 'file' ? `Tagging ${value}...` : `Running ${value}...`);
     setPromptAction(null);
+
+    if (kind === 'linearField') {
+      setConfig((current) => setStudioLinearField(current, promptAction.field, value));
+      setFocusPane('linear');
+      setActionStatus(`${promptAction.label || 'Linear field'} saved.`);
+      return;
+    }
 
     if (kind === 'file') {
       const file = await loadTaggedFile({ filePath: value, cwd });
@@ -725,6 +906,8 @@ function StudioApp(props) {
           if (setting) setConfig((current) => applyStudioSetting(current, setting.id, 1));
         } else if (focusPane === 'agents') {
           setConfig((current) => toggleStudioMember(current, STUDIO_ENGINES[agentIndex]));
+        } else if (focusPane === 'linear') {
+          startStudioLinearStatus();
         } else if (focusPane === 'results') {
           toggleStudioResult(resultIndex, enabledStudioMembers(config), setExpanded);
         } else if (focusPane === 'prompt') {
@@ -807,6 +990,10 @@ function StudioApp(props) {
             config,
             members,
             settings,
+            linearStatus,
+            linearResult,
+            linearEvents,
+            linearBusy,
             menuIndex,
             settingIndex,
             agentIndex,
@@ -830,7 +1017,7 @@ function StudioApp(props) {
       ? h(StudioActionInputPanel, { promptAction })
       : null,
     showHelp ? h(StudioHelpPanel) : null,
-    h(StudioFooter, { phase, focusPane, editingPrompt, exitArmedUntil })
+    h(StudioFooter, { phase, focusPane, editingPrompt, exitArmedUntil, linearBusy })
   );
 }
 
@@ -1185,6 +1372,10 @@ function StudioPane({
   config,
   members,
   settings,
+  linearStatus,
+  linearResult,
+  linearEvents,
+  linearBusy,
   menuIndex,
   settingIndex,
   agentIndex,
@@ -1197,6 +1388,7 @@ function StudioPane({
     menu: 'Command Palette',
     settings: 'Settings',
     agents: 'Agents',
+    linear: 'Linear',
     results: 'Canvas'
   }[pane];
 
@@ -1220,6 +1412,16 @@ function StudioPane({
       : null,
     pane === 'agents'
       ? h(StudioAgentsPane, { config, sessionState, selectedIndex: agentIndex, focused })
+      : null,
+    pane === 'linear'
+      ? h(StudioLinearPane, {
+          config,
+          status: linearStatus,
+          result: linearResult,
+          events: linearEvents,
+          busy: linearBusy,
+          focused
+        })
       : null,
     pane === 'results'
       ? h(StudioResultsPane, {
@@ -1299,6 +1501,58 @@ function StudioAgentsPane({ config, sessionState, selectedIndex, focused }) {
   );
 }
 
+function StudioLinearPane({ config, status, result, events = [], busy, focused }) {
+  const linear = config.linear || {};
+  const mode = studioLinearMode(linear);
+  const statusLines = status
+    ? [
+        `auth:${status.configured ? 'configured' : 'missing'} (${status.authMethod})`,
+        status.viewer
+          ? `viewer:${status.viewer.name || status.viewer.email || status.viewer.id}`
+          : status.authError
+            ? `viewer:error`
+            : `env:${status.authMethod === 'oauth' ? status.oauthTokenEnv : status.apiKeyEnv}`,
+        `state:${formatStudioLinearCounts(status.counts)}`,
+        `workspace:${shortenStudioPath(status.workspaceRoot)}`
+      ]
+    : [
+        `auth:${linear.authMethod}`,
+        'status:not checked'
+      ];
+  const filterLines = [
+    `mode:${busy ? 'busy' : mode}`,
+    `issue:${linear.issueIds?.join(',') || 'none'}`,
+    `query:${linear.query || 'none'}`,
+    `team:${linear.team || 'any'}  state:${linear.state || 'any'}`,
+    `limit:${linear.limit}  concurrency:${linear.maxConcurrency}  attempts:${linear.maxAttempts}`,
+    `workspace:${linear.workspaceStrategy}`
+  ];
+  const media = linear.attachMedia?.length
+    ? `media:${linear.attachMedia.length}`
+    : 'media:none';
+  const deliveryLines = result
+    ? [
+        `last:${result.success ? 'ok' : 'needs attention'} issues:${result.issueCount} polls:${result.pollCount}`,
+        `log:${shortenStudioPath(result.observabilityLog)}`
+      ]
+    : [];
+
+  return h(
+    Box,
+    { flexDirection: 'column' },
+    h(Text, { color: focused ? 'cyan' : 'gray' }, '  setup'),
+    ...statusLines.map((line) => h(Text, { key: `status:${line}` }, `  ${line}`)),
+    h(Text, { color: focused ? 'cyan' : 'gray' }, '  delivery'),
+    ...filterLines.map((line) => h(Text, { key: `filter:${line}` }, `  ${line}`)),
+    h(Text, null, `  ${media}`),
+    ...deliveryLines.map((line) => h(Text, { key: `delivery:${line}` }, `  ${line}`)),
+    events.length > 0 ? h(Text, { color: focused ? 'cyan' : 'gray' }, '  recent') : null,
+    ...events.slice(0, 4).map((line, index) =>
+      h(Text, { key: `event:${index}:${line}`, color: 'gray' }, `  ${line}`)
+    )
+  );
+}
+
 function StudioResultsPane({
   members,
   sessionState,
@@ -1313,6 +1567,8 @@ function StudioResultsPane({
     members,
     expanded
   }).filter((block) => block.kind === 'result-row');
+
+  const telemetryLines = buildStudioTelemetryLines(sessionState);
 
   return h(
     Box,
@@ -1335,8 +1591,88 @@ function StudioResultsPane({
     }),
     blocks.length === 0
       ? h(Text, { color: 'gray' }, '  Run the council to populate the canvas.')
-      : null
+      : null,
+    h(Text, { color: focused ? 'cyan' : 'gray' }, '  Telemetry'),
+    ...telemetryLines.map((line) =>
+      h(Text, { key: `telemetry:${line}`, color: line.includes('waiting') ? 'gray' : undefined }, `  ${line}`)
+    )
   );
+}
+
+export function buildStudioTelemetryLines(sessionState: any = {}) {
+  const entries = [
+    ...(sessionState.items || []).map((item) => ({
+      label: item.name,
+      item
+    })),
+    {
+      label: sessionState.summaryItem?.summarizerName
+        ? `synthesis/${sessionState.summaryItem.summarizerName}`
+        : 'synthesis',
+      item: sessionState.summaryItem
+    }
+  ].filter((entry) => entry.item);
+
+  const lines = entries
+    .map(({ label, item }) => {
+      const tokenUsage = item.tokenUsage || item.result?.tokenUsage;
+      const toolUsage = item.toolUsage || item.result?.toolUsage || [];
+      const parts = [];
+
+      if (tokenUsage) {
+        parts.push(`tokens ${formatStudioTokenUsage(tokenUsage)}`);
+      }
+
+      if (toolUsage.length > 0) {
+        parts.push(`tools ${formatStudioToolUsage(toolUsage)}`);
+      }
+
+      if (item.progressDetail && item.status === 'running') {
+        parts.push(`now ${item.progressDetail}`);
+      }
+
+      return parts.length > 0 ? `${label}: ${parts.join(' | ')}` : null;
+    })
+    .filter(Boolean);
+
+  return lines.length > 0
+    ? lines
+    : ['waiting for provider token/tool usage'];
+}
+
+function formatStudioTokenUsage(tokenUsage: any = {}) {
+  const estimated = tokenUsage.estimated ? '~' : '';
+  return `${estimated}${formatStudioNumber(tokenUsage.total || 0)} total (${formatStudioNumber(tokenUsage.input || 0)} in/${formatStudioNumber(tokenUsage.output || 0)} out)`;
+}
+
+function formatStudioToolUsage(toolUsage: any[] = []) {
+  const total = toolUsage.reduce((sum, tool) => sum + (tool.count || 1), 0);
+  const names = toolUsage
+    .slice(0, 3)
+    .map((tool) => tool.name)
+    .filter(Boolean)
+    .join(',');
+  return `${total}${names ? ` ${names}` : ''}`;
+}
+
+function formatStudioNumber(value) {
+  const numeric = Number(value) || 0;
+  if (numeric >= 1_000_000) {
+    return `${(numeric / 1_000_000).toFixed(1)}m`;
+  }
+  if (numeric >= 1_000) {
+    return `${(numeric / 1_000).toFixed(1)}k`;
+  }
+  return String(numeric);
+}
+
+function shortenStudioPath(value) {
+  const text = String(value || '');
+  if (!text) {
+    return 'default';
+  }
+  const parts = text.split('/');
+  return parts.length > 2 ? parts.slice(-2).join('/') : text;
 }
 
 function StudioPromptPanel({ focused, editing, promptValue, cursorOffset, promptContext, actionStatus }) {
@@ -1367,7 +1703,11 @@ function StudioPromptPanel({ focused, editing, promptValue, cursorOffset, prompt
 }
 
 function StudioActionInputPanel({ promptAction }) {
-  const label = promptAction.kind === 'file' ? 'Tag file' : 'Run command';
+  const label = promptAction.kind === 'file'
+    ? 'Tag file'
+    : promptAction.kind === 'linearField'
+      ? promptAction.label || 'Linear'
+      : 'Run command';
   const value = renderPromptWithCursor(promptAction.value, promptAction.cursorOffset);
 
   return h(
@@ -1390,9 +1730,11 @@ function StudioHelpPanel() {
     'Arrow keys: move selection; left/right changes selected setting',
     'Enter: activate selected menu item, toggle provider, expand selected result, or start prompt editing',
     'Agents pane: l lead, p planner, +/- provider team size',
-    'Settings pane: choose handoff, lead/planner, synthesis, auth methods, permissions, efforts, iterations',
+    'Settings pane: choose handoff, lead/planner, synthesis, auth methods, permissions, efforts, iterations, Linear mode/auth/workspace',
     'Social login: opens each selected provider auth flow in browser tabs; paste returned codes here if prompted',
+    'Linear pane: Enter checks setup/status; Command Palette can deliver issues or edit issue/query/media fields',
     'Command Palette: tag local files or run shell commands into prompt context',
+    'Canvas pane: provider rows show token/tool suffixes; Telemetry section lists current token/tool usage',
     '[ and ]: move the focused pane left/right',
     'r: run or re-run without restarting node',
     'e: edit prompt',
@@ -1415,18 +1757,19 @@ function StudioHelpPanel() {
   );
 }
 
-function StudioFooter({ phase, focusPane, editingPrompt, exitArmedUntil = 0 }) {
+function StudioFooter({ phase, focusPane, editingPrompt, exitArmedUntil = 0, linearBusy = false }) {
   const detail = editingPrompt
     ? 'typing prompt | Enter run | Esc keep'
-    : 'Tab focus | arrows select/change | Enter action | social login/tag files/run commands from menu | [ ] move pane | r run | e edit | ? help | q quit';
+    : 'Tab focus | arrows select/change | Enter action | social login/Linear/tag files/run commands from menu | [ ] move pane | r run | e edit | ? help | q quit';
   const exitHint = Date.now() < exitArmedUntil
     ? 'Ctrl-C again to close'
     : 'Ctrl-C twice to close';
+  const phaseText = linearBusy ? `${phase}+linear` : phase;
 
   return h(
     Box,
     { flexDirection: 'column', marginTop: 1 },
-    h(Text, { color: 'gray' }, `${phase} | focus:${focusPane}`),
+    h(Text, { color: 'gray' }, `${phaseText} | focus:${focusPane}`),
     h(Text, { color: 'gray' }, `${detail} | ${exitHint}`)
   );
 }
@@ -1677,6 +2020,7 @@ export function createStudioConfig(options = {}) {
     ? [...(options as any).members]
     : [...STUDIO_ENGINES];
   const teamWork = Math.max(0, Number((options as any).teamWork ?? 0) || 0);
+  const delivery = (options as any).delivery || {};
 
   return sanitizeStudioConfig({
     members,
@@ -1710,7 +2054,8 @@ export function createStudioConfig(options = {}) {
       codex: (options as any).auths?.codex ?? 'auto',
       claude: (options as any).auths?.claude ?? 'auto',
       gemini: (options as any).auths?.gemini ?? 'auto'
-    }
+    },
+    linear: createStudioLinearConfig(delivery)
   });
 }
 
@@ -1729,7 +2074,14 @@ export function buildStudioSettings(config) {
     { id: 'claudePermission', label: 'Claude permission', value: config.permissions.claude },
     { id: 'codexEffort', label: 'Codex effort', value: config.efforts.codex || 'default' },
     { id: 'claudeEffort', label: 'Claude effort', value: config.efforts.claude || 'default' },
-    { id: 'geminiEffort', label: 'Gemini effort', value: config.efforts.gemini || 'default' }
+    { id: 'geminiEffort', label: 'Gemini effort', value: config.efforts.gemini || 'default' },
+    { id: 'linearMode', label: 'Linear mode', value: studioLinearMode(config.linear) },
+    { id: 'linearAuth', label: 'Linear auth', value: config.linear.authMethod },
+    { id: 'linearWorkspace', label: 'Linear workspace', value: config.linear.workspaceStrategy },
+    { id: 'linearLimit', label: 'Linear limit', value: String(config.linear.limit) },
+    { id: 'linearConcurrency', label: 'Linear concurrency', value: String(config.linear.maxConcurrency) },
+    { id: 'linearAttempts', label: 'Linear attempts', value: String(config.linear.maxAttempts) },
+    { id: 'linearFilter', label: 'Linear filter', value: formatStudioLinearFilter(config.linear) }
   ];
 }
 
@@ -1770,6 +2122,22 @@ export function applyStudioSetting(config, settingId, direction = 1) {
     next.efforts.claude = cycleNullableValue(next.efforts.claude, STUDIO_EFFORTS.claude, direction);
   } else if (settingId === 'geminiEffort') {
     next.efforts.gemini = cycleNullableValue(next.efforts.gemini, STUDIO_EFFORTS.gemini, direction);
+  } else if (settingId === 'linearMode') {
+    const mode = cycleValue(studioLinearMode(next.linear), STUDIO_LINEAR_MODES, direction);
+    next.linear.enabled = mode !== 'off';
+    next.linear.watch = mode === 'watch';
+  } else if (settingId === 'linearAuth') {
+    next.linear.authMethod = cycleValue(next.linear.authMethod, STUDIO_LINEAR_AUTH_METHODS, direction);
+  } else if (settingId === 'linearWorkspace') {
+    next.linear.workspaceStrategy = cycleValue(next.linear.workspaceStrategy, STUDIO_LINEAR_WORKSPACE_STRATEGIES, direction);
+  } else if (settingId === 'linearLimit') {
+    next.linear.limit = Math.max(1, next.linear.limit + direction);
+  } else if (settingId === 'linearConcurrency') {
+    next.linear.maxConcurrency = Math.max(1, next.linear.maxConcurrency + direction);
+  } else if (settingId === 'linearAttempts') {
+    next.linear.maxAttempts = Math.max(1, next.linear.maxAttempts + direction);
+  } else if (settingId === 'linearFilter') {
+    next.linear.filterSlot = cycleValue(next.linear.filterSlot || 'issue', ['issue', 'query', 'team', 'state', 'media'], direction);
   }
 
   return sanitizeStudioConfig(next);
@@ -1814,6 +2182,7 @@ function sanitizeStudioConfig(config) {
 
   next.iterations = Math.max(1, Number(next.iterations) || 1);
   next.teamWork = Math.max(0, Number(next.teamWork) || 0);
+  next.linear = sanitizeStudioLinearConfig(next.linear || {});
 
   for (const engine of STUDIO_ENGINES) {
     next.teams[engine] = Math.max(0, Number(next.teams[engine] ?? next.teamWork) || 0);
@@ -1833,8 +2202,236 @@ function cloneStudioConfig(config) {
     models: { ...(config.models || {}) },
     efforts: { ...(config.efforts || {}) },
     permissions: { ...(config.permissions || {}) },
-    auths: { ...(config.auths || {}) }
+    auths: { ...(config.auths || {}) },
+    linear: cloneStudioLinearConfig(config.linear || {})
   };
+}
+
+function createStudioLinearConfig(delivery: any = {}) {
+  return sanitizeStudioLinearConfig({
+    enabled: Boolean(delivery.enabled),
+    watch: Boolean(delivery.watch),
+    issueIds: [...(delivery.issueIds || [])],
+    query: delivery.query || '',
+    team: delivery.team || '',
+    state: delivery.state || '',
+    assignee: delivery.assignee || '',
+    limit: delivery.limit ?? 3,
+    endpoint: delivery.endpoint || '',
+    authMethod: delivery.authMethod || 'api-key',
+    apiKeyEnv: delivery.apiKeyEnv || 'LINEAR_API_KEY',
+    oauthTokenEnv: delivery.oauthTokenEnv || 'LINEAR_OAUTH_TOKEN',
+    pollIntervalMs: delivery.pollIntervalMs ?? 60_000,
+    maxPolls: delivery.maxPolls ?? null,
+    maxConcurrency: delivery.maxConcurrency ?? 1,
+    maxAttempts: delivery.maxAttempts ?? 3,
+    retryBaseMs: delivery.retryBaseMs ?? 60_000,
+    stateFile: delivery.stateFile || '',
+    workspaceRoot: delivery.workspaceRoot || '',
+    observabilityDir: delivery.observabilityDir || '',
+    workspaceStrategy: delivery.workspaceStrategy || 'worktree',
+    workflowFile: delivery.workflowFile || '',
+    attachMedia: [...(delivery.attachMedia || [])],
+    attachmentTitle: delivery.attachmentTitle || '',
+    phases: delivery.phases?.length > 0
+      ? [...delivery.phases]
+      : [...DEFAULT_STUDIO_LINEAR_PHASES],
+    filterSlot: 'issue'
+  });
+}
+
+function sanitizeStudioLinearConfig(linear: any = {}) {
+  const next = cloneStudioLinearConfig(linear);
+  next.enabled = Boolean(next.enabled);
+  next.watch = Boolean(next.watch);
+  next.issueIds = normalizeStudioList(next.issueIds);
+  next.query = String(next.query || '').trim();
+  next.team = String(next.team || '').trim();
+  next.state = String(next.state || '').trim();
+  next.assignee = String(next.assignee || '').trim();
+  next.limit = Math.max(1, Number(next.limit) || 3);
+  next.endpoint = String(next.endpoint || '').trim();
+  next.authMethod = STUDIO_LINEAR_AUTH_METHODS.includes(next.authMethod)
+    ? next.authMethod
+    : 'api-key';
+  next.apiKeyEnv = String(next.apiKeyEnv || 'LINEAR_API_KEY').trim() || 'LINEAR_API_KEY';
+  next.oauthTokenEnv = String(next.oauthTokenEnv || 'LINEAR_OAUTH_TOKEN').trim() || 'LINEAR_OAUTH_TOKEN';
+  next.pollIntervalMs = Math.max(1_000, Number(next.pollIntervalMs) || 60_000);
+  next.maxPolls = next.maxPolls === null || next.maxPolls === undefined || next.maxPolls === ''
+    ? null
+    : Math.max(1, Number(next.maxPolls) || 1);
+  next.maxConcurrency = Math.max(1, Number(next.maxConcurrency) || 1);
+  next.maxAttempts = Math.max(1, Number(next.maxAttempts) || 3);
+  next.retryBaseMs = Math.max(1_000, Number(next.retryBaseMs) || 60_000);
+  next.stateFile = String(next.stateFile || '').trim();
+  next.workspaceRoot = String(next.workspaceRoot || '').trim();
+  next.observabilityDir = String(next.observabilityDir || '').trim();
+  next.workspaceStrategy = STUDIO_LINEAR_WORKSPACE_STRATEGIES.includes(next.workspaceStrategy)
+    ? next.workspaceStrategy
+    : 'worktree';
+  next.workflowFile = String(next.workflowFile || '').trim();
+  next.attachMedia = normalizeStudioList(next.attachMedia);
+  next.attachmentTitle = String(next.attachmentTitle || '').trim();
+  next.phases = normalizeStudioList(next.phases).length > 0
+    ? normalizeStudioList(next.phases)
+    : [...DEFAULT_STUDIO_LINEAR_PHASES];
+  next.filterSlot = ['issue', 'query', 'team', 'state', 'media'].includes(next.filterSlot)
+    ? next.filterSlot
+    : 'issue';
+  return next;
+}
+
+function cloneStudioLinearConfig(linear: any = {}) {
+  return {
+    ...linear,
+    issueIds: [...(linear.issueIds || [])],
+    attachMedia: [...(linear.attachMedia || [])],
+    phases: [...(linear.phases || DEFAULT_STUDIO_LINEAR_PHASES)]
+  };
+}
+
+function setStudioLinearField(config, field, value) {
+  const next = cloneStudioConfig(config);
+  if (field === 'issueIds' || field === 'attachMedia') {
+    next.linear[field] = normalizeStudioList(value);
+  } else {
+    next.linear[field] = String(value || '').trim();
+  }
+  next.linear.enabled = true;
+  return sanitizeStudioConfig(next);
+}
+
+export function buildStudioLinearDelivery(config, overrides: any = {}) {
+  const linear = sanitizeStudioLinearConfig({
+    ...(config.linear || {}),
+    ...overrides
+  });
+  return {
+    enabled: Boolean(linear.enabled || overrides.enabled),
+    setup: false,
+    status: false,
+    watch: Boolean(linear.watch),
+    issueIds: [...linear.issueIds],
+    query: linear.query || null,
+    team: linear.team || null,
+    state: linear.state || null,
+    assignee: linear.assignee || null,
+    limit: linear.limit,
+    endpoint: linear.endpoint || null,
+    authMethod: linear.authMethod,
+    apiKeyEnv: linear.apiKeyEnv,
+    oauthTokenEnv: linear.oauthTokenEnv,
+    phases: [...linear.phases],
+    pollIntervalMs: linear.pollIntervalMs,
+    maxPolls: linear.maxPolls,
+    maxConcurrency: linear.maxConcurrency,
+    maxAttempts: linear.maxAttempts,
+    retryBaseMs: linear.retryBaseMs,
+    stateFile: linear.stateFile || null,
+    workspaceRoot: linear.workspaceRoot || null,
+    observabilityDir: linear.observabilityDir || null,
+    workspaceStrategy: linear.workspaceStrategy,
+    workflowFile: linear.workflowFile || null,
+    attachMedia: [...linear.attachMedia],
+    attachmentTitle: linear.attachmentTitle || null
+  };
+}
+
+function createInitialStudioLinearStatus(linear, cwd, env: any = {}) {
+  const method = linear.authMethod || 'api-key';
+  const apiKeyEnv = linear.apiKeyEnv || 'LINEAR_API_KEY';
+  const oauthTokenEnv = linear.oauthTokenEnv || 'LINEAR_OAUTH_TOKEN';
+  const envName = method === 'oauth' ? oauthTokenEnv : apiKeyEnv;
+  const workspaceRoot = linear.workspaceRoot || '.council/linear-workspaces';
+  const observabilityDir = linear.observabilityDir || '.council/linear-observability';
+
+  return {
+    provider: 'linear',
+    configured: Boolean(String(env?.[envName] || '').trim()),
+    authMethod: method,
+    endpoint: linear.endpoint || 'https://api.linear.app/graphql',
+    apiKeyEnv,
+    oauthTokenEnv,
+    viewer: null,
+    authError: null,
+    stateFile: linear.stateFile || '.council/linear-delivery-state.json',
+    workspaceRoot,
+    observabilityLog: `${observabilityDir}/events.jsonl`,
+    state: null,
+    counts: {
+      total: 0,
+      delivered: 0,
+      running: 0,
+      retry_wait: 0,
+      failed: 0,
+      ineligible: 0
+    },
+    cwd
+  };
+}
+
+function studioLinearMode(linear: any = {}) {
+  if (!linear.enabled) {
+    return 'off';
+  }
+  return linear.watch ? 'watch' : 'deliver';
+}
+
+function formatStudioLinearFilter(linear: any = {}) {
+  const slot = linear.filterSlot || 'issue';
+  if (slot === 'issue') {
+    return `issue:${linear.issueIds?.join(',') || 'none'}`;
+  }
+  if (slot === 'query') {
+    return `query:${linear.query || 'none'}`;
+  }
+  if (slot === 'team') {
+    return `team:${linear.team || 'any'}`;
+  }
+  if (slot === 'state') {
+    return `state:${linear.state || 'any'}`;
+  }
+  return `media:${linear.attachMedia?.length || 0}`;
+}
+
+function formatStudioLinearCounts(counts: any = {}) {
+  return [
+    `total:${counts.total || 0}`,
+    `done:${counts.delivered || 0}`,
+    `run:${counts.running || 0}`,
+    `retry:${counts.retry_wait || 0}`,
+    `fail:${counts.failed || 0}`
+  ].join(',');
+}
+
+function formatStudioLinearEvent(event: any = {}) {
+  if (!event.type) {
+    return '';
+  }
+  if (event.issue?.key || event.issueId) {
+    return `${event.type}:${event.issue?.key || event.issueId}`;
+  }
+  if (event.phase) {
+    return `${event.type}:${event.phase}`;
+  }
+  if (event.poll) {
+    return `${event.type}:poll ${event.poll}`;
+  }
+  return event.type;
+}
+
+function normalizeStudioList(value) {
+  if (Array.isArray(value)) {
+    return value
+      .flatMap((entry) => String(entry || '').split(','))
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  return String(value || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 }
 
 function toggleStudioMember(config, engine) {
@@ -1934,16 +2531,18 @@ function calculateStudioPanelWidths(columns, compact = false) {
       menu: width,
       settings: width,
       agents: width,
+      linear: width,
       results: width
     };
   }
 
   const available = Math.max(90, columns - 3);
-  const menu = Math.max(18, Math.min(24, Math.floor(available * 0.18)));
-  const settings = Math.max(28, Math.min(36, Math.floor(available * 0.26)));
-  const agents = Math.max(26, Math.min(34, Math.floor(available * 0.23)));
-  const results = Math.max(28, available - menu - settings - agents);
-  return { menu, settings, agents, results };
+  const menu = Math.max(18, Math.min(25, Math.floor(available * 0.16)));
+  const settings = Math.max(28, Math.min(36, Math.floor(available * 0.23)));
+  const agents = Math.max(26, Math.min(32, Math.floor(available * 0.19)));
+  const linear = Math.max(28, Math.min(36, Math.floor(available * 0.20)));
+  const results = Math.max(30, available - menu - settings - agents - linear);
+  return { menu, settings, agents, linear, results };
 }
 
 function renderPromptWithCursor(value, cursorOffset) {

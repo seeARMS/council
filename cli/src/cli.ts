@@ -69,7 +69,7 @@ export async function main(argv = process.argv.slice(2)) {
   const ui = resolveUiOptions(parsed);
   const resolvedCwd = resolve(parsed.cwd);
 
-  if (parsed.delivery.setup || parsed.delivery.status) {
+  if (!parsed.studio && (parsed.delivery.setup || parsed.delivery.status)) {
     const status = await getLinearDeliveryStatus({
       cwd: resolvedCwd,
       delivery: parsed.delivery,
@@ -159,7 +159,7 @@ export async function main(argv = process.argv.slice(2)) {
   });
   const enrichedPrompt = buildPromptWithContext(initialPrompt, promptContext);
 
-  if (parsed.delivery.enabled) {
+  if (parsed.delivery.enabled && !interactiveMode) {
     const result = await runLinearDelivery({
       baseQuery: enrichedPrompt,
       cwd: resolvedCwd,
@@ -226,6 +226,7 @@ export async function main(argv = process.argv.slice(2)) {
       iterations: parsed.iterations,
       teamWork: parsed.teamWork,
       teams: parsed.teams,
+      delivery: parsed.delivery,
       promptContext,
       studio: parsed.studio,
       conversation: [],
