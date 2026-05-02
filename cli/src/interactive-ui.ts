@@ -45,9 +45,9 @@ const STUDIO_MENU = [
 const STUDIO_CODEX_SANDBOXES = ['read-only', 'workspace-write', 'danger-full-access'];
 const STUDIO_CLAUDE_PERMISSIONS = ['plan', 'default', 'acceptEdits', 'auto', 'dontAsk', 'bypassPermissions'];
 const STUDIO_AUTHS = {
-  codex: ['auto', 'login', 'api-key'],
-  claude: ['auto', 'oauth', 'api-key', 'keychain'],
-  gemini: ['auto', 'login', 'api-key']
+  codex: ['auto', 'social-login', 'login', 'api-key'],
+  claude: ['auto', 'social-login', 'oauth', 'api-key', 'keychain'],
+  gemini: ['auto', 'social-login', 'login', 'api-key']
 };
 const STUDIO_EFFORTS = {
   codex: [null, 'low', 'medium', 'high', 'xhigh'],

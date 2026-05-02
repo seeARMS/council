@@ -25,10 +25,11 @@ export async function fetchLinearIssues({
   limit = 3,
   endpoint = DEFAULT_LINEAR_ENDPOINT,
   apiKey,
+  authorization = apiKey,
   fetchFn = fetch
 }: any = {}) {
-  if (!apiKey) {
-    throw new Error('Linear delivery requires an API key. Set LINEAR_API_KEY or pass --linear-api-key-env.');
+  if (!authorization) {
+    throw new Error('Linear delivery requires credentials. Set LINEAR_API_KEY, use --linear-api-key-env, or select --linear-auth oauth with an OAuth token env var.');
   }
 
   if (issueIds.length > 0) {
@@ -37,7 +38,7 @@ export async function fetchLinearIssues({
       const issue = await fetchLinearIssueById({
         id: issueId,
         endpoint,
-        apiKey,
+        authorization,
         fetchFn
       });
       if (issue) {
@@ -49,7 +50,7 @@ export async function fetchLinearIssues({
 
   const data = await linearGraphql({
     endpoint,
-    apiKey,
+    authorization,
     fetchFn,
     query: `
       query CouncilLinearIssues($first: Int!, $filter: IssueFilter) {
@@ -69,10 +70,16 @@ export async function fetchLinearIssues({
   return normalizeLinearIssues(data?.issues?.nodes || []);
 }
 
-export async function fetchLinearIssueById({ id, endpoint = DEFAULT_LINEAR_ENDPOINT, apiKey, fetchFn = fetch }: any) {
+export async function fetchLinearIssueById({
+  id,
+  endpoint = DEFAULT_LINEAR_ENDPOINT,
+  apiKey,
+  authorization = apiKey,
+  fetchFn = fetch
+}: any) {
   const data = await linearGraphql({
     endpoint,
-    apiKey,
+    authorization,
     fetchFn,
     query: `
       query CouncilLinearIssue($id: String!) {
@@ -87,11 +94,40 @@ export async function fetchLinearIssueById({ id, endpoint = DEFAULT_LINEAR_ENDPO
   return data?.issue ? normalizeLinearIssue(data.issue) : null;
 }
 
-async function linearGraphql({ endpoint, apiKey, fetchFn, query, variables }) {
+export async function fetchLinearViewer({
+  endpoint = DEFAULT_LINEAR_ENDPOINT,
+  apiKey,
+  authorization = apiKey,
+  fetchFn = fetch
+}: any = {}) {
+  if (!authorization) {
+    return null;
+  }
+
+  const data = await linearGraphql({
+    endpoint,
+    authorization,
+    fetchFn,
+    query: `
+      query CouncilLinearViewer {
+        viewer {
+          id
+          name
+          email
+        }
+      }
+    `,
+    variables: {}
+  });
+
+  return data?.viewer || null;
+}
+
+async function linearGraphql({ endpoint, apiKey, authorization = apiKey, fetchFn, query, variables }: any) {
   const response = await fetchFn(endpoint, {
     method: 'POST',
     headers: {
-      authorization: apiKey,
+      authorization,
       'content-type': 'application/json'
     },
     body: JSON.stringify({ query, variables })

@@ -21,3 +21,4 @@ npm-debug.log*
 
 # Local AI CLI config
 .claude/settings.local.json
+.council/

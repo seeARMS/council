@@ -55,6 +55,9 @@ const OPTIONS = {
   'gemini-sub-agents': { type: 'string' },
   linear: { type: 'boolean' },
   'deliver-linear': { type: 'boolean' },
+  'linear-setup': { type: 'boolean' },
+  'linear-status': { type: 'boolean' },
+  'linear-watch': { type: 'boolean' },
   'linear-issue': { type: 'string' },
   'linear-query': { type: 'string' },
   'linear-team': { type: 'string' },
@@ -62,7 +65,19 @@ const OPTIONS = {
   'linear-assignee': { type: 'string' },
   'linear-limit': { type: 'string' },
   'linear-endpoint': { type: 'string' },
+  'linear-auth': { type: 'string' },
   'linear-api-key-env': { type: 'string' },
+  'linear-oauth-token-env': { type: 'string' },
+  'linear-poll-interval': { type: 'string' },
+  'linear-max-polls': { type: 'string' },
+  'linear-max-concurrency': { type: 'string' },
+  'linear-max-attempts': { type: 'string' },
+  'linear-retry-base': { type: 'string' },
+  'linear-state-file': { type: 'string' },
+  'linear-workspace-root': { type: 'string' },
+  'linear-observability-dir': { type: 'string' },
+  'linear-workspace-strategy': { type: 'string' },
+  'linear-workflow-file': { type: 'string' },
   'delivery-phases': { type: 'string' },
   timeout: { type: 'string' },
   'max-member-chars': { type: 'string' },
@@ -93,6 +108,8 @@ export function usageText(version) {
     '  council --effort high "Analyze the tradeoffs for this architecture"',
     '  council --planner codex --lead claude --handoff --iterations 2 "Plan and execute this change"',
     '  council --deliver-linear --linear-issue ABC-123 --lead codex',
+    '  council --linear-status',
+    '  council --deliver-linear --linear-watch --linear-team ENG --linear-state Todo',
     '',
     'Selection:',
     '  --members <list>          Ordered subset of codex,claude,gemini',
@@ -140,12 +157,32 @@ export function usageText(version) {
     '  --claude-sub-agents <n>   Claude-specific team size override',
     '  --gemini-sub-agents <n>   Gemini-specific team size override',
     '  --deliver-linear          Fetch Linear tasks and run delivery phases for each task',
+    '  --linear-setup            Print Linear integration setup and local status',
+    '  --linear-status           Print Linear integration status and local delivery state',
+    '  --linear-watch            Keep polling Linear for eligible tasks',
     '  --linear-issue <ids>      Comma-separated Linear issue IDs/keys to deliver',
     '  --linear-query <text>     Fetch matching Linear issues when explicit IDs are not provided',
     '  --linear-team <key>       Restrict Linear fetches to a team key',
     '  --linear-state <name>     Restrict Linear fetches to a state name',
     '  --linear-assignee <text>  Restrict Linear fetches to an assignee name/email',
     '  --linear-limit <n>        Max Linear issues to fetch (default: 3)',
+    '  --linear-auth <method>    Linear auth: api-key or oauth',
+    '  --linear-poll-interval <seconds>',
+    '                            Poll interval for --linear-watch (default: 60)',
+    '  --linear-max-polls <n>    Stop a watch run after n polls; omit to run until interrupted',
+    '  --linear-max-concurrency <n>',
+    '                            Max issues delivered concurrently (default: 1)',
+    '  --linear-max-attempts <n> Max retry attempts per issue (default: 3)',
+    '  --linear-workspace-root <path>',
+    '                            Directory for per-issue isolated workspaces',
+    '  --linear-workspace-strategy <worktree|copy|none>',
+    '                            Isolation strategy for issue workspaces',
+    '  --linear-state-file <path>',
+    '                            Persistent reconciliation/retry state file',
+    '  --linear-observability-dir <path>',
+    '                            JSONL event log directory',
+    '  --linear-workflow-file <path>',
+    '                            Optional repo workflow policy file to include in delivery prompts',
     '  --delivery-phases <list>  Comma-separated plan,implement,verify,ship',
     '',
     'Other:',
@@ -157,6 +194,7 @@ export function usageText(version) {
     '  COUNCIL_CLAUDE_BIN        Override the claude executable path',
     '  COUNCIL_GEMINI_BIN        Override the gemini executable path',
     '  LINEAR_API_KEY            Linear API key used by --deliver-linear',
+    '  LINEAR_OAUTH_TOKEN        Linear OAuth token used by --linear-auth oauth',
     '  CLAUDE_CODE_OAUTH_TOKEN   Use Claude OAuth-token auth (omits Claude --bare mode)',
     '  ANTHROPIC_API_KEY         Use Claude API-key auth (keeps Claude --bare mode)',
     '  CLAUDE_CODE_EFFORT_LEVEL  Claude effort fallback when no Claude effort flag is set'
@@ -362,10 +400,19 @@ function parseProviderAuths(values) {
 }
 
 function parseDeliveryOptions(values) {
-  const enabled = Boolean(values['deliver-linear'] || values.linear);
+  const enabled = Boolean(
+    values['deliver-linear'] ||
+    values.linear ||
+    values['linear-setup'] ||
+    values['linear-status'] ||
+    values['linear-watch']
+  );
   return {
     enabled,
     provider: enabled ? 'linear' : null,
+    setup: Boolean(values['linear-setup']),
+    status: Boolean(values['linear-status']),
+    watch: Boolean(values['linear-watch']),
     issueIds: parseOptionalList(values['linear-issue']),
     query: parseOptionalString(values['linear-query'], '--linear-query'),
     team: parseOptionalString(values['linear-team'], '--linear-team'),
@@ -375,8 +422,34 @@ function parseDeliveryOptions(values) {
       ? parsePositiveInteger(values['linear-limit'], '--linear-limit')
       : 3,
     endpoint: parseOptionalString(values['linear-endpoint'], '--linear-endpoint'),
+    authMethod: parseEnumValue(values['linear-auth'] ?? 'api-key', '--linear-auth', ['api-key', 'oauth']),
     apiKeyEnv: parseOptionalString(values['linear-api-key-env'], '--linear-api-key-env') || 'LINEAR_API_KEY',
-    phases: parseDeliveryPhases(values['delivery-phases'])
+    oauthTokenEnv: parseOptionalString(values['linear-oauth-token-env'], '--linear-oauth-token-env') || 'LINEAR_OAUTH_TOKEN',
+    phases: parseDeliveryPhases(values['delivery-phases']),
+    pollIntervalMs: values['linear-poll-interval']
+      ? parsePositiveSecondsMs(values['linear-poll-interval'], '--linear-poll-interval')
+      : 60_000,
+    maxPolls: values['linear-max-polls']
+      ? parsePositiveInteger(values['linear-max-polls'], '--linear-max-polls')
+      : null,
+    maxConcurrency: values['linear-max-concurrency']
+      ? parsePositiveInteger(values['linear-max-concurrency'], '--linear-max-concurrency')
+      : 1,
+    maxAttempts: values['linear-max-attempts']
+      ? parsePositiveInteger(values['linear-max-attempts'], '--linear-max-attempts')
+      : 3,
+    retryBaseMs: values['linear-retry-base']
+      ? parsePositiveSecondsMs(values['linear-retry-base'], '--linear-retry-base')
+      : 60_000,
+    stateFile: parseOptionalString(values['linear-state-file'], '--linear-state-file'),
+    workspaceRoot: parseOptionalString(values['linear-workspace-root'], '--linear-workspace-root'),
+    observabilityDir: parseOptionalString(values['linear-observability-dir'], '--linear-observability-dir'),
+    workspaceStrategy: parseEnumValue(
+      values['linear-workspace-strategy'] ?? 'worktree',
+      '--linear-workspace-strategy',
+      ['worktree', 'copy', 'none']
+    ),
+    workflowFile: parseOptionalString(values['linear-workflow-file'], '--linear-workflow-file')
   };
 }
 
@@ -486,6 +559,16 @@ function parseTimeoutMs(value) {
 
   if (!Number.isFinite(seconds) || seconds <= 0) {
     throw new Error(`Invalid timeout value: ${value}`);
+  }
+
+  return Math.round(seconds * 1000);
+}
+
+function parsePositiveSecondsMs(value, flagName) {
+  const seconds = Number(value);
+
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    throw new Error(`${flagName} requires a positive number of seconds.`);
   }
 
   return Math.round(seconds * 1000);

@@ -24,9 +24,9 @@ export const DEFAULT_PROVIDER_PERMISSIONS = {
   gemini: null
 };
 export const PROVIDER_AUTH_METHODS = {
-  codex: ['auto', 'login', 'api-key'],
-  claude: ['auto', 'oauth', 'api-key', 'keychain'],
-  gemini: ['auto', 'login', 'api-key']
+  codex: ['auto', 'social-login', 'login', 'api-key'],
+  claude: ['auto', 'social-login', 'oauth', 'api-key', 'keychain'],
+  gemini: ['auto', 'social-login', 'login', 'api-key']
 };
 export const DEFAULT_PROVIDER_AUTHS = {
   codex: 'auto',
@@ -499,7 +499,7 @@ function shouldUseClaudeBareMode(env, auth = 'auto') {
     return true;
   }
 
-  if (auth === 'oauth' || auth === 'keychain') {
+  if (auth === 'social-login' || auth === 'oauth' || auth === 'keychain') {
     return false;
   }
 

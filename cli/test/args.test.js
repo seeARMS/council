@@ -163,18 +163,18 @@ test('parses provider-specific permission flags', () => {
 test('parses provider-specific auth flags', () => {
   const parsed = parseArgs([
     '--codex-auth',
-    'api-key',
+    'social-login',
     '--claude-auth',
-    'oauth',
+    'social-login',
     '--gemini-auth',
-    'login',
+    'social-login',
     'question'
   ]);
 
   assert.deepEqual(parsed.auths, {
-    codex: 'api-key',
-    claude: 'oauth',
-    gemini: 'login'
+    codex: 'social-login',
+    claude: 'social-login',
+    gemini: 'social-login'
   });
 });
 
@@ -211,6 +211,31 @@ test('parses Linear delivery options', () => {
     '2',
     '--linear-api-key-env',
     'TEST_LINEAR_KEY',
+    '--linear-auth',
+    'oauth',
+    '--linear-oauth-token-env',
+    'TEST_LINEAR_OAUTH',
+    '--linear-watch',
+    '--linear-poll-interval',
+    '5',
+    '--linear-max-polls',
+    '4',
+    '--linear-max-concurrency',
+    '2',
+    '--linear-max-attempts',
+    '5',
+    '--linear-retry-base',
+    '10',
+    '--linear-state-file',
+    '.state.json',
+    '--linear-workspace-root',
+    '.workspaces',
+    '--linear-observability-dir',
+    '.events',
+    '--linear-workspace-strategy',
+    'copy',
+    '--linear-workflow-file',
+    'WORKFLOW.md',
     '--delivery-phases',
     'plan,verify',
     'ship it'
@@ -223,7 +248,25 @@ test('parses Linear delivery options', () => {
   assert.equal(parsed.delivery.assignee, 'Dvir');
   assert.equal(parsed.delivery.limit, 2);
   assert.equal(parsed.delivery.apiKeyEnv, 'TEST_LINEAR_KEY');
+  assert.equal(parsed.delivery.authMethod, 'oauth');
+  assert.equal(parsed.delivery.oauthTokenEnv, 'TEST_LINEAR_OAUTH');
+  assert.equal(parsed.delivery.watch, true);
+  assert.equal(parsed.delivery.pollIntervalMs, 5_000);
+  assert.equal(parsed.delivery.maxPolls, 4);
+  assert.equal(parsed.delivery.maxConcurrency, 2);
+  assert.equal(parsed.delivery.maxAttempts, 5);
+  assert.equal(parsed.delivery.retryBaseMs, 10_000);
+  assert.equal(parsed.delivery.stateFile, '.state.json');
+  assert.equal(parsed.delivery.workspaceRoot, '.workspaces');
+  assert.equal(parsed.delivery.observabilityDir, '.events');
+  assert.equal(parsed.delivery.workspaceStrategy, 'copy');
+  assert.equal(parsed.delivery.workflowFile, 'WORKFLOW.md');
   assert.deepEqual(parsed.delivery.phases, ['plan', 'verify']);
+});
+
+test('parses Linear setup and status without delivery prompt text', () => {
+  assert.equal(parseArgs(['--linear-setup']).delivery.setup, true);
+  assert.equal(parseArgs(['--linear-status']).delivery.status, true);
 });
 
 test('parses workflow, iteration, and team-work flags', () => {

@@ -447,6 +447,31 @@ test('runEngine can force Claude OAuth auth mode', async () => {
   }
 });
 
+test('runEngine can force Claude social-login auth mode', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    claude: { member: { mode: 'echo-argv' } }
+  });
+
+  try {
+    const result = await runEngine('claude', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: {
+        ...fake.env,
+        ANTHROPIC_API_KEY: 'test-api-key'
+      },
+      auth: 'social-login'
+    });
+
+    assert.equal(result.status, 'ok');
+    const argv = JSON.parse(result.output);
+    assert.equal(argv.includes('--bare'), false);
+  } finally {
+    await fake.cleanup();
+  }
+});
+
 test('runEngine forwards CLAUDE_CODE_EFFORT_LEVEL to claude when no effort option is set', async () => {
   const fake = await createFakeCouncilEnvironment({
     claude: { member: { mode: 'echo-argv' } }

@@ -47,6 +47,10 @@ If you are working on the CLI from a git checkout, run `npm run build` in `cli/`
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md).
 
+## Contributors
+
+- [Dviros](https://github.com/Dviros)
+
 ## Security
 
 See [SECURITY.md](./SECURITY.md).

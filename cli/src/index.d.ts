@@ -6,9 +6,9 @@ export type EffortLevel = 'low' | 'medium' | 'high';
 export type ProviderEffortLevel = EffortLevel | 'xhigh' | 'max';
 export type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
 export type ClaudePermissionMode = 'acceptEdits' | 'auto' | 'bypassPermissions' | 'default' | 'dontAsk' | 'plan';
-export type CodexAuthMethod = 'auto' | 'login' | 'api-key';
-export type ClaudeAuthMethod = 'auto' | 'oauth' | 'api-key' | 'keychain';
-export type GeminiAuthMethod = 'auto' | 'login' | 'api-key';
+export type CodexAuthMethod = 'auto' | 'social-login' | 'login' | 'api-key';
+export type ClaudeAuthMethod = 'auto' | 'social-login' | 'oauth' | 'api-key' | 'keychain';
+export type GeminiAuthMethod = 'auto' | 'social-login' | 'login' | 'api-key';
 export type CouncilRole = 'planner' | 'lead' | 'lead+planner' | 'executor';
 
 export interface ProviderModels {
@@ -52,7 +52,22 @@ export interface DeliveryOptions {
   limit: number;
   endpoint?: string | null;
   apiKeyEnv: string;
+  authMethod: 'api-key' | 'oauth';
+  oauthTokenEnv: string;
   phases: string[];
+  setup: boolean;
+  status: boolean;
+  watch: boolean;
+  pollIntervalMs: number;
+  maxPolls: number | null;
+  maxConcurrency: number;
+  maxAttempts: number;
+  retryBaseMs: number;
+  stateFile?: string | null;
+  workspaceRoot?: string | null;
+  observabilityDir?: string | null;
+  workspaceStrategy: 'worktree' | 'copy' | 'none';
+  workflowFile?: string | null;
 }
 
 export interface CouncilWorkflow {
@@ -318,10 +333,13 @@ export function usageText(version: string): string;
 export function parseArgs(argv: string[]): ParsedArgs;
 export function runCouncil(options: RunCouncilOptions): Promise<CouncilResult>;
 export function runLinearDelivery(options?: any): Promise<any>;
+export function getLinearDeliveryStatus(options?: any): Promise<any>;
+export function renderLinearDeliveryStatus(status: any): string;
 export function renderDeliveryResult(result: any): string;
 export function renderDeliveryProgressEvent(event: any): string;
 export function buildDeliveryPhasePrompt(options: any): string;
 export function fetchLinearIssues(options?: any): Promise<any[]>;
+export function fetchLinearViewer(options?: any): Promise<any | null>;
 export function isCouncilSuccess(result: CouncilResult): boolean;
 export function runEngine(name: EngineName, options: RunEngineOptions): Promise<CouncilEngineResult>;
 export function buildMemberPrompt(query: string, options?: BuildPromptOptions): string;
@@ -341,9 +359,9 @@ export const PROVIDER_EFFORT_LEVELS: {
   readonly gemini: readonly EffortLevel[];
 };
 export const PROVIDER_AUTH_METHODS: {
-  readonly codex: readonly CodexAuthMethod[];
-  readonly claude: readonly ClaudeAuthMethod[];
-  readonly gemini: readonly GeminiAuthMethod[];
+  readonly codex: readonly ('auto' | 'social-login' | 'login' | 'api-key')[];
+  readonly claude: readonly ('auto' | 'social-login' | 'oauth' | 'api-key' | 'keychain')[];
+  readonly gemini: readonly ('auto' | 'social-login' | 'login' | 'api-key')[];
 };
 export const CODEX_SANDBOX_MODES: readonly CodexSandboxMode[];
 export const CLAUDE_PERMISSION_MODES: readonly ClaudePermissionMode[];

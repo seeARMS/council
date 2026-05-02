@@ -224,17 +224,26 @@ Use provider-specific auth preferences when you want Council or Studio mode to a
 
 ```bash
 council \
-  --codex-auth login \
+  --codex-auth social-login \
   --claude-auth oauth \
-  --gemini-auth api-key \
+  --gemini-auth social-login \
   "Review this plan"
 ```
 
-Codex auth preferences are `auto`, `login`, and `api-key`. Claude auth preferences are `auto`, `oauth`, `api-key`, and `keychain`; `api-key` forces Claude `--bare`, while `oauth` and `keychain` omit `--bare`. Gemini auth preferences are `auto`, `login`, and `api-key`. Studio exposes these settings directly in the Settings pane so you can change them before each run.
+Codex auth preferences are `auto`, `social-login`, `login`, and `api-key`. Claude auth preferences are `auto`, `social-login`, `oauth`, `api-key`, and `keychain`; `api-key` forces Claude `--bare`, while `social-login`, `oauth`, and `keychain` omit `--bare`. Gemini auth preferences are `auto`, `social-login`, `login`, and `api-key`. Studio exposes these settings directly in the Settings pane so you can change them before each run.
 
-## Linear delivery
+## Linear setup and delivery
 
-Council can optionally fetch Linear work and run each issue through delivery phases inspired by Symphony-style work orchestration:
+Council can connect to Linear with either a personal API key or an OAuth token. Check setup and local state without running any task:
+
+```bash
+council --linear-setup
+council --linear-status
+```
+
+Set `LINEAR_API_KEY` for API-key auth, or set `LINEAR_OAUTH_TOKEN` and pass `--linear-auth oauth`. Linear status reports whether auth is configured, the authenticated viewer when available, the persistent state file, the per-issue workspace root, and the JSONL observability log.
+
+Council can fetch Linear work and run each issue through delivery phases:
 
 ```bash
 council \
@@ -246,7 +255,7 @@ council \
   "Keep the patch small and open a PR when tests pass"
 ```
 
-Set `LINEAR_API_KEY` or use `--linear-api-key-env <env-var>`. If you do not pass explicit issue IDs, use `--linear-query`, `--linear-team`, `--linear-state`, `--linear-assignee`, and `--linear-limit` to fetch candidate tasks. Delivery phases default to `plan,implement,verify,ship`; override with `--delivery-phases`.
+If you do not pass explicit issue IDs, use `--linear-query`, `--linear-team`, `--linear-state`, `--linear-assignee`, and `--linear-limit` to fetch candidate tasks. Delivery phases default to `plan,implement,verify,ship`; override with `--delivery-phases`.
 
 Each Linear issue is normalized into a task prompt. Council then runs phase-specific prompts:
 
@@ -255,7 +264,34 @@ Each Linear issue is normalized into a task prompt. Council then runs phase-spec
 - `verify`: run tests, typechecks, builds, linters, or targeted checks and fix in-scope failures.
 - `ship`: inspect git state, scan for secrets, commit, push, open or update a GitHub PR, and leave Linear/GitHub-ready proof of work.
 
-This is intentionally a lightweight runner, not a long-running daemon. Symphony remains the better fit for continuous polling, per-issue isolated workspaces, retry queues, and service-level observability.
+For Symphony-style operation, run Council as a long-running Linear worker:
+
+```bash
+council \
+  --deliver-linear \
+  --linear-watch \
+  --linear-team ENG \
+  --linear-state Todo \
+  --linear-poll-interval 60 \
+  --linear-max-concurrency 2 \
+  --linear-max-attempts 3 \
+  --linear-workspace-strategy worktree \
+  --planner codex \
+  --lead claude \
+  --handoff \
+  --team-work 2 \
+  "Deliver each eligible Linear issue end to end"
+```
+
+Long-running Linear mode includes:
+
+- polling: `--linear-watch` keeps fetching eligible issues until interrupted; `--linear-max-polls` bounds a run for CI or testing.
+- isolated workspaces: each issue gets a workspace under `.council/linear-workspaces` by default. `worktree` creates a Git worktree and falls back to `copy`; `copy` clones the files without `.git`, `.council`, `node_modules`, or `dist`; `none` keeps the current `--cwd`.
+- retry and reconciliation: Council persists `.council/linear-delivery-state.json`, tracks attempts, schedules exponential backoff, skips delivered/running issues, and marks watched issues ineligible when they stop matching the current Linear query.
+- observability: every delivery event is appended as JSONL to `.council/linear-observability/events.jsonl`; `--json-stream` also streams lifecycle events to stdout.
+- workflow policy: if `WORKFLOW.md` exists, Council includes it in each phase prompt; override with `--linear-workflow-file`.
+
+Use `--linear-state-file`, `--linear-workspace-root`, and `--linear-observability-dir` to relocate the state, workspace, and event-log paths.
 
 ## Safe defaults
 
@@ -265,7 +301,7 @@ This is intentionally a lightweight runner, not a long-running daemon. Symphony 
 - `claude`: `claude -p --permission-mode plan --verbose --output-format stream-json --include-partial-messages --no-session-persistence`
 - `gemini`: `gemini -p "" --skip-trust --approval-mode plan --output-format json`
 
-For Claude, Council keeps `--bare` only when `ANTHROPIC_API_KEY` is set and `CLAUDE_CODE_OAUTH_TOKEN` is not set. OAuth-token auth and normal logged-in Claude Code auth omit `--bare` because Claude Code bare mode does not read OAuth or keychain credentials. The rest of the non-interactive plan-mode Claude invocation is preserved.
+For Claude, Council keeps `--bare` only when `ANTHROPIC_API_KEY` is set and OAuth/social/keychain auth is not selected or detected. OAuth-token auth, social-login auth, and normal logged-in Claude Code auth omit `--bare` because Claude Code bare mode does not read OAuth or keychain credentials. The rest of the non-interactive plan-mode Claude invocation is preserved.
 
 That keeps the default behavior closer to analysis than autonomous mutation.
 
@@ -282,6 +318,7 @@ That keeps the default behavior closer to analysis than autonomous mutation.
 - `COUNCIL_CLAUDE_BIN`: override the `claude` executable path
 - `COUNCIL_GEMINI_BIN`: override the `gemini` executable path
 - `LINEAR_API_KEY`: Linear API key used by `--deliver-linear`
+- `LINEAR_OAUTH_TOKEN`: Linear OAuth token used by `--linear-auth oauth`
 - `CLAUDE_CODE_OAUTH_TOKEN`: enables Claude Code OAuth-token auth and disables Claude's incompatible `--bare` mode
 - `CLAUDE_CODE_EFFORT_LEVEL`: used as Claude's `--effort` value when no Council effort flag is provided for Claude
 

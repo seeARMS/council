@@ -1,11 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import {
   buildDeliveryPhasePrompt,
+  getLinearDeliveryStatus,
   renderDeliveryProgressEvent,
+  renderLinearDeliveryStatus,
   runLinearDelivery
 } from '../src/delivery.js';
-import { fetchLinearIssues } from '../src/linear.js';
+import { fetchLinearIssues, fetchLinearViewer } from '../src/linear.js';
 
 const issue = {
   id: 'issue-id',
@@ -54,6 +59,29 @@ test('fetchLinearIssues fetches explicit Linear issue identifiers', async () => 
   assert.deepEqual(issues[0].labels, ['bug']);
 });
 
+test('fetchLinearViewer supports OAuth bearer authorization', async () => {
+  const viewer = await fetchLinearViewer({
+    authorization: 'Bearer test-oauth-token',
+    fetchFn: async (url, request) => {
+      assert.equal(request.headers.authorization, 'Bearer test-oauth-token');
+      return {
+        ok: true,
+        json: async () => ({
+          data: {
+            viewer: {
+              id: 'user-id',
+              name: 'Dvir',
+              email: 'dvir@example.com'
+            }
+          }
+        })
+      };
+    }
+  });
+
+  assert.equal(viewer.name, 'Dvir');
+});
+
 test('buildDeliveryPhasePrompt includes testing and GitHub delivery expectations', () => {
   const verify = buildDeliveryPhasePrompt({
     phase: 'verify',
@@ -77,93 +105,219 @@ test('buildDeliveryPhasePrompt includes testing and GitHub delivery expectations
 });
 
 test('runLinearDelivery runs phase-based council delivery for each issue', async () => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), 'council-delivery-'));
   const phaseQueries = [];
-  const result = await runLinearDelivery({
-    cwd: process.cwd(),
-    baseQuery: 'Keep it small',
-    delivery: {
-      issueIds: ['ENG-123'],
-      phases: ['plan', 'verify'],
-      apiKeyEnv: 'TEST_LINEAR_KEY'
-    },
-    env: {
-      TEST_LINEAR_KEY: 'test-linear-key'
-    },
-    fetchFn: async () => ({
-      ok: true,
-      json: async () => ({
-        data: {
-          issue: {
-            ...issue,
-            state: { name: issue.state },
-            labels: { nodes: [] }
+  try {
+    const result = await runLinearDelivery({
+      cwd: tempDir,
+      baseQuery: 'Keep it small',
+      delivery: {
+        issueIds: ['ENG-123'],
+        phases: ['plan', 'verify'],
+        apiKeyEnv: 'TEST_LINEAR_KEY',
+        workspaceStrategy: 'none'
+      },
+      env: {
+        TEST_LINEAR_KEY: 'test-linear-key'
+      },
+      fetchFn: async () => ({
+        ok: true,
+        json: async () => ({
+          data: {
+            issue: {
+              ...issue,
+              state: { name: issue.state },
+              labels: { nodes: [] }
+            }
           }
-        }
-      })
-    }),
-    runner: async (options) => {
-      phaseQueries.push(options.query);
-      return {
-        summary: {
-          status: 'ok',
-          name: options.lead,
-          output: 'done'
-        }
-      };
-    },
-    members: ['codex', 'gemini'],
-    planner: 'codex'
-  });
+        })
+      }),
+      runner: async (options) => {
+        assert.equal(options.env.TEST_LINEAR_KEY, 'test-linear-key');
+        phaseQueries.push(options.query);
+        return {
+          summary: {
+            status: 'ok',
+            name: options.lead,
+            output: 'done'
+          }
+        };
+      },
+      members: ['codex', 'gemini'],
+      planner: 'codex'
+    });
 
-  assert.equal(result.success, true);
-  assert.equal(result.issueCount, 1);
-  assert.equal(phaseQueries.length, 2);
-  assert.match(phaseQueries[0], /Council phase: plan/);
-  assert.match(phaseQueries[1], /Council phase: verify/);
+    assert.equal(result.success, true);
+    assert.equal(result.issueCount, 1);
+    assert.equal(phaseQueries.length, 2);
+    assert.match(phaseQueries[0], /Council phase: plan/);
+    assert.match(phaseQueries[1], /Council phase: verify/);
+    assert.match(await readFile(result.observabilityLog, 'utf8'), /delivery_started/);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
 });
 
 test('runLinearDelivery stops later phases after a failed phase', async () => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), 'council-delivery-'));
   const phases = [];
-  const result = await runLinearDelivery({
-    delivery: {
-      issueIds: ['ENG-123'],
-      phases: ['plan', 'implement', 'verify'],
-      apiKeyEnv: 'TEST_LINEAR_KEY'
-    },
-    env: {
-      TEST_LINEAR_KEY: 'test-linear-key'
-    },
-    fetchFn: async () => ({
-      ok: true,
-      json: async () => ({
-        data: {
-          issue: {
-            ...issue,
-            state: { name: issue.state },
-            labels: { nodes: [] }
+  try {
+    const result = await runLinearDelivery({
+      cwd: tempDir,
+      delivery: {
+        issueIds: ['ENG-123'],
+        phases: ['plan', 'implement', 'verify'],
+        apiKeyEnv: 'TEST_LINEAR_KEY',
+        workspaceStrategy: 'none'
+      },
+      env: {
+        TEST_LINEAR_KEY: 'test-linear-key'
+      },
+      fetchFn: async () => ({
+        ok: true,
+        json: async () => ({
+          data: {
+            issue: {
+              ...issue,
+              state: { name: issue.state },
+              labels: { nodes: [] }
+            }
           }
-        }
-      })
-    }),
-    runner: async (options) => {
-      const phase = /Council phase: (\w+)/.exec(options.query)?.[1];
-      phases.push(phase);
-      return {
-        summary: {
-          status: phase === 'implement' ? 'error' : 'ok',
-          name: options.lead,
-          output: 'phase result'
-        }
-      };
-    }
-  });
+        })
+      }),
+      runner: async (options) => {
+        const phase = /Council phase: (\w+)/.exec(options.query)?.[1];
+        phases.push(phase);
+        return {
+          summary: {
+            status: phase === 'implement' ? 'error' : 'ok',
+            name: options.lead,
+            output: 'phase result'
+          }
+        };
+      }
+    });
 
-  assert.equal(result.success, false);
-  assert.deepEqual(phases, ['plan', 'implement']);
-  assert.deepEqual(
-    result.issues[0].phases.map((phase) => phase.phase),
-    ['plan', 'implement']
-  );
+    assert.equal(result.success, false);
+    assert.deepEqual(phases, ['plan', 'implement']);
+    assert.deepEqual(
+      result.issues[0].phases.map((phase) => phase.phase),
+      ['plan', 'implement']
+    );
+    assert.equal(result.issues[0].status, 'retry_wait');
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('runLinearDelivery can poll repeatedly with isolated workspaces and retry state', async () => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), 'council-delivery-'));
+  const workspaces = [];
+  const events = [];
+  const phaseQueries = [];
+  try {
+    const result = await runLinearDelivery({
+      cwd: tempDir,
+      delivery: {
+        issueIds: ['ENG-123'],
+        phases: ['plan'],
+        apiKeyEnv: 'TEST_LINEAR_KEY',
+        watch: true,
+        maxPolls: 2,
+        pollIntervalMs: 1,
+        maxAttempts: 2,
+        retryBaseMs: 1,
+        workspaceStrategy: 'worktree'
+      },
+      env: {
+        TEST_LINEAR_KEY: 'test-linear-key'
+      },
+      fetchFn: async () => ({
+        ok: true,
+        json: async () => ({
+          data: {
+            issue: {
+              ...issue,
+              state: { name: issue.state },
+              labels: { nodes: [] }
+            }
+          }
+        })
+      }),
+      workspaceFactory: async ({ issue }) => {
+        const workspace = path.join(tempDir, 'workspace', issue.identifier);
+        workspaces.push(workspace);
+        return {
+          cwd: workspace,
+          strategy: 'worktree',
+          branch: `council/linear/${issue.identifier.toLowerCase()}`
+        };
+      },
+      sleepFn: async () => {},
+      nowFn: (() => {
+        let now = Date.parse('2026-05-02T00:00:00Z');
+        return () => {
+          now += 1000;
+          return now;
+        };
+      })(),
+      onEvent: (event) => events.push(event),
+      runner: async (options) => {
+        phaseQueries.push(options.query);
+        return {
+          summary: {
+            status: phaseQueries.length === 1 ? 'error' : 'ok',
+            name: options.lead,
+            output: 'phase result'
+          }
+        };
+      }
+    });
+
+    assert.equal(result.watch, true);
+    assert.equal(result.pollCount, 2);
+    assert.equal(phaseQueries.length, 2);
+    assert.equal(result.issues.at(-1).success, true);
+    assert.equal(workspaces.length, 2);
+    assert.equal(events.some((event) => event.type === 'delivery_retry_scheduled'), true);
+    const state = JSON.parse(await readFile(result.stateFile, 'utf8'));
+    assert.equal(state.issues['ENG-123'].status, 'delivered');
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('getLinearDeliveryStatus reports setup, viewer, and state counts', async () => {
+  const tempDir = await mkdtemp(path.join(tmpdir(), 'council-delivery-'));
+  try {
+    const status = await getLinearDeliveryStatus({
+      cwd: tempDir,
+      delivery: {
+        authMethod: 'oauth',
+        oauthTokenEnv: 'TEST_LINEAR_OAUTH'
+      },
+      env: {
+        TEST_LINEAR_OAUTH: 'oauth-token'
+      },
+      fetchFn: async () => ({
+        ok: true,
+        json: async () => ({
+          data: {
+            viewer: {
+              id: 'user-id',
+              name: 'Dvir'
+            }
+          }
+        })
+      })
+    });
+
+    assert.equal(status.configured, true);
+    assert.equal(status.viewer.name, 'Dvir');
+    assert.match(renderLinearDeliveryStatus(status), /Linear integration status/);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
 });
 
 test('renderDeliveryProgressEvent returns readable delivery progress', () => {

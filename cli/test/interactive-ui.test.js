@@ -253,11 +253,13 @@ test('studio settings cycle workflow values and keep roles valid', () => {
   const nextLead = applyStudioSetting(noLead, 'lead', 1);
   const moreIterations = applyStudioSetting(config, 'iterations', 1);
   const nextClaudeAuth = applyStudioSetting(config, 'claudeAuth', 1);
+  const oauthClaudeAuth = applyStudioSetting(nextClaudeAuth, 'claudeAuth', 1);
 
   assert.equal(noLead.lead, null);
   assert.equal(nextLead.lead, 'codex');
   assert.equal(moreIterations.iterations, 2);
-  assert.equal(nextClaudeAuth.auths.claude, 'oauth');
+  assert.equal(nextClaudeAuth.auths.claude, 'social-login');
+  assert.equal(oauthClaudeAuth.auths.claude, 'oauth');
 });
 
 test('studio pane movement reorders focused panes', () => {

@@ -15,10 +15,12 @@ export {
   DEFAULT_PROVIDER_AUTHS,
   DEFAULT_PROVIDER_TEAM_SIZES
 } from './engines.js';
-export { fetchLinearIssues } from './linear.js';
+export { fetchLinearIssues, fetchLinearViewer } from './linear.js';
 export {
   buildDeliveryPhasePrompt,
+  getLinearDeliveryStatus,
   renderDeliveryProgressEvent,
+  renderLinearDeliveryStatus,
   renderDeliveryResult,
   runLinearDelivery
 } from './delivery.js';

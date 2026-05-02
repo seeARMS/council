@@ -9,8 +9,10 @@ import {
 import { readPromptFromArgsAndStdin } from './utils.js';
 import { runCouncil } from './council.js';
 import {
+  getLinearDeliveryStatus,
   renderDeliveryProgressEvent,
   renderDeliveryResult,
+  renderLinearDeliveryStatus,
   runLinearDelivery
 } from './delivery.js';
 import { renderHumanResult } from './render.js';
@@ -56,6 +58,23 @@ export async function main(argv = process.argv.slice(2)) {
   }
 
   const ui = resolveUiOptions(parsed);
+  const resolvedCwd = resolve(parsed.cwd);
+
+  if (parsed.delivery.setup || parsed.delivery.status) {
+    const status = await getLinearDeliveryStatus({
+      cwd: resolvedCwd,
+      delivery: parsed.delivery,
+      env: process.env
+    });
+
+    if (ui.outputMode === 'json') {
+      process.stdout.write(`${JSON.stringify(status, null, 2)}\n`);
+    } else {
+      process.stdout.write(`${renderLinearDeliveryStatus(status)}\n`);
+    }
+    return;
+  }
+
   const interactiveMode = shouldUseInteractiveDashboard(ui);
   const initialPrompt = await readPromptFromArgsAndStdin(parsed.promptParts);
 
@@ -71,8 +90,6 @@ export async function main(argv = process.argv.slice(2)) {
       `${renderBanner({ colorEnabled: ui.stderrColor })}\n\n`
     );
   }
-
-  const resolvedCwd = resolve(parsed.cwd);
 
   if (parsed.delivery.enabled) {
     const result = await runLinearDelivery({
