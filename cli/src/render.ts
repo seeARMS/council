@@ -1,4 +1,8 @@
-import { formatDuration, renderSummaryFailure } from './presentation.js';
+import {
+  formatDuration,
+  formatWorkflowSummary,
+  renderSummaryFailure
+} from './presentation.js';
 
 export function renderHumanResult(result, { summaryOnly = false, verbose = false } = {}) {
   if (summaryOnly) {
@@ -18,6 +22,10 @@ export function renderHumanResult(result, { summaryOnly = false, verbose = false
   lines.push(
     `Members: ${successfulMembers.map((member) => member.name).join(', ') || 'none'}`
   );
+
+  if (result.workflow) {
+    lines.push(`Workflow: ${formatWorkflowSummary(result.workflow)}`);
+  }
 
   if (nonSuccessfulMembers.length > 0) {
     const skippedLine = `Skipped: ${nonSuccessfulMembers
@@ -40,7 +48,7 @@ export function renderHumanResult(result, { summaryOnly = false, verbose = false
   for (const member of successfulMembers) {
     lines.push('');
     lines.push(
-      `=== ${member.name} (${formatDuration(member.durationMs)}) ===`
+      `=== ${member.name}${formatRoleSuffix(member)} (${formatDuration(member.durationMs)}) ===`
     );
     lines.push(member.output);
   }
@@ -49,7 +57,7 @@ export function renderHumanResult(result, { summaryOnly = false, verbose = false
     for (const member of nonSuccessfulMembers) {
       lines.push('');
       lines.push(
-        `=== ${member.name} (${member.status}: ${member.detail}) ===`
+        `=== ${member.name}${formatRoleSuffix(member)} (${member.status}: ${member.detail}) ===`
       );
       lines.push(member.output || '(no output)');
     }
@@ -58,10 +66,24 @@ export function renderHumanResult(result, { summaryOnly = false, verbose = false
   lines.push('');
   lines.push(
     result.summary?.name
-      ? `=== synthesis via ${result.summary.name} (${formatDuration(result.summary.durationMs)}) ===`
+      ? `=== synthesis via ${result.summary.name}${formatRoleSuffix(result.summary)} (${formatDuration(result.summary.durationMs)}) ===`
       : '=== synthesis ==='
   );
   lines.push(result.summary?.status === 'ok' ? result.summary.output : renderSummaryFailure(result.summary));
 
   return lines.join('\n');
+}
+
+function formatRoleSuffix(result) {
+  const parts = [];
+
+  if (result.role) {
+    parts.push(result.role);
+  }
+
+  if (result.teamSize > 0) {
+    parts.push(`team:${result.teamSize}`);
+  }
+
+  return parts.length > 0 ? ` [${parts.join(',')}]` : '';
 }

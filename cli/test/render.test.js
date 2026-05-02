@@ -29,7 +29,7 @@ test('resolveUiOptions makes headless runs summary-only and suppresses the banne
 
 test('renderBanner includes the council title art', () => {
   const banner = renderBanner();
-  assert.match(banner, /____/);
+  assert.match(banner, /Council Studio/);
   assert.match(banner, /consult codex \+ claude \+ gemini/i);
 });
 
@@ -67,12 +67,26 @@ test('renderHumanResult shows summary failure details in summary-only mode', () 
 
 test('renderHumanResult uses actual newlines in text output', () => {
   const output = renderHumanResult({
+    workflow: {
+      handoff: true,
+      lead: 'codex',
+      planner: 'claude',
+      iterations: 2,
+      teamWork: 1,
+      teams: {
+        codex: 1,
+        claude: 0,
+        gemini: 0
+      }
+    },
     members: [
       {
         name: 'codex',
         status: 'ok',
         durationMs: 1_000,
-        output: 'member output'
+        output: 'member output',
+        role: 'lead',
+        teamSize: 1
       }
     ],
     summary: {
@@ -83,6 +97,7 @@ test('renderHumanResult uses actual newlines in text output', () => {
     }
   });
 
-  assert.match(output, /\n=== codex \(1\.0s\) ===\nmember output/);
+  assert.match(output, /Workflow: lead:codex \| planner:claude \| handoff:on \| iterations:2 \| team:codex:1/);
+  assert.match(output, /\n=== codex \[lead,team:1\] \(1\.0s\) ===\nmember output/);
   assert.match(output, /\n=== synthesis via codex \(2\.0s\) ===\nsummary output$/);
 });

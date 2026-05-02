@@ -7,6 +7,8 @@ export const ALL_ENGINES = ['codex', 'claude', 'gemini'];
 export const AUTO_SUMMARIZER = 'auto';
 export const DEFAULT_TIMEOUT_MS = 600_000;
 export const DEFAULT_MAX_MEMBER_CHARS = 12_000;
+export const DEFAULT_ITERATIONS = 1;
+export const DEFAULT_TEAM_SIZE = 0;
 export const DEFAULT_SUMMARIZER_ORDER = ['codex', 'claude', 'gemini'];
 export const EFFORT_LEVELS = ['low', 'medium', 'high'];
 export const PROVIDER_EFFORT_LEVELS = {
@@ -20,6 +22,11 @@ export const DEFAULT_PROVIDER_PERMISSIONS = {
   codex: 'read-only',
   claude: 'plan',
   gemini: null
+};
+export const DEFAULT_PROVIDER_TEAM_SIZES = {
+  codex: DEFAULT_TEAM_SIZE,
+  claude: DEFAULT_TEAM_SIZE,
+  gemini: DEFAULT_TEAM_SIZE
 };
 
 const GEMINI_THINKING_BUDGETS = {
@@ -73,15 +80,58 @@ export async function runEngine(
   return runGemini({ prompt, cwd, timeoutMs, env, effort, model, permission, onProgress });
 }
 
-export function buildMemberPrompt(query, { conversation = [] } = {}) {
+export function buildMemberPrompt(
+  query,
+  {
+    conversation = [],
+    role = 'executor',
+    lead = null,
+    planner = null,
+    iteration = 1,
+    totalIterations = DEFAULT_ITERATIONS,
+    handoff = false,
+    previousResponses = [],
+    planOutput = '',
+    teamSize = DEFAULT_TEAM_SIZE
+  } = {}
+) {
   const sections = [
     'You are one member of a multi-model council.',
+    `Council workflow: iteration ${iteration} of ${totalIterations}.`,
+    lead ? `Lead model: ${lead}.` : 'Lead model: auto.',
+    planner ? `Planner model: ${planner}.` : 'Planner model: none.',
+    `Your assigned role: ${role}.`,
+    roleInstruction(role),
     'Answer the user query directly.',
     'Do not introduce yourself.',
     'Do not describe your tools, environment, or capabilities unless the user explicitly asks.',
     'If the query is a quick test, acknowledge it briefly and answer in one sentence.',
     'Be concise unless the user asks for depth.'
   ];
+
+  if (teamSize > 0) {
+    sections.push(
+      '',
+      `Team work: you may coordinate up to ${teamSize} internal sub-agent${teamSize === 1 ? '' : 's'} or subtasks inside your own CLI if that helps. Fold their findings into one answer.`
+    );
+  }
+
+  if (handoff) {
+    sections.push(
+      '',
+      'Handoff mode is enabled. Treat earlier council outputs as working context, then hand your own best result forward.'
+    );
+  }
+
+  const plan = compactOptionalText(planOutput);
+  if (plan) {
+    sections.push('', 'Planner handoff:', plan);
+  }
+
+  const handoffContext = formatHandoffContext(previousResponses);
+  if (handoffContext) {
+    sections.push('', 'Earlier council handoffs:', handoffContext);
+  }
 
   const history = formatConversationHistory(conversation);
   if (history) {
@@ -95,7 +145,15 @@ export function buildMemberPrompt(query, { conversation = [] } = {}) {
 export function buildSummaryPrompt(
   query,
   responses,
-  { maxMemberChars = DEFAULT_MAX_MEMBER_CHARS, conversation = [] } = {}
+  {
+    maxMemberChars = DEFAULT_MAX_MEMBER_CHARS,
+    conversation = [],
+    lead = null,
+    planner = null,
+    iterations = DEFAULT_ITERATIONS,
+    handoff = false,
+    teams = DEFAULT_PROVIDER_TEAM_SIZES
+  } = {}
 ) {
   const responseBlocks = responses
     .map(
@@ -108,6 +166,10 @@ export function buildSummaryPrompt(
 
   const sections = [
     'You are synthesizing answers from multiple AI CLI tools.',
+    `Council workflow: ${iterations} iteration${iterations === 1 ? '' : 's'}, ${handoff ? 'handoff enabled' : 'parallel consultation'}.`,
+    lead ? `Lead model: ${lead}.` : 'Lead model: auto.',
+    planner ? `Planner model: ${planner}.` : 'Planner model: none.',
+    `Team sizes: ${formatTeamSizes(teams)}.`,
     'Produce one final answer to the original user query.',
     'Answer the query directly. Do not introduce yourself or describe your environment.',
     'Use the strongest points from the responses below.',
@@ -123,6 +185,42 @@ export function buildSummaryPrompt(
 
   sections.push('', 'Current user query:', query.trim(), '', 'Council member responses:', responseBlocks);
   return sections.join('\n');
+}
+
+function roleInstruction(role) {
+  if (role === 'planner') {
+    return 'Plan the work: identify the approach, risks, checkpoints, and useful handoffs for the executors.';
+  }
+
+  if (role === 'lead') {
+    return 'Lead the work: make the strongest direct attempt while watching for conflicts you may need to resolve in synthesis.';
+  }
+
+  if (role === 'lead+planner') {
+    return 'Plan and lead the work: produce a practical plan, then make the strongest direct attempt from that plan.';
+  }
+
+  return 'Execute the work: use any plan or handoff context, then produce your independent best answer.';
+}
+
+function compactOptionalText(text) {
+  return String(text || '').trim();
+}
+
+function formatHandoffContext(responses) {
+  return responses
+    .filter((response) => response?.status === 'ok' && compactOptionalText(response.output))
+    .map((response) =>
+      [
+        `### ${response.name}${response.role ? ` (${response.role})` : ''}`,
+        compactOptionalText(response.output)
+      ].join('\n')
+    )
+    .join('\n\n');
+}
+
+function formatTeamSizes(teams) {
+  return ALL_ENGINES.map((engine) => `${engine}:${teams?.[engine] ?? DEFAULT_TEAM_SIZE}`).join(', ');
 }
 
 export function parseClaudeOutput(stdout) {

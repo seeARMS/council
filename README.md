@@ -1,6 +1,6 @@
 # council
 
-A small open-source CLI that asks multiple AI coding CLIs (`codex`, `claude`, `gemini`) the same question in parallel and synthesizes their answers into one final response.
+A small open-source CLI that asks multiple AI coding CLIs (`codex`, `claude`, `gemini`) the same question and synthesizes their answers into one final response. It can run the tools in parallel, or coordinate planner/lead/executor workflows with handoffs, iterations, and provider team sizes.
 
 This repo holds two things:
 

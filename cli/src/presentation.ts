@@ -102,6 +102,18 @@ export function buildHotkeyParts(members, expanded = null) {
   return parts;
 }
 
+export function formatWorkflowSummary(workflow: any = {}) {
+  const parts = [
+    `lead:${workflow.lead || 'auto'}`,
+    `planner:${workflow.planner || 'none'}`,
+    workflow.handoff ? 'handoff:on' : 'handoff:off',
+    `iterations:${workflow.iterations || 1}`,
+    `team:${formatTeamSummary(workflow.teams)}`
+  ];
+
+  return parts.join(' | ');
+}
+
 export function buildSessionBlocks({
   headerText,
   state,
@@ -113,7 +125,9 @@ export function buildSessionBlocks({
     {
       id: 'header',
       kind: 'header',
-      text: headerText
+      text: headerText,
+      subtitle: formatWorkflowSummary(state.workflow),
+      iteration: state.iteration
     }
   ];
 
@@ -147,7 +161,7 @@ function buildMemberBlock(item, hotkey, expanded, now) {
     id: `row:${item.name}`,
     kind: 'result-row',
     color: colorForStatus(item.status),
-    headerText: `${hotkey}. ${statusToken(item.status)} ${item.name} (${formatElapsedWindow(item.startedAt, item.completedAt, now)})`,
+    headerText: `${hotkey}. ${statusToken(item.status)} ${item.name}${formatRoleSuffix(item)} (${formatElapsedWindow(item.startedAt, item.completedAt, now)})`,
     previewText,
     expanded: expanded.has(`member:${item.name}`) && Boolean(body),
     body
@@ -168,9 +182,32 @@ function buildSummaryBlock(item, hotkey, expanded, now) {
     id: 'row:summary',
     kind: 'result-row',
     color: colorForSummaryStatus(item.status),
-    headerText: `${hotkey}. ${statusToken(item.status)} ${label} (${formatElapsedWindow(item.startedAt, item.completedAt, now)})`,
+    headerText: `${hotkey}. ${statusToken(item.status)} ${label}${formatRoleSuffix(item)} (${formatElapsedWindow(item.startedAt, item.completedAt, now)})`,
     previewText,
     expanded: expanded.has('summary') && Boolean(body),
     body
   };
+}
+
+function formatRoleSuffix(item) {
+  const parts = [];
+
+  if (item.role) {
+    parts.push(item.role);
+  }
+
+  if (item.teamSize > 0) {
+    parts.push(`team:${item.teamSize}`);
+  }
+
+  return parts.length > 0 ? ` [${parts.join(',')}]` : '';
+}
+
+function formatTeamSummary(teams = {}) {
+  const entries = Object.entries(teams).filter(([, size]) => Number(size) > 0);
+  if (entries.length === 0) {
+    return '0';
+  }
+
+  return entries.map(([name, size]) => `${name}:${size}`).join(',');
 }

@@ -1,7 +1,8 @@
 import {
   colorForSummaryStatus,
   colorForStatus,
-  formatDuration
+  formatDuration,
+  formatWorkflowSummary
 } from './presentation.js';
 
 function style(text, ansiCode, enabled) {
@@ -44,13 +45,10 @@ export function resolveUiOptions(
 
 export function renderBanner({ colorEnabled = false } = {}) {
   const lines = [
-    '  ____   ___  _   _ _   _  ____ ___ _     ',
-    ' / ___| / _ \\| | | | \\ | |/ ___|_ _| |    ',
-    '| |    | | | | | | |  \\| | |    | || |    ',
-    '| |___ | |_| | |_| | |\\  | |___ | || |___ ',
-    ' \\____| \\___/ \\___/|_| \\_|\\____|___|_____|',
-    '',
-    ' consult codex + claude + gemini, then synthesize once'
+    '+-- Council Studio --------------------------------------+',
+    '| consult codex + claude + gemini, then synthesize once |',
+    '| plan -> execute -> handoff -> synthesize              |',
+    '+--------------------------------------------------------+'
   ];
 
   const palette = ['36', '36', '94', '94', '33', '90'];
@@ -62,9 +60,19 @@ export function renderBanner({ colorEnabled = false } = {}) {
 export function renderProgressEvent(event, { colorEnabled = false } = {}) {
   switch (event.type) {
     case 'run_started':
-      return style(`Council is consulting: ${event.members.join(', ')}`, '36', colorEnabled);
+      return style(
+        `Council Studio: ${event.members.join(', ')} | ${formatWorkflowSummary(event.workflow)}`,
+        '36',
+        colorEnabled
+      );
+    case 'iteration_started':
+      return style(
+        `[iter] ${event.iteration}/${event.totalIterations} ${event.workflow?.handoff ? 'handoff' : 'parallel'} pass`,
+        '36',
+        colorEnabled
+      );
     case 'member_started':
-      return style(`[run] ${event.name}: thinking...`, '36', colorEnabled);
+      return style(`[run] ${event.name}${formatEventRole(event)}: thinking...`, '36', colorEnabled);
     case 'member_completed':
       return renderStatusLine(event.result, colorEnabled);
     case 'member_progress':
@@ -72,7 +80,7 @@ export function renderProgressEvent(event, { colorEnabled = false } = {}) {
     case 'member_heartbeat':
       return style(`[wait] ${event.name} still running (${formatDuration(event.elapsedMs)})`, '90', colorEnabled);
     case 'summary_started':
-      return style(`[sum] ${event.name}: synthesizing...`, '33', colorEnabled);
+      return style(`[sum] ${event.name}${formatEventRole(event)}: synthesizing...`, '33', colorEnabled);
     case 'summary_progress':
       return style(`[wait] synthesis via ${event.name}: ${event.detail}`, '90', colorEnabled);
     case 'summary_heartbeat':
@@ -88,6 +96,20 @@ export function renderProgressEvent(event, { colorEnabled = false } = {}) {
     default:
       return '';
   }
+}
+
+function formatEventRole(event) {
+  const parts = [];
+
+  if (event.role) {
+    parts.push(event.role);
+  }
+
+  if (event.teamSize > 0) {
+    parts.push(`team:${event.teamSize}`);
+  }
+
+  return parts.length > 0 ? ` [${parts.join(',')}]` : '';
 }
 
 function renderStatusLine(result, colorEnabled) {

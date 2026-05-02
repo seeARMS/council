@@ -168,3 +168,50 @@ test('validates provider-specific permission values', () => {
     /Unsupported --claude-permission-mode value/
   );
 });
+
+test('parses workflow, iteration, and team-work flags', () => {
+  const parsed = parseArgs([
+    '--planner',
+    'codex',
+    '--lead',
+    'claude',
+    '--handoff',
+    '--iterations',
+    '3',
+    '--team-work',
+    '2',
+    '--codex-sub-agents',
+    '4',
+    'question'
+  ]);
+
+  assert.equal(parsed.planner, 'codex');
+  assert.equal(parsed.lead, 'claude');
+  assert.equal(parsed.handoff, true);
+  assert.equal(parsed.iterations, 3);
+  assert.equal(parsed.teamWork, 2);
+  assert.deepEqual(parsed.teams, {
+    codex: 4,
+    claude: null,
+    gemini: null
+  });
+});
+
+test('validates workflow role and numeric flags', () => {
+  assert.throws(
+    () => parseArgs(['--lead', 'llama', 'q']),
+    /Unsupported --lead value/
+  );
+  assert.throws(
+    () => parseArgs(['--no-claude', '--lead', 'claude', 'q']),
+    /--lead must be one of the enabled members/
+  );
+  assert.throws(
+    () => parseArgs(['--iterations', '0', 'q']),
+    /--iterations requires a positive integer/
+  );
+  assert.throws(
+    () => parseArgs(['--team-work=-1', 'q']),
+    /--team-work requires a non-negative integer/
+  );
+});

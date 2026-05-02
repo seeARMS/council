@@ -81,6 +81,12 @@ export async function main(argv = process.argv.slice(2)) {
       models: parsed.models,
       efforts: parsed.efforts,
       permissions: parsed.permissions,
+      handoff: parsed.handoff,
+      lead: parsed.lead,
+      planner: parsed.planner,
+      iterations: parsed.iterations,
+      teamWork: parsed.teamWork,
+      teams: parsed.teams,
       conversation: [],
       onEvent: undefined
     });
@@ -102,6 +108,12 @@ export async function main(argv = process.argv.slice(2)) {
     models: parsed.models,
     efforts: parsed.efforts,
     permissions: parsed.permissions,
+    handoff: parsed.handoff,
+    lead: parsed.lead,
+    planner: parsed.planner,
+    iterations: parsed.iterations,
+    teamWork: parsed.teamWork,
+    teams: parsed.teams,
     conversation: [],
     onEvent: (event) => {
       if (ui.outputMode === 'json-stream') {

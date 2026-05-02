@@ -25,6 +25,7 @@ Agent CLIs are useful, but each one has different strengths, safety controls, an
 - fans out a prompt to several tools in parallel
 - keeps the primary interaction read-only by default
 - synthesizes the responses with one final model
+- can promote one model to planner, another to lead, and pass handoffs between executor members
 - supports human-friendly interactive output and automation-friendly headless output
 
 ## Install
@@ -70,6 +71,17 @@ Pick a specific summarizer:
 
 ```bash
 council --summarizer claude "Compare these two designs"
+```
+
+Run a coordinated workflow with a planner, lead, two iterations, and handoffs:
+
+```bash
+council \
+  --planner codex \
+  --lead claude \
+  --handoff \
+  --iterations 2 \
+  "Plan and implement this change"
 ```
 
 Run against another project directory:
@@ -138,6 +150,37 @@ council --members codex,gemini "Compare these responses"
 ```
 
 `--members` preserves the order you pass. If you later re-enable another member with a toggle such as `--claude`, it is appended after that explicit list.
+
+## Workflow design
+
+By default, Council still asks every enabled member in parallel and then synthesizes once. The workflow flags turn that into a more structured terminal workbench:
+
+```bash
+council \
+  --members codex,claude,gemini \
+  --planner codex \
+  --lead claude \
+  --handoff \
+  --iterations 3 \
+  --team-work 2 \
+  "Investigate the flaky test and propose a patch"
+```
+
+- `--planner <codex|claude|gemini>` runs that member first and passes its plan to the remaining executor members.
+- `--lead <codex|claude|gemini>` marks the lead member and makes it the first auto-synthesis candidate when it succeeds.
+- `--handoff` runs members in order and passes earlier member outputs to later members.
+- `--iterations <n>` repeats the consultation loop `n` times for the same prompt, feeding the previous round into the next.
+- `--team-work <n>` tells each provider it may coordinate up to `n` internal sub-agents or subtasks inside its own CLI.
+
+Use provider-specific team overrides when one model should fan out more or less than the others:
+
+```bash
+council \
+  --team-work 1 \
+  --codex-sub-agents 3 \
+  --claude-sub-agents 2 \
+  "Review this refactor"
+```
 
 ## Model and effort selection
 

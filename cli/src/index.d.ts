@@ -6,6 +6,7 @@ export type EffortLevel = 'low' | 'medium' | 'high';
 export type ProviderEffortLevel = EffortLevel | 'xhigh' | 'max';
 export type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access';
 export type ClaudePermissionMode = 'acceptEdits' | 'auto' | 'bypassPermissions' | 'default' | 'dontAsk' | 'plan';
+export type CouncilRole = 'planner' | 'lead' | 'lead+planner' | 'executor';
 
 export interface ProviderModels {
   codex?: string | null;
@@ -23,6 +24,21 @@ export interface ProviderPermissions {
   codex?: CodexSandboxMode | null;
   claude?: ClaudePermissionMode | null;
   gemini?: null;
+}
+
+export interface ProviderTeamSizes {
+  codex?: number | null;
+  claude?: number | null;
+  gemini?: number | null;
+}
+
+export interface CouncilWorkflow {
+  handoff: boolean;
+  lead: EngineName | null;
+  planner: EngineName | null;
+  iterations: number;
+  teamWork: number;
+  teams: ProviderTeamSizes;
 }
 
 export interface ConversationTurn {
@@ -47,6 +63,12 @@ export interface ParsedArgs {
   models: ProviderModels;
   efforts: ProviderEfforts;
   permissions: ProviderPermissions;
+  handoff: boolean;
+  lead: EngineName | null;
+  planner: EngineName | null;
+  iterations: number;
+  teamWork: number;
+  teams: ProviderTeamSizes;
   timeoutMs: number;
   maxMemberChars: number;
   cwd: string;
@@ -69,6 +91,10 @@ export interface CouncilEngineResult {
   stdout?: string;
   stderr?: string;
   output?: string;
+  role?: CouncilRole;
+  iteration?: number;
+  totalIterations?: number;
+  teamSize?: number;
 }
 
 export interface RunEngineOptions {
@@ -84,10 +110,21 @@ export interface RunEngineOptions {
 
 export interface BuildPromptOptions {
   conversation?: ConversationTurn[];
+  role?: CouncilRole;
+  lead?: EngineName | null;
+  planner?: EngineName | null;
+  iteration?: number;
+  totalIterations?: number;
+  handoff?: boolean;
+  previousResponses?: CouncilEngineResult[];
+  planOutput?: string;
+  teamSize?: number;
 }
 
 export interface BuildSummaryPromptOptions extends BuildPromptOptions {
   maxMemberChars?: number;
+  iterations?: number;
+  teams?: ProviderTeamSizes;
 }
 
 export interface RunCouncilOptions {
@@ -101,6 +138,12 @@ export interface RunCouncilOptions {
   models?: ProviderModels;
   efforts?: ProviderEfforts;
   permissions?: ProviderPermissions;
+  handoff?: boolean;
+  lead?: EngineName | null;
+  planner?: EngineName | null;
+  iterations?: number;
+  teamWork?: number;
+  teams?: ProviderTeamSizes;
   conversation?: ConversationTurn[];
   env?: Record<string, string | undefined>;
   onEvent?: (event: CouncilEvent) => void;
@@ -115,6 +158,12 @@ export interface CouncilResult {
   models: ProviderModels;
   efforts: ProviderEfforts;
   permissions: ProviderPermissions;
+  workflow: CouncilWorkflow;
+  iterations: number;
+  iterationResults: Array<{
+    iteration: number;
+    members: CouncilEngineResult[];
+  }>;
   members: CouncilEngineResult[];
   summaryAttempts: CouncilEngineResult[];
   summary: CouncilEngineResult;
@@ -136,18 +185,43 @@ export interface RunStartedEvent {
   models: ProviderModels;
   efforts: ProviderEfforts;
   permissions: ProviderPermissions;
+  workflow: CouncilWorkflow;
+}
+
+export interface IterationStartedEvent {
+  type: 'iteration_started';
+  at: string;
+  iteration: number;
+  totalIterations: number;
+  workflow: CouncilWorkflow;
+}
+
+export interface IterationCompletedEvent {
+  type: 'iteration_completed';
+  at: string;
+  iteration: number;
+  totalIterations: number;
+  members: CouncilEngineResult[];
 }
 
 export interface MemberStartedEvent {
   type: 'member_started';
   at: string;
   name: EngineName;
+  role: CouncilRole;
+  iteration: number;
+  totalIterations: number;
+  teamSize: number;
 }
 
 export interface MemberProgressEvent {
   type: 'member_progress' | 'member_heartbeat';
   at: string;
   name: EngineName;
+  role?: CouncilRole;
+  iteration?: number;
+  totalIterations?: number;
+  teamSize?: number;
   detail?: string;
   elapsedMs?: number;
 }
@@ -162,12 +236,20 @@ export interface SummaryStartedEvent {
   type: 'summary_started';
   at: string;
   name: EngineName;
+  role: CouncilRole;
+  iteration: number;
+  totalIterations: number;
+  teamSize: number;
 }
 
 export interface SummaryProgressEvent {
   type: 'summary_progress' | 'summary_heartbeat';
   at: string;
   name: EngineName;
+  role?: CouncilRole;
+  iteration?: number;
+  totalIterations?: number;
+  teamSize?: number;
   detail?: string;
   elapsedMs?: number;
 }
@@ -187,6 +269,8 @@ export interface RunCompletedEvent {
 
 export type CouncilEvent =
   | RunStartedEvent
+  | IterationStartedEvent
+  | IterationCompletedEvent
   | MemberStartedEvent
   | MemberProgressEvent
   | MemberCompletedEvent
@@ -208,6 +292,8 @@ export function buildSummaryPrompt(
 ): string;
 export function exitCodeForResult(result: CouncilResult): number;
 export function renderHumanResult(result: CouncilResult, options?: RenderHumanResultOptions): string;
+export const DEFAULT_ITERATIONS: 1;
+export const DEFAULT_TEAM_SIZE: 0;
 export const EFFORT_LEVELS: readonly EffortLevel[];
 export const PROVIDER_EFFORT_LEVELS: {
   readonly codex: readonly ('low' | 'medium' | 'high' | 'xhigh')[];
@@ -220,6 +306,11 @@ export const DEFAULT_PROVIDER_PERMISSIONS: {
   readonly codex: 'read-only';
   readonly claude: 'plan';
   readonly gemini: null;
+};
+export const DEFAULT_PROVIDER_TEAM_SIZES: {
+  readonly codex: 0;
+  readonly claude: 0;
+  readonly gemini: 0;
 };
 export const EXIT_CODES: {
   readonly OK: 0;

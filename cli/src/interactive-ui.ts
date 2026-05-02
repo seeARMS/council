@@ -63,6 +63,12 @@ function SessionApp({
   models = {},
   efforts = {},
   permissions = {},
+  handoff = false,
+  lead = null,
+  planner = null,
+  iterations = 1,
+  teamWork = 0,
+  teams = {},
   conversation = [],
   onEvent
 }) {
@@ -139,6 +145,12 @@ function SessionApp({
       models,
       efforts,
       permissions,
+      handoff,
+      lead,
+      planner,
+      iterations,
+      teamWork,
+      teams,
       conversation: conversationRef.current,
       onEvent: (event) => {
         if (cancelled) return;
@@ -208,6 +220,12 @@ function SessionApp({
     models,
     efforts,
     permissions,
+    handoff,
+    lead,
+    planner,
+    iterations,
+    teamWork,
+    teams,
     maxMemberChars,
     members,
     onEvent,
@@ -455,10 +473,19 @@ function PromptComposer({
 
 function SessionBlock({ block }) {
   if (block.kind === 'header') {
+    const iterationText = block.iteration?.total > 1
+      ? `iteration ${block.iteration.current}/${block.iteration.total}`
+      : null;
+
     return h(
       Box,
       { flexDirection: 'column' },
-      h(Text, { color: 'cyan' }, block.text)
+      h(Text, { color: 'cyan' }, block.text),
+      h(
+        Text,
+        { color: 'gray' },
+        [iterationText, block.subtitle].filter(Boolean).join(' | ')
+      )
     );
   }
 
@@ -561,8 +588,8 @@ export function buildInteractiveBlocks({
   return buildSessionBlocks({
     headerText:
       phase === 'running'
-        ? `Council is consulting: ${members.join(', ')}`
-        : `Council consulted: ${members.join(', ')}`,
+        ? `Council Studio: consulting ${members.join(', ')}`
+        : `Council Studio: consulted ${members.join(', ')}`,
     state,
     members,
     expanded,

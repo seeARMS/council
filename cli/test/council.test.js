@@ -119,7 +119,16 @@ test('runCouncil emits lifecycle events for members and synthesis', async () => 
       }
     });
 
-    assert.deepEqual(events, ['run_started', 'member_started', 'member_completed', 'summary_started', 'summary_completed', 'run_completed']);
+    assert.deepEqual(events, [
+      'run_started',
+      'iteration_started',
+      'member_started',
+      'member_completed',
+      'iteration_completed',
+      'summary_started',
+      'summary_completed',
+      'run_completed'
+    ]);
   } finally {
     await fake.cleanup();
   }
@@ -182,6 +191,97 @@ test('runCouncil applies provider-specific model, effort, and permission overrid
       claude: 'acceptEdits',
       gemini: null
     });
+  } finally {
+    await fake.cleanup();
+  }
+});
+
+test('runCouncil assigns planner, lead, executor, and team roles', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    codex: {
+      member: { output: 'codex plan' },
+      summary: { output: 'summary via codex' }
+    },
+    claude: {
+      member: { output: 'claude lead answer' },
+      summary: { output: 'summary via claude lead' }
+    },
+    gemini: {
+      member: { output: 'gemini executor answer' }
+    }
+  });
+
+  try {
+    const result = await runCouncil({
+      query: 'Coordinate this',
+      cwd: process.cwd(),
+      members: ['codex', 'claude', 'gemini'],
+      summarizer: 'auto',
+      timeoutMs: 5_000,
+      env: fake.env,
+      planner: 'codex',
+      lead: 'claude',
+      teamWork: 2,
+      teams: {
+        codex: 4
+      }
+    });
+
+    assert.deepEqual(result.members.map((member) => member.name), [
+      'codex',
+      'claude',
+      'gemini'
+    ]);
+    assert.equal(result.members[0].role, 'planner');
+    assert.equal(result.members[0].teamSize, 4);
+    assert.equal(result.members[1].role, 'lead');
+    assert.equal(result.members[1].teamSize, 2);
+    assert.equal(result.members[2].role, 'executor');
+    assert.equal(result.summary.name, 'claude');
+    assert.equal(result.summary.role, 'lead');
+    assert.deepEqual(result.workflow.teams, {
+      codex: 4,
+      claude: 2,
+      gemini: 2
+    });
+  } finally {
+    await fake.cleanup();
+  }
+});
+
+test('runCouncil repeats iterations and passes handoff context forward', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    codex: {
+      member: { mode: 'echo-prompt' },
+      summary: { output: 'summary via codex' }
+    },
+    claude: {
+      member: { mode: 'echo-prompt' }
+    }
+  });
+
+  try {
+    const result = await runCouncil({
+      query: 'Refine this',
+      cwd: process.cwd(),
+      members: ['codex', 'claude'],
+      summarizer: 'codex',
+      timeoutMs: 5_000,
+      env: fake.env,
+      planner: 'codex',
+      lead: 'claude',
+      handoff: true,
+      iterations: 2,
+      teamWork: 1
+    });
+
+    assert.equal(result.iterations, 2);
+    assert.equal(result.iterationResults.length, 2);
+    assert.equal(result.iterationResults[1].members[1].name, 'claude');
+    assert.match(result.iterationResults[1].members[1].output, /iteration 2 of 2/);
+    assert.match(result.iterationResults[1].members[1].output, /Earlier council handoffs:/);
+    assert.match(result.iterationResults[1].members[1].output, /### codex/);
+    assert.match(result.iterationResults[1].members[1].output, /Team work: you may coordinate up to 1 internal sub-agent/);
   } finally {
     await fake.cleanup();
   }

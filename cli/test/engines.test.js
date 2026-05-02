@@ -36,6 +36,36 @@ test('buildMemberPrompt includes recent conversation context for follow-up turns
   assert.match(prompt, /Current user query:\nWhat about the timeout\?/);
 });
 
+test('buildMemberPrompt includes role, iteration, handoff, and team context', () => {
+  const prompt = buildMemberPrompt('Ship it', {
+    role: 'lead',
+    lead: 'claude',
+    planner: 'codex',
+    iteration: 2,
+    totalIterations: 3,
+    handoff: true,
+    teamSize: 2,
+    planOutput: 'Inspect the failing test first.',
+    previousResponses: [
+      {
+        name: 'codex',
+        role: 'planner',
+        status: 'ok',
+        output: 'Use the smallest patch.'
+      }
+    ]
+  });
+
+  assert.match(prompt, /iteration 2 of 3/);
+  assert.match(prompt, /Lead model: claude/);
+  assert.match(prompt, /Planner model: codex/);
+  assert.match(prompt, /Your assigned role: lead/);
+  assert.match(prompt, /Team work: you may coordinate up to 2 internal sub-agents/);
+  assert.match(prompt, /Planner handoff:\nInspect the failing test first/);
+  assert.match(prompt, /Earlier council handoffs:/);
+  assert.match(prompt, /### codex \(planner\)/);
+});
+
 test('buildSummaryPrompt truncates long member outputs before summarization', () => {
   const prompt = buildSummaryPrompt(
     'What should we do?',
@@ -51,6 +81,34 @@ test('buildSummaryPrompt truncates long member outputs before summarization', ()
   );
 
   assert.match(prompt, /\[truncated by council after 20 characters\]/);
+});
+
+test('buildSummaryPrompt includes workflow context', () => {
+  const prompt = buildSummaryPrompt(
+    'What should we do?',
+    [
+      {
+        name: 'claude',
+        output: 'ship it'
+      }
+    ],
+    {
+      lead: 'claude',
+      planner: 'codex',
+      iterations: 2,
+      handoff: true,
+      teams: {
+        codex: 1,
+        claude: 2,
+        gemini: 0
+      }
+    }
+  );
+
+  assert.match(prompt, /2 iterations, handoff enabled/);
+  assert.match(prompt, /Lead model: claude/);
+  assert.match(prompt, /Planner model: codex/);
+  assert.match(prompt, /Team sizes: codex:1, claude:2, gemini:0/);
 });
 
 test('parseClaudeOutput extracts the final result from JSON', () => {

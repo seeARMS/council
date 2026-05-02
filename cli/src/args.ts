@@ -4,7 +4,9 @@ import {
   AUTO_SUMMARIZER,
   CLAUDE_PERMISSION_MODES,
   CODEX_SANDBOX_MODES,
+  DEFAULT_ITERATIONS,
   DEFAULT_MAX_MEMBER_CHARS,
+  DEFAULT_TEAM_SIZE,
   DEFAULT_TIMEOUT_MS,
   EFFORT_LEVELS,
   PROVIDER_EFFORT_LEVELS
@@ -36,6 +38,16 @@ const OPTIONS = {
   'gemini-effort': { type: 'string' },
   'codex-sandbox': { type: 'string' },
   'claude-permission-mode': { type: 'string' },
+  handoff: { type: 'boolean' },
+  lead: { type: 'string' },
+  planner: { type: 'string' },
+  iterations: { type: 'string' },
+  'team-work': { type: 'string' },
+  teamwork: { type: 'string' },
+  'sub-agents': { type: 'string' },
+  'codex-sub-agents': { type: 'string' },
+  'claude-sub-agents': { type: 'string' },
+  'gemini-sub-agents': { type: 'string' },
   timeout: { type: 'string' },
   'max-member-chars': { type: 'string' },
   cwd: { type: 'string' },
@@ -62,6 +74,7 @@ export function usageText(version) {
     '  council --headless --json "Summarize the implementation options"',
     '  council --json-stream --codex --claude "Compare these designs"',
     '  council --effort high "Analyze the tradeoffs for this architecture"',
+    '  council --planner codex --lead claude --handoff --iterations 2 "Plan and execute this change"',
     '',
     'Selection:',
     '  --members <list>          Ordered subset of codex,claude,gemini',
@@ -96,6 +109,14 @@ export function usageText(version) {
     `  --codex-sandbox <mode>    Codex sandbox: ${CODEX_SANDBOX_MODES.join(', ')}`,
     `  --claude-permission-mode <mode>`,
     `                            Claude permission mode: ${CLAUDE_PERMISSION_MODES.join(', ')}`,
+    '  --handoff                 Run members in order and pass each response to the next member',
+    '  --lead <name>             Lead model for final synthesis preference: codex, claude, or gemini',
+    '  --planner <name>          Planner model that runs before executor members',
+    `  --iterations <n>          Consultation rounds per prompt (default: ${DEFAULT_ITERATIONS})`,
+    `  --team-work <n>           Let each provider coordinate up to n internal sub-agents (default: ${DEFAULT_TEAM_SIZE})`,
+    '  --codex-sub-agents <n>    Codex-specific team size override',
+    '  --claude-sub-agents <n>   Claude-specific team size override',
+    '  --gemini-sub-agents <n>   Gemini-specific team size override',
     '',
     'Other:',
     '  -h, --help                Show help',
@@ -140,6 +161,14 @@ export function parseArgs(argv) {
     models: parseProviderModels(values),
     efforts: parseProviderEfforts(values),
     permissions: parseProviderPermissions(values),
+    handoff: Boolean(values.handoff),
+    lead: parseOptionalEngine(values.lead, '--lead'),
+    planner: parseOptionalEngine(values.planner, '--planner'),
+    iterations: values.iterations
+      ? parsePositiveInteger(values.iterations, '--iterations')
+      : DEFAULT_ITERATIONS,
+    teamWork: parseTeamWork(values),
+    teams: parseProviderTeams(values),
     timeoutMs: values.timeout
       ? parseTimeoutMs(values.timeout)
       : DEFAULT_TIMEOUT_MS,
@@ -198,6 +227,9 @@ export function parseArgs(argv) {
   if (result.members.length === 0) {
     throw new Error('At least one engine must be enabled.');
   }
+
+  validateSelectedRole(result.lead, '--lead', result.members);
+  validateSelectedRole(result.planner, '--planner', result.members);
 
   return result;
 }
@@ -287,6 +319,21 @@ function parseProviderPermissions(values) {
   };
 }
 
+function parseTeamWork(values) {
+  const value = values['team-work'] ?? values.teamwork ?? values['sub-agents'];
+  return value === undefined || value === null || value === ''
+    ? DEFAULT_TEAM_SIZE
+    : parseNonNegativeInteger(value, '--team-work');
+}
+
+function parseProviderTeams(values) {
+  return {
+    codex: parseOptionalNonNegativeInteger(values['codex-sub-agents'], '--codex-sub-agents'),
+    claude: parseOptionalNonNegativeInteger(values['claude-sub-agents'], '--claude-sub-agents'),
+    gemini: parseOptionalNonNegativeInteger(values['gemini-sub-agents'], '--gemini-sub-agents')
+  };
+}
+
 function parseProviderEffort(value, engine) {
   if (value === undefined || value === null || value === '') {
     return null;
@@ -329,6 +376,27 @@ function parseOptionalString(value, flagName) {
   throw new Error(`${flagName} requires a non-empty value.`);
 }
 
+function parseOptionalEngine(value, flagName) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const parsed = String(value).trim();
+  if (ALL_ENGINES.includes(parsed)) {
+    return parsed;
+  }
+
+  throw new Error(`Unsupported ${flagName} value: ${parsed} (expected ${ALL_ENGINES.join(', ')})`);
+}
+
+function validateSelectedRole(value, flagName, members) {
+  if (!value || members.includes(value)) {
+    return;
+  }
+
+  throw new Error(`${flagName} must be one of the enabled members: ${members.join(', ')}`);
+}
+
 function parseTimeoutMs(value) {
   const seconds = Number(value);
 
@@ -344,6 +412,24 @@ function parsePositiveInteger(value, flagName) {
 
   if (!Number.isInteger(parsed) || parsed <= 0) {
     throw new Error(`${flagName} requires a positive integer.`);
+  }
+
+  return parsed;
+}
+
+function parseOptionalNonNegativeInteger(value, flagName) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  return parseNonNegativeInteger(value, flagName);
+}
+
+function parseNonNegativeInteger(value, flagName) {
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`${flagName} requires a non-negative integer.`);
   }
 
   return parsed;
