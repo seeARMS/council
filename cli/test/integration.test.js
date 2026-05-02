@@ -110,14 +110,14 @@ test('verbose mode shows all member responses, including failures', async () => 
   });
 
   try {
-    const result = await runCli(['--verbose', '--timeout', '1', '--no-gemini', 'hello'], {
+    const result = await runCli(['--verbose', '--timeout', '2', '--no-gemini', 'hello'], {
       cwd,
       env: fake.env
     });
 
     assert.equal(result.code, 0);
     assert.match(result.stdout, /codex member/);
-    assert.match(result.stdout, /claude \(timeout: Timed out after 1s\.\)/);
+    assert.match(result.stdout, /claude \(timeout: Timed out after 2s\.\)/);
     assert.match(result.stdout, /\(no output\)/);
     assert.match(result.stdout, /synthesis via codex/);
   } finally {

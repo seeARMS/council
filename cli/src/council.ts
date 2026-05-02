@@ -19,20 +19,37 @@ export async function runCouncil(options: any = {}) {
   conversation = [],
   env = process.env,
   effort = null,
+  models = {},
+  efforts = {},
   onEvent = () => {}
   } = options;
+  const resolvedModels = resolveEngineSettings(models, null);
+  const resolvedEfforts = resolveEngineSettings(efforts, effort);
+
   emitEvent(onEvent, 'run_started', {
     cwd,
     members: [...members],
     summarizer,
-    effort
+    effort,
+    models: resolvedModels,
+    efforts: resolvedEfforts
   });
 
   const memberPrompt = buildMemberPrompt(query, {
     conversation
   });
   const memberRuns = await Promise.all(
-    members.map((name) => runMember(name, { prompt: memberPrompt, cwd, timeoutMs, env, effort, onEvent }))
+    members.map((name) =>
+      runMember(name, {
+        prompt: memberPrompt,
+        cwd,
+        timeoutMs,
+        env,
+        effort: resolvedEfforts[name],
+        model: resolvedModels[name],
+        onEvent
+      })
+    )
   );
   const successfulMembers = memberRuns.filter((result) => result.status === 'ok');
   const summaryAttempts = [];
@@ -51,7 +68,8 @@ export async function runCouncil(options: any = {}) {
         cwd,
         timeoutMs,
         env,
-        effort,
+        effort: resolvedEfforts[candidate],
+        model: resolvedModels[candidate],
         onEvent
       });
       summaryAttempts.push(attempt);
@@ -88,6 +106,8 @@ export async function runCouncil(options: any = {}) {
     membersRequested: [...members],
     summarizerRequested: summarizer,
     effort,
+    models: resolvedModels,
+    efforts: resolvedEfforts,
     members: memberRuns,
     summaryAttempts,
     summary,
@@ -131,7 +151,7 @@ function summarizeNoResponse(memberRuns) {
   return 'No council member produced a response.';
 }
 
-async function runMember(name, { prompt, cwd, timeoutMs, env, effort, onEvent }) {
+async function runMember(name, { prompt, cwd, timeoutMs, env, effort, model, onEvent }) {
   emitEvent(onEvent, 'member_started', {
     name
   });
@@ -144,6 +164,7 @@ async function runMember(name, { prompt, cwd, timeoutMs, env, effort, onEvent })
     timeoutMs,
     env,
     effort,
+    model,
     onEvent
   });
 
@@ -154,7 +175,7 @@ async function runMember(name, { prompt, cwd, timeoutMs, env, effort, onEvent })
   return result;
 }
 
-async function runSummaryAttempt(name, { prompt, cwd, timeoutMs, env, effort, onEvent }) {
+async function runSummaryAttempt(name, { prompt, cwd, timeoutMs, env, effort, model, onEvent }) {
   emitEvent(onEvent, 'summary_started', {
     name
   });
@@ -167,6 +188,7 @@ async function runSummaryAttempt(name, { prompt, cwd, timeoutMs, env, effort, on
     timeoutMs,
     env,
     effort,
+    model,
     onEvent
   });
 
@@ -209,7 +231,7 @@ async function runWithHeartbeat({ kind, name, onEvent, task }) {
   }
 }
 
-async function runEngineTask({ kind, name, prompt, cwd, timeoutMs, env, effort, onEvent }) {
+async function runEngineTask({ kind, name, prompt, cwd, timeoutMs, env, effort, model, onEvent }) {
   const startedAt = Date.now();
 
   try {
@@ -224,12 +246,23 @@ async function runEngineTask({ kind, name, prompt, cwd, timeoutMs, env, effort, 
           timeoutMs,
           env,
           effort,
+          model,
           onProgress
         })
     });
   } catch (error) {
     return unexpectedEngineFailure(name, error, Date.now() - startedAt);
   }
+}
+
+function resolveEngineSettings(overrides, fallback) {
+  const resolved = {};
+
+  for (const engine of ALL_ENGINES) {
+    resolved[engine] = overrides?.[engine] ?? fallback ?? null;
+  }
+
+  return resolved;
 }
 
 function unexpectedEngineFailure(name, error, durationMs) {

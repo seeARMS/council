@@ -3,6 +3,19 @@ export type SummarizerName = 'auto' | EngineName;
 export type ColorMode = 'auto' | 'always' | 'never';
 export type EngineStatus = 'ok' | 'missing' | 'timeout' | 'error';
 export type EffortLevel = 'low' | 'medium' | 'high';
+export type ProviderEffortLevel = EffortLevel | 'xhigh' | 'max';
+
+export interface ProviderModels {
+  codex?: string | null;
+  claude?: string | null;
+  gemini?: string | null;
+}
+
+export interface ProviderEfforts {
+  codex?: ProviderEffortLevel | null;
+  claude?: ProviderEffortLevel | null;
+  gemini?: EffortLevel | null;
+}
 
 export interface ConversationTurn {
   user: string;
@@ -23,6 +36,8 @@ export interface ParsedArgs {
   color: ColorMode;
   summarizer: SummarizerName;
   effort: EffortLevel | null;
+  models: ProviderModels;
+  efforts: ProviderEfforts;
   timeoutMs: number;
   maxMemberChars: number;
   cwd: string;
@@ -52,7 +67,8 @@ export interface RunEngineOptions {
   cwd?: string;
   timeoutMs?: number;
   env?: Record<string, string | undefined>;
-  effort?: EffortLevel | null;
+  effort?: ProviderEffortLevel | null;
+  model?: string | null;
   onProgress?: (progress: EngineProgress) => void;
 }
 
@@ -72,6 +88,8 @@ export interface RunCouncilOptions {
   timeoutMs?: number;
   maxMemberChars?: number;
   effort?: EffortLevel | null;
+  models?: ProviderModels;
+  efforts?: ProviderEfforts;
   conversation?: ConversationTurn[];
   env?: Record<string, string | undefined>;
   onEvent?: (event: CouncilEvent) => void;
@@ -83,6 +101,8 @@ export interface CouncilResult {
   membersRequested: EngineName[];
   summarizerRequested: SummarizerName;
   effort: EffortLevel | null;
+  models: ProviderModels;
+  efforts: ProviderEfforts;
   members: CouncilEngineResult[];
   summaryAttempts: CouncilEngineResult[];
   summary: CouncilEngineResult;
@@ -101,6 +121,8 @@ export interface RunStartedEvent {
   members: EngineName[];
   summarizer: SummarizerName;
   effort: EffortLevel | null;
+  models: ProviderModels;
+  efforts: ProviderEfforts;
 }
 
 export interface MemberStartedEvent {
@@ -174,6 +196,11 @@ export function buildSummaryPrompt(
 export function exitCodeForResult(result: CouncilResult): number;
 export function renderHumanResult(result: CouncilResult, options?: RenderHumanResultOptions): string;
 export const EFFORT_LEVELS: readonly EffortLevel[];
+export const PROVIDER_EFFORT_LEVELS: {
+  readonly codex: readonly ('low' | 'medium' | 'high' | 'xhigh')[];
+  readonly claude: readonly ('low' | 'medium' | 'high' | 'xhigh' | 'max')[];
+  readonly gemini: readonly EffortLevel[];
+};
 export const EXIT_CODES: {
   readonly OK: 0;
   readonly RUNTIME_ERROR: 1;

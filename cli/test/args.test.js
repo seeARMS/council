@@ -102,3 +102,42 @@ test('parses --effort and validates allowed values', () => {
     /Unsupported --effort value/
   );
 });
+
+test('parses provider-specific model and effort flags', () => {
+  const parsed = parseArgs([
+    '--codex-model',
+    'gpt-5.2',
+    '--claude-model=opus',
+    '--gemini-model',
+    'gemini-3-pro-preview',
+    '--codex-effort',
+    'xhigh',
+    '--claude-effort',
+    'max',
+    '--gemini-effort',
+    'high',
+    'question'
+  ]);
+
+  assert.deepEqual(parsed.models, {
+    codex: 'gpt-5.2',
+    claude: 'opus',
+    gemini: 'gemini-3-pro-preview'
+  });
+  assert.deepEqual(parsed.efforts, {
+    codex: 'xhigh',
+    claude: 'max',
+    gemini: 'high'
+  });
+});
+
+test('validates provider-specific effort values against each provider', () => {
+  assert.throws(
+    () => parseArgs(['--gemini-effort', 'max', 'q']),
+    /Unsupported --gemini-effort value/
+  );
+  assert.throws(
+    () => parseArgs(['--claude-effort', 'turbo', 'q']),
+    /Unsupported --claude-effort value/
+  );
+});

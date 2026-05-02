@@ -78,6 +78,8 @@ export async function main(argv = process.argv.slice(2)) {
       maxMemberChars: parsed.maxMemberChars,
       cwd: resolvedCwd,
       effort: parsed.effort,
+      models: parsed.models,
+      efforts: parsed.efforts,
       conversation: [],
       onEvent: undefined
     });
@@ -96,6 +98,8 @@ export async function main(argv = process.argv.slice(2)) {
     timeoutMs: parsed.timeoutMs,
     maxMemberChars: parsed.maxMemberChars,
     effort: parsed.effort,
+    models: parsed.models,
+    efforts: parsed.efforts,
     conversation: [],
     onEvent: (event) => {
       if (ui.outputMode === 'json-stream') {

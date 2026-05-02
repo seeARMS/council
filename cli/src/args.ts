@@ -4,7 +4,8 @@ import {
   AUTO_SUMMARIZER,
   DEFAULT_MAX_MEMBER_CHARS,
   DEFAULT_TIMEOUT_MS,
-  EFFORT_LEVELS
+  EFFORT_LEVELS,
+  PROVIDER_EFFORT_LEVELS
 } from './engines.js';
 const OPTIONS = {
   help: { type: 'boolean', short: 'h' },
@@ -25,6 +26,12 @@ const OPTIONS = {
   members: { type: 'string' },
   summarizer: { type: 'string' },
   effort: { type: 'string' },
+  'codex-model': { type: 'string' },
+  'claude-model': { type: 'string' },
+  'gemini-model': { type: 'string' },
+  'codex-effort': { type: 'string' },
+  'claude-effort': { type: 'string' },
+  'gemini-effort': { type: 'string' },
   timeout: { type: 'string' },
   'max-member-chars': { type: 'string' },
   cwd: { type: 'string' },
@@ -76,6 +83,12 @@ export function usageText(version) {
     `  --max-member-chars <n>    Cap each member response before summarization (default: ${DEFAULT_MAX_MEMBER_CHARS})`,
     '  --cwd <path>              Working directory for all upstream CLIs',
     `  --effort <level>          Reasoning effort applied to every member: ${EFFORT_LEVELS.join(', ')}`,
+    '  --codex-model <model>     Model passed to Codex via --model',
+    '  --claude-model <model>    Model passed to Claude via --model',
+    '  --gemini-model <model>    Model passed to Gemini via --model',
+    `  --codex-effort <level>    Codex effort: ${PROVIDER_EFFORT_LEVELS.codex.join(', ')}`,
+    `  --claude-effort <level>   Claude effort: ${PROVIDER_EFFORT_LEVELS.claude.join(', ')}`,
+    `  --gemini-effort <level>   Gemini effort: ${PROVIDER_EFFORT_LEVELS.gemini.join(', ')}`,
     '',
     'Other:',
     '  -h, --help                Show help',
@@ -84,7 +97,10 @@ export function usageText(version) {
     'Environment:',
     '  COUNCIL_CODEX_BIN         Override the codex executable path',
     '  COUNCIL_CLAUDE_BIN        Override the claude executable path',
-    '  COUNCIL_GEMINI_BIN        Override the gemini executable path'
+    '  COUNCIL_GEMINI_BIN        Override the gemini executable path',
+    '  CLAUDE_CODE_OAUTH_TOKEN   Use Claude OAuth-token auth (omits Claude --bare mode)',
+    '  ANTHROPIC_API_KEY         Use Claude API-key auth (keeps Claude --bare mode)',
+    '  CLAUDE_CODE_EFFORT_LEVEL  Claude effort fallback when no Claude effort flag is set'
   ].join('\n');
 }
 
@@ -114,6 +130,8 @@ export function parseArgs(argv) {
     color: values['no-color'] ? 'never' : parseColor(values.color ?? 'auto'),
     summarizer: parseSummarizer(values.summarizer ?? AUTO_SUMMARIZER),
     effort: parseEffort(values.effort),
+    models: parseProviderModels(values),
+    efforts: parseProviderEfforts(values),
     timeoutMs: values.timeout
       ? parseTimeoutMs(values.timeout)
       : DEFAULT_TIMEOUT_MS,
@@ -231,6 +249,50 @@ function parseEffort(value) {
   throw new Error(
     `Unsupported --effort value: ${value} (expected ${EFFORT_LEVELS.join(', ')})`
   );
+}
+
+function parseProviderModels(values) {
+  return {
+    codex: parseOptionalString(values['codex-model'], '--codex-model'),
+    claude: parseOptionalString(values['claude-model'], '--claude-model'),
+    gemini: parseOptionalString(values['gemini-model'], '--gemini-model')
+  };
+}
+
+function parseProviderEfforts(values) {
+  return {
+    codex: parseProviderEffort(values['codex-effort'], 'codex'),
+    claude: parseProviderEffort(values['claude-effort'], 'claude'),
+    gemini: parseProviderEffort(values['gemini-effort'], 'gemini')
+  };
+}
+
+function parseProviderEffort(value, engine) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const allowed = PROVIDER_EFFORT_LEVELS[engine];
+  if (allowed.includes(value)) {
+    return value;
+  }
+
+  throw new Error(
+    `Unsupported --${engine}-effort value: ${value} (expected ${allowed.join(', ')})`
+  );
+}
+
+function parseOptionalString(value, flagName) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  const parsed = String(value).trim();
+  if (parsed) {
+    return parsed;
+  }
+
+  throw new Error(`${flagName} requires a non-empty value.`);
 }
 
 function parseTimeoutMs(value) {

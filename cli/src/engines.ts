@@ -9,6 +9,11 @@ export const DEFAULT_TIMEOUT_MS = 600_000;
 export const DEFAULT_MAX_MEMBER_CHARS = 12_000;
 export const DEFAULT_SUMMARIZER_ORDER = ['codex', 'claude', 'gemini'];
 export const EFFORT_LEVELS = ['low', 'medium', 'high'];
+export const PROVIDER_EFFORT_LEVELS = {
+  codex: ['low', 'medium', 'high', 'xhigh'],
+  claude: ['low', 'medium', 'high', 'xhigh', 'max'],
+  gemini: ['low', 'medium', 'high']
+};
 
 const GEMINI_THINKING_BUDGETS = {
   low: 1024,
@@ -35,21 +40,29 @@ const ENGINE_BINS = {
 
 export async function runEngine(
   name,
-  { prompt, cwd, timeoutMs = DEFAULT_TIMEOUT_MS, env = process.env, effort = null, onProgress = () => {} }
+  {
+    prompt,
+    cwd,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+    env = process.env,
+    effort = null,
+    model = null,
+    onProgress = () => {}
+  }
 ) {
   if (!ALL_ENGINES.includes(name)) {
     throw new Error(`Unknown engine: ${name}`);
   }
 
   if (name === 'codex') {
-    return runCodex({ prompt, cwd, timeoutMs, env, effort, onProgress });
+    return runCodex({ prompt, cwd, timeoutMs, env, effort, model, onProgress });
   }
 
   if (name === 'claude') {
-    return runClaude({ prompt, cwd, timeoutMs, env, effort, onProgress });
+    return runClaude({ prompt, cwd, timeoutMs, env, effort, model, onProgress });
   }
 
-  return runGemini({ prompt, cwd, timeoutMs, env, effort, onProgress });
+  return runGemini({ prompt, cwd, timeoutMs, env, effort, model, onProgress });
 }
 
 export function buildMemberPrompt(query, { conversation = [] } = {}) {
@@ -152,7 +165,7 @@ export function parseGeminiOutput(stdout) {
   return trimmed;
 }
 
-async function runCodex({ prompt, cwd, timeoutMs, env, effort, onProgress }) {
+async function runCodex({ prompt, cwd, timeoutMs, env, effort, model, onProgress }) {
   const bin = resolveBinary('codex', env);
   const tempDir = await mkdtemp(path.join(tmpdir(), 'council-codex-'));
   const outputPath = path.join(tempDir, 'last-message.txt');
@@ -167,6 +180,7 @@ async function runCodex({ prompt, cwd, timeoutMs, env, effort, onProgress }) {
     onProgress(progress);
   });
 
+  const modelArgs = model ? ['--model', model] : [];
   const effortArgs = effort ? ['-c', `model_reasoning_effort=${effort}`] : [];
 
   try {
@@ -174,6 +188,7 @@ async function runCodex({ prompt, cwd, timeoutMs, env, effort, onProgress }) {
       command: bin,
       args: [
         'exec',
+        ...modelArgs,
         ...effortArgs,
         '--skip-git-repo-check',
         '--sandbox',
@@ -208,7 +223,7 @@ async function runCodex({ prompt, cwd, timeoutMs, env, effort, onProgress }) {
   }
 }
 
-async function runClaude({ prompt, cwd, timeoutMs, env, effort, onProgress }) {
+async function runClaude({ prompt, cwd, timeoutMs, env, effort, model, onProgress }) {
   const bin = resolveBinary('claude', env);
   const startedAt = Date.now();
   let lastProgressDetail = '';
@@ -220,11 +235,14 @@ async function runClaude({ prompt, cwd, timeoutMs, env, effort, onProgress }) {
     lastProgressDetail = progress.detail;
     onProgress(progress);
   });
-  const effortArgs = effort ? ['--effort', effort] : [];
+  const resolvedEffort = effort || readEnvValue(env, 'CLAUDE_CODE_EFFORT_LEVEL');
+  const authArgs = shouldUseClaudeBareMode(env) ? ['--bare'] : [];
+  const modelArgs = model ? ['--model', model] : [];
+  const effortArgs = resolvedEffort ? ['--effort', resolvedEffort] : [];
   const commandResult = await runCommand({
     command: bin,
     args: [
-      '--bare',
+      ...authArgs,
       '-p',
       '--permission-mode',
       'plan',
@@ -233,6 +251,7 @@ async function runClaude({ prompt, cwd, timeoutMs, env, effort, onProgress }) {
       'stream-json',
       '--include-partial-messages',
       '--no-session-persistence',
+      ...modelArgs,
       ...effortArgs
     ],
     cwd,
@@ -256,7 +275,7 @@ async function runClaude({ prompt, cwd, timeoutMs, env, effort, onProgress }) {
   });
 }
 
-async function runGemini({ prompt, cwd, timeoutMs, env, effort, onProgress }) {
+async function runGemini({ prompt, cwd, timeoutMs, env, effort, model, onProgress }) {
   const bin = resolveBinary('gemini', env);
   const startedAt = Date.now();
   let lastProgressDetail = '';
@@ -264,11 +283,13 @@ async function runGemini({ prompt, cwd, timeoutMs, env, effort, onProgress }) {
   const runEnv = effortContext
     ? { ...env, GEMINI_CLI_SYSTEM_SETTINGS_PATH: effortContext.settingsPath }
     : env;
+  const modelArgs = model ? ['--model', model] : [];
 
   try {
     const commandResult = await runCommand({
       command: bin,
       args: [
+        ...modelArgs,
         '-p',
         prompt,
         '--skip-trust',
@@ -352,6 +373,19 @@ async function mergeGeminiSettings({ settingsPath, thinkingBudget }) {
   }
 
   return nextSettings;
+}
+
+function shouldUseClaudeBareMode(env) {
+  if (readEnvValue(env, 'CLAUDE_CODE_OAUTH_TOKEN')) {
+    return false;
+  }
+
+  return Boolean(readEnvValue(env, 'ANTHROPIC_API_KEY'));
+}
+
+function readEnvValue(env, name) {
+  const value = env?.[name];
+  return typeof value === 'string' && value.trim() ? value.trim() : '';
 }
 
 function resolveBinary(name, env) {

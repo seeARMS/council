@@ -125,6 +125,56 @@ test('runCouncil emits lifecycle events for members and synthesis', async () => 
   }
 });
 
+test('runCouncil applies provider-specific model and effort overrides', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    codex: {
+      member: { mode: 'echo-argv' },
+      summary: { mode: 'echo-argv' }
+    },
+    claude: {
+      member: { mode: 'echo-argv' }
+    }
+  });
+
+  try {
+    const result = await runCouncil({
+      query: 'Hello',
+      cwd: process.cwd(),
+      members: ['codex', 'claude'],
+      summarizer: 'auto',
+      timeoutMs: 5_000,
+      env: fake.env,
+      effort: 'low',
+      models: {
+        codex: 'gpt-5.2',
+        claude: 'opus'
+      },
+      efforts: {
+        claude: 'max'
+      }
+    });
+
+    const codexMember = JSON.parse(result.members.find((member) => member.name === 'codex').output);
+    assert.equal(codexMember[codexMember.indexOf('--model') + 1], 'gpt-5.2');
+    assert.equal(codexMember[codexMember.indexOf('-c') + 1], 'model_reasoning_effort=low');
+
+    const claudeMember = JSON.parse(result.members.find((member) => member.name === 'claude').output);
+    assert.equal(claudeMember[claudeMember.indexOf('--model') + 1], 'opus');
+    assert.equal(claudeMember[claudeMember.indexOf('--effort') + 1], 'max');
+
+    const codexSummary = JSON.parse(result.summary.output);
+    assert.equal(codexSummary[codexSummary.indexOf('--model') + 1], 'gpt-5.2');
+    assert.equal(codexSummary[codexSummary.indexOf('-c') + 1], 'model_reasoning_effort=low');
+    assert.deepEqual(result.efforts, {
+      codex: 'low',
+      claude: 'max',
+      gemini: 'low'
+    });
+  } finally {
+    await fake.cleanup();
+  }
+});
+
 test('returns a summary failure when no member is available', async () => {
   const fake = await createFakeCouncilEnvironment({});
 
@@ -294,7 +344,7 @@ test('runCouncil emits gemini retry progress while the member is still running',
       cwd: process.cwd(),
       members: ['gemini'],
       summarizer: 'auto',
-      timeoutMs: 500,
+      timeoutMs: 2_000,
       env: fake.env,
       onEvent: (event) => {
         events.push(event);

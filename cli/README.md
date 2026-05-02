@@ -139,13 +139,29 @@ council --members codex,gemini "Compare these responses"
 
 `--members` preserves the order you pass. If you later re-enable another member with a toggle such as `--claude`, it is appended after that explicit list.
 
+## Model and effort selection
+
+Use provider-specific flags when each upstream CLI should run a different model or reasoning level:
+
+```bash
+council \
+  --codex-model gpt-5.2 --codex-effort high \
+  --claude-model opus --claude-effort max \
+  --gemini-model gemini-3-pro-preview --gemini-effort high \
+  "Review this plan"
+```
+
+`--effort low|medium|high` remains available as a common default for all members. Provider-specific effort flags override the common value for that provider.
+
 ## Safe defaults
 
 `council` intentionally runs the upstream tools in consultation-oriented modes:
 
 - `codex`: `codex exec --skip-git-repo-check --sandbox read-only --ephemeral`
-- `claude`: `claude --bare -p --permission-mode plan --verbose --output-format stream-json --include-partial-messages --no-session-persistence`
+- `claude`: `claude -p --permission-mode plan --verbose --output-format stream-json --include-partial-messages --no-session-persistence`
 - `gemini`: `gemini -p "" --skip-trust --approval-mode plan --output-format json`
+
+For Claude, Council keeps `--bare` only when `ANTHROPIC_API_KEY` is set and `CLAUDE_CODE_OAUTH_TOKEN` is not set. OAuth-token auth and normal logged-in Claude Code auth omit `--bare` because Claude Code bare mode does not read OAuth or keychain credentials. The rest of the non-interactive plan-mode Claude invocation is preserved.
 
 That keeps the default behavior closer to analysis than autonomous mutation.
 
@@ -161,6 +177,8 @@ That keeps the default behavior closer to analysis than autonomous mutation.
 - `COUNCIL_CODEX_BIN`: override the `codex` executable path
 - `COUNCIL_CLAUDE_BIN`: override the `claude` executable path
 - `COUNCIL_GEMINI_BIN`: override the `gemini` executable path
+- `CLAUDE_CODE_OAUTH_TOKEN`: enables Claude Code OAuth-token auth and disables Claude's incompatible `--bare` mode
+- `CLAUDE_CODE_EFFORT_LEVEL`: used as Claude's `--effort` value when no Council effort flag is provided for Claude
 
 ## Programmatic use
 

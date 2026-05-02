@@ -219,6 +219,152 @@ test('runEngine forwards --effort to claude via --effort', async () => {
   }
 });
 
+test('runEngine keeps claude --bare for API-key auth', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    claude: { member: { mode: 'echo-argv' } }
+  });
+
+  try {
+    const result = await runEngine('claude', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: {
+        ...fake.env,
+        ANTHROPIC_API_KEY: 'test-api-key'
+      }
+    });
+
+    assert.equal(result.status, 'ok');
+    const argv = JSON.parse(result.output);
+    assert.equal(argv.includes('--bare'), true);
+  } finally {
+    await fake.cleanup();
+  }
+});
+
+test('runEngine omits claude --bare when API-key auth is absent', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    claude: { member: { mode: 'echo-argv' } }
+  });
+
+  try {
+    const result = await runEngine('claude', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: {
+        ...fake.env,
+        ANTHROPIC_API_KEY: ''
+      }
+    });
+
+    assert.equal(result.status, 'ok');
+    const argv = JSON.parse(result.output);
+    assert.equal(argv.includes('--bare'), false);
+  } finally {
+    await fake.cleanup();
+  }
+});
+
+test('runEngine omits claude --bare when CLAUDE_CODE_OAUTH_TOKEN is present', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    claude: { member: { mode: 'echo-argv' } }
+  });
+
+  try {
+    const result = await runEngine('claude', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: {
+        ...fake.env,
+        CLAUDE_CODE_OAUTH_TOKEN: 'test-oauth-token'
+      }
+    });
+
+    assert.equal(result.status, 'ok');
+    const argv = JSON.parse(result.output);
+    assert.equal(argv.includes('--bare'), false);
+  } finally {
+    await fake.cleanup();
+  }
+});
+
+test('runEngine forwards CLAUDE_CODE_EFFORT_LEVEL to claude when no effort option is set', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    claude: { member: { mode: 'echo-argv' } }
+  });
+
+  try {
+    const result = await runEngine('claude', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: {
+        ...fake.env,
+        CLAUDE_CODE_EFFORT_LEVEL: 'max'
+      }
+    });
+
+    assert.equal(result.status, 'ok');
+    const argv = JSON.parse(result.output);
+    const idx = argv.indexOf('--effort');
+    assert.ok(idx >= 0, 'claude did not receive --effort');
+    assert.equal(argv[idx + 1], 'max');
+  } finally {
+    await fake.cleanup();
+  }
+});
+
+test('runEngine forwards provider model flags', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    codex: { member: { mode: 'echo-argv' } },
+    claude: { member: { mode: 'echo-argv' } },
+    gemini: { member: { mode: 'echo-argv' } }
+  });
+
+  try {
+    const codexResult = await runEngine('codex', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: fake.env,
+      model: 'gpt-5.2'
+    });
+    const codexArgv = JSON.parse(codexResult.output);
+    const codexModelIdx = codexArgv.indexOf('--model');
+    assert.ok(codexModelIdx >= 0, 'codex did not receive --model');
+    assert.equal(codexArgv[codexModelIdx + 1], 'gpt-5.2');
+
+    const claudeResult = await runEngine('claude', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: fake.env,
+      model: 'opus'
+    });
+    const claudeArgv = JSON.parse(claudeResult.output);
+    const claudeModelIdx = claudeArgv.indexOf('--model');
+    assert.ok(claudeModelIdx >= 0, 'claude did not receive --model');
+    assert.equal(claudeArgv[claudeModelIdx + 1], 'opus');
+
+    const geminiResult = await runEngine('gemini', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: fake.env,
+      model: 'gemini-3-pro-preview'
+    });
+    const geminiArgv = JSON.parse(geminiResult.output);
+    const geminiModelIdx = geminiArgv.indexOf('--model');
+    assert.ok(geminiModelIdx >= 0, 'gemini did not receive --model');
+    assert.equal(geminiArgv[geminiModelIdx + 1], 'gemini-3-pro-preview');
+  } finally {
+    await fake.cleanup();
+  }
+});
+
 test('runEngine forwards --effort to gemini via thinkingBudget settings (no model swap)', async () => {
   const fake = await createFakeCouncilEnvironment({
     gemini: { member: { mode: 'echo-env' } }
