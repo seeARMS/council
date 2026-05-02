@@ -1733,6 +1733,7 @@ function StudioHelpPanel() {
     'Settings pane: choose handoff, lead/planner, synthesis, auth methods, permissions, efforts, iterations, Linear mode/auth/workspace',
     'Social login: opens each selected provider auth flow in browser tabs; paste returned codes here if prompted',
     'Linear pane: Enter checks setup/status; Command Palette can deliver issues or edit issue/query/media fields',
+    'Provider tools/MCP: Council inherits each CLI config when the selected sandbox or permission mode allows it',
     'Command Palette: tag local files or run shell commands into prompt context',
     'Canvas pane: provider rows show token/tool suffixes; Telemetry section lists current token/tool usage',
     '[ and ]: move the focused pane left/right',

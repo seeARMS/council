@@ -4,7 +4,7 @@ export const authorName = "Colin Armstrong";
 export const xHandle = "@colinarms";
 export const title = "Council: Compare Codex, Claude, and Gemini in One CLI";
 export const description =
-  "Council is an open-source CLI that runs Codex, Claude, and Gemini in parallel on the same prompt, synthesizes one answer, and highlights disagreements.";
+  "Council is an open-source CLI and terminal studio for coordinating Codex, Claude, and Gemini with social login, Linear delivery, telemetry, and one synthesized answer.";
 export const examplePrompt = "review this migration plan";
 export const ogImagePath = "/og/home.png";
 export const ogImageAlt =
