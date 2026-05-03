@@ -7,10 +7,11 @@ use crossterm::terminal::{
     LeaveAlternateScreen,
 };
 
-const MENU: [&str; 12] = [
+const MENU: [&str; 15] = [
     "Run / re-run",
     "Edit prompt",
     "Social login",
+    "Auth status",
     "Linear status",
     "Deliver Linear",
     "Tag local file",
@@ -18,8 +19,10 @@ const MENU: [&str; 12] = [
     "Settings",
     "Agents",
     "Capabilities",
+    "Refresh capabilities",
     "Linear",
     "Help",
+    "Quit",
 ];
 
 const PANES: [Pane; 6] = [
@@ -58,8 +61,15 @@ enum InputMode {
     ClaudeMcpConfig,
     ClaudeAllowedTools,
     ClaudeDisallowedTools,
+    ClaudeTools,
+    ClaudeAgent,
+    ClaudeAgentsJson,
+    ClaudePluginDir,
     GeminiSettings,
     GeminiToolsProfile,
+    GeminiAllowedMcp,
+    GeminiPolicy,
+    GeminiAdminPolicy,
 }
 
 #[derive(Debug, Clone)]
@@ -75,6 +85,8 @@ struct StudioState {
     result_index: usize,
     last_result: Option<CouncilResult>,
     last_linear_result: Option<String>,
+    last_auth_result: Option<String>,
+    last_capability_result: Option<String>,
     status: String,
     input_mode: Option<InputMode>,
     input_buffer: String,
@@ -86,6 +98,8 @@ enum StudioAction {
     None,
     RunCouncil,
     SocialLogin,
+    AuthStatus,
+    CapabilitiesStatus,
     LinearStatus,
     LinearDeliver,
     Quit,
@@ -137,6 +151,8 @@ pub(super) fn run_studio(resolved: &ResolvedArgs) -> i32 {
         result_index: 0,
         last_result: None,
         last_linear_result: None,
+        last_auth_result: None,
+        last_capability_result: None,
         status: "Ready".to_string(),
         input_mode: None,
         input_buffer: String::new(),
@@ -183,6 +199,24 @@ pub(super) fn run_studio(resolved: &ResolvedArgs) -> i32 {
                 run_external_action(&mut guard, || match run_social_login(&state.resolved) {
                     Ok(()) => state.status = "Social login completed".to_string(),
                     Err(error) => state.status = format!("Social login failed: {error}"),
+                });
+            }
+            StudioAction::AuthStatus => {
+                run_external_action(&mut guard, || {
+                    state.last_auth_result = Some(render_auth_statuses(&collect_auth_statuses(
+                        &state.resolved,
+                    )));
+                    state.status = "Auth status refreshed".to_string();
+                    state.focus = Pane::Agents;
+                });
+            }
+            StudioAction::CapabilitiesStatus => {
+                run_external_action(&mut guard, || {
+                    state.last_capability_result = Some(render_provider_capability_statuses(
+                        &collect_provider_capability_statuses(&state.resolved),
+                    ));
+                    state.status = "Provider capabilities refreshed".to_string();
+                    state.focus = Pane::Capabilities;
                 });
             }
             StudioAction::LinearStatus => {
@@ -238,14 +272,14 @@ fn run_council_from_studio(state: &mut StudioState) {
     state.status = "Running council...".to_string();
     let mut resolved = state.resolved.clone();
     resolved.prompt = state.prompt.clone();
-    let prompt = match build_prompt_with_context(&resolved) {
-        Ok(prompt) => prompt,
+    let prompt_context = match build_prompt_context(&resolved) {
+        Ok(context) => context,
         Err(error) => {
             state.status = format!("Prompt context failed: {error}");
             return;
         }
     };
-    let result = run_council(&resolved, prompt);
+    let result = run_council(&resolved, prompt_context.prompt, prompt_context.commands);
     state.status = if is_success(&result) {
         "Council run completed".to_string()
     } else {
@@ -404,6 +438,26 @@ fn apply_input(state: &mut StudioState, mode: InputMode, value: String) {
             "Claude disallowed tools",
             &mut state.status,
         ),
+        InputMode::ClaudeTools => set_csv(
+            &mut state.resolved.raw.claude_tools,
+            value,
+            "Claude tools",
+            &mut state.status,
+        ),
+        InputMode::ClaudeAgent => {
+            state.resolved.raw.claude_agent = empty_to_none(value);
+            state.status = "Claude agent updated".to_string();
+        }
+        InputMode::ClaudeAgentsJson => {
+            state.resolved.raw.claude_agents_json = empty_to_none(value);
+            state.status = "Claude agents JSON updated".to_string();
+        }
+        InputMode::ClaudePluginDir => set_csv(
+            &mut state.resolved.raw.claude_plugin_dir,
+            value,
+            "Claude plugin dirs",
+            &mut state.status,
+        ),
         InputMode::GeminiSettings => {
             state.resolved.raw.gemini_settings = empty_to_none(value);
             state.status = "Gemini settings updated".to_string();
@@ -412,6 +466,24 @@ fn apply_input(state: &mut StudioState, mode: InputMode, value: String) {
             &mut state.resolved.raw.gemini_tools_profile,
             value,
             "Gemini tools profile",
+            &mut state.status,
+        ),
+        InputMode::GeminiAllowedMcp => set_csv(
+            &mut state.resolved.raw.gemini_allowed_mcp_servers,
+            value,
+            "Gemini allowed MCP servers",
+            &mut state.status,
+        ),
+        InputMode::GeminiPolicy => set_csv(
+            &mut state.resolved.raw.gemini_policy,
+            value,
+            "Gemini policy",
+            &mut state.status,
+        ),
+        InputMode::GeminiAdminPolicy => set_csv(
+            &mut state.resolved.raw.gemini_admin_policy,
+            value,
+            "Gemini admin policy",
             &mut state.status,
         ),
     }
@@ -502,6 +574,7 @@ fn activate_menu(state: &mut StudioState) -> Result<StudioAction, String> {
         "Run / re-run" => Ok(StudioAction::RunCouncil),
         "Edit prompt" => start_input(state, InputMode::Prompt, state.prompt.clone()),
         "Social login" => Ok(StudioAction::SocialLogin),
+        "Auth status" => Ok(StudioAction::AuthStatus),
         "Linear status" => Ok(StudioAction::LinearStatus),
         "Deliver Linear" => Ok(StudioAction::LinearDeliver),
         "Tag local file" => start_input(state, InputMode::File, String::new()),
@@ -518,6 +591,7 @@ fn activate_menu(state: &mut StudioState) -> Result<StudioAction, String> {
             state.focus = Pane::Capabilities;
             Ok(StudioAction::None)
         }
+        "Refresh capabilities" => Ok(StudioAction::CapabilitiesStatus),
         "Linear" => {
             state.focus = Pane::Linear;
             Ok(StudioAction::None)
@@ -526,6 +600,7 @@ fn activate_menu(state: &mut StudioState) -> Result<StudioAction, String> {
             state.show_help = !state.show_help;
             Ok(StudioAction::None)
         }
+        "Quit" => Ok(StudioAction::Quit),
         _ => Ok(StudioAction::None),
     }
 }
@@ -562,7 +637,32 @@ fn activate_capability(state: &mut StudioState) -> Result<StudioAction, String> 
             InputMode::ClaudeDisallowedTools,
             state.resolved.raw.claude_disallowed_tools.join(","),
         ),
+        7 => start_input(
+            state,
+            InputMode::ClaudeTools,
+            state.resolved.raw.claude_tools.join(","),
+        ),
         8 => start_input(
+            state,
+            InputMode::ClaudeAgent,
+            state.resolved.raw.claude_agent.clone().unwrap_or_default(),
+        ),
+        9 => start_input(
+            state,
+            InputMode::ClaudeAgentsJson,
+            state
+                .resolved
+                .raw
+                .claude_agents_json
+                .clone()
+                .unwrap_or_default(),
+        ),
+        10 => start_input(
+            state,
+            InputMode::ClaudePluginDir,
+            state.resolved.raw.claude_plugin_dir.join(","),
+        ),
+        14 => start_input(
             state,
             InputMode::GeminiSettings,
             state
@@ -572,10 +672,25 @@ fn activate_capability(state: &mut StudioState) -> Result<StudioAction, String> 
                 .clone()
                 .unwrap_or_default(),
         ),
-        9 => start_input(
+        15 => start_input(
             state,
             InputMode::GeminiToolsProfile,
             state.resolved.raw.gemini_tools_profile.join(","),
+        ),
+        16 => start_input(
+            state,
+            InputMode::GeminiAllowedMcp,
+            state.resolved.raw.gemini_allowed_mcp_servers.join(","),
+        ),
+        17 => start_input(
+            state,
+            InputMode::GeminiPolicy,
+            state.resolved.raw.gemini_policy.join(","),
+        ),
+        18 => start_input(
+            state,
+            InputMode::GeminiAdminPolicy,
+            state.resolved.raw.gemini_admin_policy.join(","),
         ),
         _ => {
             adjust_capability(state, 1)?;
@@ -616,13 +731,13 @@ fn activate_linear(state: &mut StudioState) -> Result<StudioAction, String> {
             InputMode::LinearState,
             state.resolved.raw.linear_state.clone().unwrap_or_default(),
         ),
-        10 => start_input(
+        14 => start_input(
             state,
             InputMode::LinearMedia,
             state.resolved.raw.linear_attach_media.join(","),
         ),
-        11 => Ok(StudioAction::LinearStatus),
-        12 => Ok(StudioAction::LinearDeliver),
+        15 => Ok(StudioAction::LinearStatus),
+        16 => Ok(StudioAction::LinearDeliver),
         _ => {
             adjust_linear(state, 1)?;
             Ok(StudioAction::None)
@@ -669,13 +784,37 @@ fn adjust_setting(state: &mut StudioState, delta: isize) -> Result<(), String> {
             state.resolved.raw.team_work = adjust_number(state.resolved.raw.team_work, delta, 0, 64)
         }
         6 => {
+            let current = state
+                .resolved
+                .raw
+                .codex_sub_agents
+                .unwrap_or(state.resolved.raw.team_work);
+            state.resolved.raw.codex_sub_agents = Some(adjust_number(current, delta, 0, 64));
+        }
+        7 => {
+            let current = state
+                .resolved
+                .raw
+                .claude_sub_agents
+                .unwrap_or(state.resolved.raw.team_work);
+            state.resolved.raw.claude_sub_agents = Some(adjust_number(current, delta, 0, 64));
+        }
+        8 => {
+            let current = state
+                .resolved
+                .raw
+                .gemini_sub_agents
+                .unwrap_or(state.resolved.raw.team_work);
+            state.resolved.raw.gemini_sub_agents = Some(adjust_number(current, delta, 0, 64));
+        }
+        9 => {
             state.resolved.raw.codex_sandbox = cycle_value(
                 &state.resolved.raw.codex_sandbox,
                 &["read-only", "workspace-write", "danger-full-access"],
                 delta,
             )
         }
-        7 => {
+        10 => {
             state.resolved.raw.claude_permission_mode = cycle_value(
                 &state.resolved.raw.claude_permission_mode,
                 &[
@@ -689,42 +828,42 @@ fn adjust_setting(state: &mut StudioState, delta: isize) -> Result<(), String> {
                 delta,
             )
         }
-        8 => {
+        11 => {
             state.resolved.raw.codex_auth = cycle_value(
                 &state.resolved.raw.codex_auth,
                 &["auto", "social-login", "login", "api-key"],
                 delta,
             )
         }
-        9 => {
+        12 => {
             state.resolved.raw.claude_auth = cycle_value(
                 &state.resolved.raw.claude_auth,
                 &["auto", "social-login", "oauth", "api-key", "keychain"],
                 delta,
             )
         }
-        10 => {
+        13 => {
             state.resolved.raw.gemini_auth = cycle_value(
                 &state.resolved.raw.gemini_auth,
                 &["auto", "social-login", "login", "api-key"],
                 delta,
             )
         }
-        11 => {
+        14 => {
             state.resolved.raw.codex_effort = cycle_optional(
                 &state.resolved.raw.codex_effort,
                 &["low", "medium", "high", "xhigh"],
                 delta,
             )
         }
-        12 => {
+        15 => {
             state.resolved.raw.claude_effort = cycle_optional(
                 &state.resolved.raw.claude_effort,
                 &["low", "medium", "high", "xhigh", "max"],
                 delta,
             )
         }
-        13 => {
+        16 => {
             state.resolved.raw.gemini_effort = cycle_optional(
                 &state.resolved.raw.gemini_effort,
                 &["low", "medium", "high"],
@@ -753,7 +892,15 @@ fn adjust_capability(state: &mut StudioState, delta: isize) -> Result<(), String
                 delta,
             )
         }
-        7 => {
+        11 => {
+            state.resolved.raw.claude_strict_mcp_config =
+                !state.resolved.raw.claude_strict_mcp_config
+        }
+        12 => {
+            state.resolved.raw.claude_disable_slash_commands =
+                !state.resolved.raw.claude_disable_slash_commands
+        }
+        13 => {
             state.resolved.raw.gemini_capabilities = cycle_value(
                 &state.resolved.raw.gemini_capabilities,
                 &["inherit", "override"],
@@ -811,6 +958,23 @@ fn adjust_linear(state: &mut StudioState, delta: isize) -> Result<(), String> {
                 &["worktree", "copy", "none"],
                 delta,
             )
+        }
+        10 => {
+            state.resolved.raw.linear_poll_interval = adjust_number(
+                state.resolved.raw.linear_poll_interval as usize,
+                delta,
+                1,
+                3600,
+            ) as u64
+        }
+        11 => {
+            state.resolved.raw.linear_max_attempts =
+                adjust_number(state.resolved.raw.linear_max_attempts, delta, 1, 99)
+        }
+        12 => state.resolved.raw.no_linear_comments = !state.resolved.raw.no_linear_comments,
+        13 => {
+            state.resolved.raw.linear_update_review_state =
+                !state.resolved.raw.linear_update_review_state
         }
         _ => {}
     }
@@ -929,6 +1093,30 @@ fn settings_lines(state: &StudioState) -> Vec<String> {
             format!("Summarizer: {}", state.resolved.raw.summarizer),
             format!("Iterations: {}", state.resolved.raw.iterations),
             format!("Team default: {}", state.resolved.raw.team_work),
+            format!(
+                "Codex sub-agents: {}",
+                state
+                    .resolved
+                    .raw
+                    .codex_sub_agents
+                    .unwrap_or(state.resolved.raw.team_work)
+            ),
+            format!(
+                "Claude sub-agents: {}",
+                state
+                    .resolved
+                    .raw
+                    .claude_sub_agents
+                    .unwrap_or(state.resolved.raw.team_work)
+            ),
+            format!(
+                "Gemini sub-agents: {}",
+                state
+                    .resolved
+                    .raw
+                    .gemini_sub_agents
+                    .unwrap_or(state.resolved.raw.team_work)
+            ),
             format!("Codex sandbox: {}", state.resolved.raw.codex_sandbox),
             format!(
                 "Claude permission: {}",
@@ -978,6 +1166,18 @@ fn agent_lines(state: &StudioState) -> Vec<String> {
             provider_auth(&state.resolved, member),
             usage.unwrap_or_default()
         ));
+        if let Some(result) = state.last_result.as_ref().and_then(|result| {
+            result
+                .members
+                .iter()
+                .find(|candidate| &candidate.name == member)
+        }) {
+            lines.push(format!(
+                "    tools:{} sub-agents:{}",
+                result.tool_calls.len(),
+                result.sub_agents.len()
+            ));
+        }
     }
     if let Some(result) = &state.last_result {
         lines.push(format!(
@@ -985,11 +1185,15 @@ fn agent_lines(state: &StudioState) -> Vec<String> {
             result.summary.status, result.summary.token_usage.total
         ));
     }
+    if let Some(status) = &state.last_auth_result {
+        lines.push(String::new());
+        lines.extend(status.lines().take(8).map(ToString::to_string));
+    }
     lines
 }
 
 fn capability_lines(state: &StudioState) -> Vec<String> {
-    select_lines(
+    let mut lines = select_lines(
         state.focus == Pane::Capabilities,
         state.capability_index,
         vec![
@@ -1017,6 +1221,33 @@ fn capability_lines(state: &StudioState) -> Vec<String> {
                 "Claude disallowed: {}",
                 list(&state.resolved.raw.claude_disallowed_tools)
             ),
+            format!("Claude tools: {}", list(&state.resolved.raw.claude_tools)),
+            format!(
+                "Claude agent: {}",
+                state.resolved.raw.claude_agent.as_deref().unwrap_or("none")
+            ),
+            format!(
+                "Claude agents JSON: {}",
+                state
+                    .resolved
+                    .raw
+                    .claude_agents_json
+                    .as_deref()
+                    .map(|value| truncate(value, 32))
+                    .unwrap_or_else(|| "none".to_string())
+            ),
+            format!(
+                "Claude plugin dirs: {}",
+                list(&state.resolved.raw.claude_plugin_dir)
+            ),
+            format!(
+                "Claude strict MCP: {}",
+                on_off(state.resolved.raw.claude_strict_mcp_config)
+            ),
+            format!(
+                "Claude slash skills off: {}",
+                on_off(state.resolved.raw.claude_disable_slash_commands)
+            ),
             format!("Gemini mode: {}", state.resolved.raw.gemini_capabilities),
             format!(
                 "Gemini settings: {}",
@@ -1031,8 +1262,22 @@ fn capability_lines(state: &StudioState) -> Vec<String> {
                 "Gemini tools: {}",
                 list(&state.resolved.raw.gemini_tools_profile)
             ),
+            format!(
+                "Gemini MCP allow: {}",
+                list(&state.resolved.raw.gemini_allowed_mcp_servers)
+            ),
+            format!("Gemini policy: {}", list(&state.resolved.raw.gemini_policy)),
+            format!(
+                "Gemini admin policy: {}",
+                list(&state.resolved.raw.gemini_admin_policy)
+            ),
         ],
-    )
+    );
+    if let Some(status) = &state.last_capability_result {
+        lines.push(String::new());
+        lines.extend(status.lines().take(8).map(ToString::to_string));
+    }
+    lines
 }
 
 fn linear_lines(state: &StudioState) -> Vec<String> {
@@ -1070,6 +1315,23 @@ fn linear_lines(state: &StudioState) -> Vec<String> {
                 state.resolved.raw.linear_workspace_strategy
             ),
             format!(
+                "Poll interval: {}s",
+                state.resolved.raw.linear_poll_interval
+            ),
+            format!("Max attempts: {}", state.resolved.raw.linear_max_attempts),
+            format!(
+                "Comments: {}",
+                if state.resolved.raw.no_linear_comments {
+                    "off"
+                } else {
+                    "on"
+                }
+            ),
+            format!(
+                "Update review state: {}",
+                on_off(state.resolved.raw.linear_update_review_state)
+            ),
+            format!(
                 "Attach media: {}",
                 list(&state.resolved.raw.linear_attach_media)
             ),
@@ -1097,6 +1359,23 @@ fn result_lines(state: &StudioState) -> Vec<String> {
             )
         })
         .collect::<Vec<_>>();
+    for command in &result.prompt_commands {
+        lines.push(format!(
+            "cmd [{}] {}",
+            command.status,
+            truncate(&command.command, 54)
+        ));
+    }
+    for member in &result.members {
+        if !member.tool_calls.is_empty() || !member.sub_agents.is_empty() {
+            lines.push(format!(
+                "{} telemetry tools:{} sub-agents:{}",
+                member.name,
+                member.tool_calls.len(),
+                member.sub_agents.len()
+            ));
+        }
+    }
     lines.push(format!(
         "Synthesis [{}] via {} tokens:{}",
         result.summary.status, result.summary.name, result.summary.token_usage.total
@@ -1163,7 +1442,9 @@ fn write_help(out: &mut impl Write) -> Result<(), String> {
         "",
         "Help: Tab focus | Up/Down select | Left/Right modify | Enter activate/edit",
         "r run | ? help | [ and ] move focused pane | Ctrl+C twice quits",
-        "Menu actions support prompt editing, file tagging, command context, auth, Linear status, and Linear delivery.",
+        "Menu actions support prompt editing, file tagging, command context, social login, auth status, Linear delivery, and capability refresh.",
+        "Settings manage lead/planner/executors, per-provider sub-agent counts, permissions, auth, effort, and Linear delivery controls.",
+        "Capabilities manages inherit/override plus provider MCP, skills, tools, plugins, policies, and extension profiles.",
     ];
     for line in lines {
         writeln!(out, "{line}").map_err(|error| error.to_string())?;
@@ -1255,15 +1536,15 @@ fn cycle_summarizer(current: &str, delta: isize) -> String {
 }
 
 fn settings_len() -> usize {
-    14
+    17
 }
 
 fn capabilities_len() -> usize {
-    10
+    19
 }
 
 fn linear_len() -> usize {
-    13
+    17
 }
 
 fn result_len(state: &StudioState) -> usize {

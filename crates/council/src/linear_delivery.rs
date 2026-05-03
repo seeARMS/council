@@ -7,7 +7,6 @@ use serde_json::{json, Map};
 const DEFAULT_LINEAR_ENDPOINT: &str = "https://api.linear.app/graphql";
 const DEFAULT_BRANCH_PREFIX: &str = "council/linear/";
 const DEFAULT_WORKFLOW_FILE: &str = "WORKFLOW.md";
-const DEFAULT_RETRY_BASE_MS: u64 = 60_000;
 const DEFAULT_MAX_ATTEMPTS: usize = 3;
 const DEFAULT_POLL_INTERVAL_MS: u64 = 60_000;
 const DEFAULT_DELIVERY_PHASES: [&str; 4] = ["plan", "implement", "verify", "ship"];
@@ -52,6 +51,8 @@ struct IssueDeliveryResult {
     completion: CompletionResult,
     phases: Vec<PhaseDeliveryResult>,
     media_attachments: Vec<MediaAttachmentResult>,
+    comments: Vec<LinearCommentResult>,
+    state_update: Option<StateUpdateResult>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -77,6 +78,21 @@ struct MediaAttachmentResult {
     url: Option<String>,
     attachment_id: Option<String>,
     title: Option<String>,
+    error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct LinearCommentResult {
+    id: Option<String>,
+    url: Option<String>,
+    status: String,
+    error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct StateUpdateResult {
+    state: String,
+    status: String,
     error: Option<String>,
 }
 
@@ -308,6 +324,8 @@ pub(super) fn render_linear_status(status: &LinearStatus) -> String {
         "- Long-running mode: add --linear-watch with --linear-team/--linear-state filters.".to_string(),
         "- Completion loop: add --linear-until-complete with --linear-project/--linear-epic and a completion gate.".to_string(),
         "- Isolated workspaces are persisted under the workspace root; state and events are written for retry/reconciliation.".to_string(),
+        "- Delivery comments are posted back to Linear by default; disable with --no-linear-comments.".to_string(),
+        "- Review-state transitions are available with --linear-update-review-state plus --linear-review-state.".to_string(),
         String::new(),
         "Local state".to_string(),
         format!("- total: {}", status.counts.total),
@@ -382,7 +400,12 @@ pub(super) fn run_linear_delivery(resolved: &ResolvedArgs) -> Result<LinearDeliv
         if !resolved.raw.linear_watch {
             break;
         }
-        thread::sleep(Duration::from_millis(DEFAULT_POLL_INTERVAL_MS));
+        let poll_interval = if resolved.raw.linear_poll_interval == 0 {
+            DEFAULT_POLL_INTERVAL_MS
+        } else {
+            resolved.raw.linear_poll_interval.saturating_mul(1000)
+        };
+        thread::sleep(Duration::from_millis(poll_interval.max(1000)));
     }
 
     let issues = poll_results
@@ -545,8 +568,12 @@ fn run_linear_issue_delivery(
             pick_phase_lead(phase, &resolved.members, resolved.raw.lead.as_deref());
         phase_resolved.prompt =
             build_delivery_phase_prompt(phase, &issue, resolved, &conversation, workflow_policy);
-        let prompt = build_prompt_with_context(&phase_resolved)?;
-        let result = run_council(&phase_resolved, prompt);
+        let prompt_context = build_prompt_context(&phase_resolved)?;
+        let result = run_council(
+            &phase_resolved,
+            prompt_context.prompt,
+            prompt_context.commands,
+        );
         let summary = result.summary.clone();
         let success = summary.status == "ok";
         let phase_result = PhaseDeliveryResult {
@@ -645,6 +672,65 @@ fn run_linear_issue_delivery(
             pr_url: None,
         }
     };
+    let state_update = if completion.success && resolved.raw.linear_update_review_state {
+        resolved.raw.linear_review_state.as_ref().map(
+            |review_state| match update_linear_issue_state(auth, &issue, review_state) {
+                Ok(()) => StateUpdateResult {
+                    state: review_state.clone(),
+                    status: "ok".to_string(),
+                    error: None,
+                },
+                Err(error) => StateUpdateResult {
+                    state: review_state.clone(),
+                    status: "error".to_string(),
+                    error: Some(error),
+                },
+            },
+        )
+    } else {
+        None
+    };
+    if let Some(update) = &state_update {
+        emit_event(
+            context,
+            "delivery_issue_state_update",
+            json!({ "issue": issue, "state": update.state, "status": update.status, "error": update.error }),
+        )?;
+    }
+    let mut comments = Vec::new();
+    if !resolved.raw.no_linear_comments {
+        let body = build_delivery_comment_body(
+            &issue,
+            &workspace,
+            &completion,
+            &phase_results,
+            &media_attachments,
+            state_update.as_ref(),
+        );
+        match create_linear_comment(auth, &issue.id, &body) {
+            Ok(comment) => {
+                emit_event(
+                    context,
+                    "delivery_comment_created",
+                    json!({ "issue": issue, "comment": comment }),
+                )?;
+                comments.push(comment);
+            }
+            Err(error) => {
+                emit_event(
+                    context,
+                    "delivery_comment_failed",
+                    json!({ "issue": issue, "detail": error }),
+                )?;
+                comments.push(LinearCommentResult {
+                    id: None,
+                    url: None,
+                    status: "error".to_string(),
+                    error: Some(error),
+                });
+            }
+        }
+    }
 
     {
         let max_attempts = effective_max_attempts(resolved);
@@ -666,7 +752,15 @@ fn run_linear_issue_delivery(
             }
         } else {
             issue_state.last_error = Some(completion.detail.clone());
-            schedule_retry(issue_state, max_attempts, DEFAULT_RETRY_BASE_MS);
+            schedule_retry(
+                issue_state,
+                max_attempts,
+                resolved
+                    .raw
+                    .linear_retry_base
+                    .saturating_mul(1000)
+                    .max(1000),
+            );
         }
     }
     write_delivery_state(&context.paths.state_file, state)?;
@@ -693,6 +787,8 @@ fn run_linear_issue_delivery(
         completion,
         phases: phase_results,
         media_attachments,
+        comments,
+        state_update,
     })
 }
 
@@ -756,6 +852,22 @@ pub(super) fn render_linear_delivery_result(result: &LinearDeliveryResult) -> St
                     media.url.as_deref().unwrap_or("unknown")
                 ));
             }
+        }
+        for comment in &issue.comments {
+            if let Some(error) = &comment.error {
+                lines.push(format!("- linear comment: failed ({error})"));
+            } else {
+                lines.push(format!(
+                    "- linear comment: {}",
+                    comment.url.as_deref().unwrap_or("created")
+                ));
+            }
+        }
+        if let Some(update) = &issue.state_update {
+            lines.push(format!(
+                "- linear state: {} ({})",
+                update.state, update.status
+            ));
         }
     }
     lines.join("\n")
@@ -1188,6 +1300,144 @@ fn create_linear_attachment(
         .get("attachment")
         .cloned()
         .ok_or_else(|| "Linear attachmentCreate did not return an attachment.".to_string())
+}
+
+fn create_linear_comment(
+    auth: &str,
+    issue_id: &str,
+    body: &str,
+) -> Result<LinearCommentResult, String> {
+    let data = linear_graphql(
+        auth,
+        "mutation CouncilLinearCommentCreate($input: CommentCreateInput!) { commentCreate(input: $input) { success comment { id url } } }",
+        json!({
+            "input": {
+                "issueId": issue_id,
+                "body": body
+            }
+        }),
+    )?;
+    let payload = data
+        .get("commentCreate")
+        .ok_or_else(|| "Linear commentCreate did not return a payload.".to_string())?;
+    if !payload
+        .get("success")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        return Err("Linear commentCreate did not succeed.".to_string());
+    }
+    let comment = payload.get("comment").cloned().unwrap_or(Value::Null);
+    Ok(LinearCommentResult {
+        id: comment
+            .get("id")
+            .and_then(Value::as_str)
+            .map(ToString::to_string),
+        url: comment
+            .get("url")
+            .and_then(Value::as_str)
+            .map(ToString::to_string),
+        status: "ok".to_string(),
+        error: None,
+    })
+}
+
+fn update_linear_issue_state(
+    auth: &str,
+    issue: &LinearIssue,
+    review_state: &str,
+) -> Result<(), String> {
+    let mut filter = json!({ "name": { "eq": review_state } });
+    if let Some(team) = &issue.team {
+        filter = json!({
+            "and": [
+                { "name": { "eq": review_state } },
+                { "team": { "key": { "eq": team } } }
+            ]
+        });
+    }
+    let data = linear_graphql(
+        auth,
+        "query CouncilLinearWorkflowState($filter: WorkflowStateFilter) { workflowStates(first: 10, filter: $filter) { nodes { id name } } }",
+        json!({ "filter": filter }),
+    )?;
+    let state_id = data
+        .pointer("/workflowStates/nodes")
+        .and_then(Value::as_array)
+        .and_then(|nodes| nodes.first())
+        .and_then(|node| node.get("id"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("Could not find Linear workflow state `{review_state}`."))?;
+    let updated = linear_graphql(
+        auth,
+        "mutation CouncilLinearIssueState($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success issue { id } } }",
+        json!({
+            "id": issue.id,
+            "input": { "stateId": state_id }
+        }),
+    )?;
+    let success = updated
+        .pointer("/issueUpdate/success")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if success {
+        Ok(())
+    } else {
+        Err("Linear issueUpdate did not succeed.".to_string())
+    }
+}
+
+fn build_delivery_comment_body(
+    issue: &LinearIssue,
+    workspace: &IssueWorkspace,
+    completion: &CompletionResult,
+    phases: &[PhaseDeliveryResult],
+    media: &[MediaAttachmentResult],
+    state_update: Option<&StateUpdateResult>,
+) -> String {
+    let mut lines = vec![
+        format!("Council delivery update for {}", issue.identifier),
+        String::new(),
+        format!("Status: {}", completion.status),
+        format!("Gate: {}", completion.gate),
+        format!("Workspace strategy: {}", workspace.strategy),
+    ];
+    if let Some(branch) = &workspace.branch {
+        lines.push(format!("Branch: {branch}"));
+    }
+    if let Some(pr_url) = &completion.pr_url {
+        lines.push(format!("PR: {pr_url}"));
+    }
+    if !completion.detail.trim().is_empty() {
+        lines.push(format!("Detail: {}", completion.detail));
+    }
+    lines.push(String::new());
+    lines.push("Phases:".to_string());
+    for phase in phases {
+        lines.push(format!(
+            "- {}: {} via {}",
+            phase.phase, phase.summary_status, phase.summarizer
+        ));
+    }
+    if !media.is_empty() {
+        lines.push(String::new());
+        lines.push("Media:".to_string());
+        for item in media {
+            lines.push(format!(
+                "- {}: {}",
+                item.source,
+                item.error.as_deref().unwrap_or("attached")
+            ));
+        }
+    }
+    if let Some(update) = state_update {
+        lines.push(String::new());
+        lines.push(format!(
+            "Review state update: {} ({})",
+            update.state, update.status
+        ));
+    }
+    truncate(&lines.join("\n"), 16_000)
 }
 
 fn evaluate_completion_gate(
@@ -2015,8 +2265,10 @@ fn pick_phase_lead(phase: &str, members: &[String], requested: Option<&str>) -> 
 fn effective_max_attempts(resolved: &ResolvedArgs) -> usize {
     if resolved.raw.linear_until_complete {
         usize::MAX
-    } else {
+    } else if resolved.raw.linear_max_attempts == 0 {
         DEFAULT_MAX_ATTEMPTS
+    } else {
+        resolved.raw.linear_max_attempts
     }
 }
 

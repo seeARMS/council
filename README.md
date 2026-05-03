@@ -1,6 +1,6 @@
 # council
 
-A small open-source CLI that asks multiple AI coding CLIs (`codex`, `claude`, `gemini`) the same question and synthesizes their answers into one final response. It can run the tools in parallel, or coordinate planner/lead/executor workflows with handoffs, iterations, and provider team sizes.
+A small open-source CLI that asks multiple AI coding CLIs (`codex`, `claude`, `gemini`) the same question and synthesizes their answers into one final response. It can run the tools in parallel, or coordinate planner/lead/executor workflows with handoffs, iterations, and real provider sub-agent teams.
 
 This repo holds two things:
 
@@ -48,6 +48,8 @@ cd web && npm install && npm run dev
 ```
 
 If you are working on the CLI from a git checkout, run `cargo run -p council -- --help`, launch the native Studio with `cargo run -p council -- --studio`, or install it locally with `cargo install --path crates/council`.
+
+Native Rust surfaces now include `--auth-status`, `--capabilities-status`, provider Skills/MCP/Tools override flags, `--team-work` fanout, prompt command telemetry, and Linear delivery loops that can poll targeted projects or epics until review or CI gates are satisfied.
 
 ## License
 

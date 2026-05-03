@@ -77,11 +77,11 @@ const structuredData = JSON.stringify([
     featureList: [
       "Runs Codex, Claude, and Gemini in parallel",
       "Synthesizes one answer across multiple model outputs",
-      "Provides native provider settings, lead and planner roles, handoffs, iterations, and team sizes",
-      "Launches provider social-login flows and preserves browser deeplink and code paste authentication",
-      "Carries Linear setup/status and delivery flags forward while the native worker loop is ported",
-      "Shows provider token usage and tool command telemetry",
-      "Inherits provider-native tools, skills, and MCP configuration from the underlying CLIs when their permission modes allow it",
+      "Provides native provider settings, lead and planner roles, handoffs, iterations, and real provider sub-agent teams",
+      "Launches provider social-login flows, checks auth status, and preserves browser deeplink and code paste authentication",
+      "Runs native Linear project and epic delivery loops with isolated workspaces, reconciliation, comments, media, and review or CI gates",
+      "Shows provider token usage, sub-agent usage, prompt commands, and tool command telemetry",
+      "Manages inherit or override modes for provider-native tools, skills, MCP, agents, plugins, policies, and extensions",
     ],
     sameAs: [repoUrl, crateUrl, xUrl],
   },
@@ -576,7 +576,7 @@ const structuredData = JSON.stringify([
         <div class="max-w-6xl mx-auto px-6">
           <div class="stagger-fade-group" style="--stagger-fade-base-delay: 420ms;">
             <p class="mx-auto max-w-3xl text-center text-lg leading-8 text-zinc-700 text-balance dark:text-zinc-300">
-              Three models, three sets of blind spots. Council lets you choose a lead, planner, executors, handoffs, iterations, social-login auth, Linear delivery, and the local tools each provider already knows how to use.
+              Three models, three sets of blind spots. Council lets you choose a lead, planner, executors, real provider sub-agents, handoffs, iterations, managed social-login auth, Linear delivery, and the local tools each provider already knows how to use.
             </p>
             <div class="mt-12 md:mt-16 rounded-2xl border border-zinc-200 bg-zinc-50/70 p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/40">
               <div class="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
@@ -589,34 +589,34 @@ const structuredData = JSON.stringify([
                     <div>
                       <p class="text-zinc-500 dark:text-zinc-500">menu</p>
                       <p>Social login</p>
+                      <p>Auth status</p>
                       <p>Linear status</p>
-                      <p>Deliver Linear</p>
-                      <p>Attach media</p>
+                      <p>Capabilities</p>
                     </div>
                     <div>
                       <p class="text-zinc-500 dark:text-zinc-500">linear</p>
                       <p>auth: configured</p>
                       <p>mode: watch</p>
                       <p>team: ENG</p>
-                      <p>workspace: worktree</p>
+                      <p>comments: on</p>
                     </div>
                     <div>
                       <p class="text-zinc-500 dark:text-zinc-500">telemetry</p>
-                      <p>codex tok:~8.4k tools:3</p>
-                      <p>claude tok:12.1k tools:2</p>
-                      <p>gemini tok:~6.7k</p>
-                      <p>synthesis tools:1</p>
+                      <p>codex tok:~8.4k tools:3 subs:2</p>
+                      <p>claude tok:12.1k tools:2 subs:2</p>
+                      <p>gemini tok:~6.7k tools:1</p>
+                      <p>cmds:4</p>
                     </div>
                   </div>
                 </div>
                 <div class="grid gap-3 text-sm">
                   <div class="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
                     <h2 class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Native by default</h2>
-                    <p class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Run provider consultations, change auth and permissions, tag files, run prompt commands, inspect JSON, and use the native Studio TUI without relying on the removed npm CLI.</p>
+                    <p class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Run provider consultations, change auth and permissions, manage Skills/MCP/Tools overrides, tag files, run prompt commands, inspect JSON, and use the native Studio TUI without relying on the removed npm CLI.</p>
                   </div>
                   <div class="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
                     <h2 class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Linear migration path</h2>
-                    <p class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Target Linear issues, projects, and epics from the native CLI with isolated workspaces, persisted state, retry/reconciliation, media attachments, and review or CI completion gates.</p>
+                    <p class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Target Linear issues, projects, and epics from the native CLI with isolated workspaces, persisted state, retry/reconciliation, comments back to Linear, optional review-state updates, media attachments, and review or CI completion gates.</p>
                   </div>
                 </div>
               </div>
@@ -626,23 +626,23 @@ const structuredData = JSON.stringify([
               <dl class="features-dl stagger-fade-group space-y-6 text-sm" style="--stagger-fade-base-delay: 510ms;">
                 <div>
                   <dt class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Works with what you&apos;ve already got</dt>
-                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Detects <code>codex</code>, <code>claude</code>, and <code>gemini</code> on your <code>PATH</code> and runs whichever subset is there. Each provider still loads its own local config, including native tools, skills, and MCP servers when that CLI and permission mode allow them.</dd>
+                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Detects <code>codex</code>, <code>claude</code>, and <code>gemini</code> on your <code>PATH</code> and runs whichever subset is there. Each provider can inherit local config or use managed override flags for native tools, skills, MCP servers, agents, plugins, policies, and extensions.</dd>
                 </div>
                 <div>
                   <dt class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Coordination without glue scripts</dt>
-                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Select a lead, planner, executors, auth method, sandbox, permission mode, model, effort, iterations, handoffs, provider team sizes, tagged files, and prompt commands from the native CLI.</dd>
+                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Select a lead, planner, executors, auth method, sandbox, permission mode, model, effort, iterations, handoffs, provider sub-agent counts, tagged files, and prompt commands from the native CLI.</dd>
                 </div>
                 <div>
                   <dt class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Social login without leaving the flow</dt>
-                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Launch Codex, Claude, and Gemini auth flows from the CLI. Browser tabs, deeplink callbacks, local callbacks, and pasted verification codes stay connected to the provider CLI doing the login.</dd>
+                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Launch Codex, Claude, and Gemini auth flows from the CLI, check provider auth status, choose Claude login mode, and keep browser tabs, deeplink callbacks, local callbacks, and pasted verification codes connected to the provider CLI doing the login.</dd>
                 </div>
                 <div>
                   <dt class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Linear delivery loop</dt>
-                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Poll Linear, target issues by project or epic, prepare isolated workspaces, run phased council delivery, persist retry state, attach media, and finish on human-review or GitHub CI gates.</dd>
+                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Poll Linear, target issues by project or epic, prepare isolated workspaces, run phased council delivery, persist retry state, post delivery comments, attach media, optionally move review state, and finish on human-review or GitHub CI gates.</dd>
                 </div>
                 <div>
                   <dt class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Telemetry you can inspect</dt>
-                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Provider rows and JSON results include token usage, estimated usage when provider numbers are missing, and tool/command telemetry from prompt commands and upstream provider progress streams.</dd>
+                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Provider rows and JSON results include provider token usage, estimated usage when provider numbers are missing, sub-agent usage, prompt command telemetry, and tool calls extracted from upstream provider progress streams.</dd>
                 </div>
                 <div>
                   <dt class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Still fits automation</dt>

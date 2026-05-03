@@ -173,13 +173,35 @@ pub struct CliArgs {
     claude_allowed_tools: Vec<String>,
     #[arg(long = "claude-disallowed-tools", value_delimiter = ',', action = ArgAction::Append)]
     claude_disallowed_tools: Vec<String>,
+    #[arg(long = "claude-tools", value_delimiter = ',', action = ArgAction::Append)]
+    claude_tools: Vec<String>,
+    #[arg(long = "claude-agent")]
+    claude_agent: Option<String>,
+    #[arg(long = "claude-agents-json")]
+    claude_agents_json: Option<String>,
+    #[arg(long = "claude-plugin-dir", action = ArgAction::Append)]
+    claude_plugin_dir: Vec<String>,
+    #[arg(long = "claude-strict-mcp-config", action = ArgAction::SetTrue)]
+    claude_strict_mcp_config: bool,
+    #[arg(long = "claude-disable-slash-commands", action = ArgAction::SetTrue)]
+    claude_disable_slash_commands: bool,
     #[arg(long = "gemini-settings")]
     gemini_settings: Option<String>,
     #[arg(long = "gemini-tools-profile", value_delimiter = ',', action = ArgAction::Append)]
     gemini_tools_profile: Vec<String>,
+    #[arg(long = "gemini-allowed-mcp-servers", value_delimiter = ',', action = ArgAction::Append)]
+    gemini_allowed_mcp_servers: Vec<String>,
+    #[arg(long = "gemini-policy", value_delimiter = ',', action = ArgAction::Append)]
+    gemini_policy: Vec<String>,
+    #[arg(long = "gemini-admin-policy", value_delimiter = ',', action = ArgAction::Append)]
+    gemini_admin_policy: Vec<String>,
+    #[arg(long = "capabilities-status", action = ArgAction::SetTrue)]
+    capabilities_status: bool,
 
     #[arg(long = "auth-login", action = ArgAction::SetTrue)]
     auth_login: bool,
+    #[arg(long = "auth-status", action = ArgAction::SetTrue)]
+    auth_status: bool,
     #[arg(long = "auth-login-providers", value_delimiter = ',')]
     auth_login_providers: Vec<String>,
     #[arg(long = "auth-device-code", action = ArgAction::SetTrue)]
@@ -188,6 +210,10 @@ pub struct CliArgs {
     no_auth_open_browser: bool,
     #[arg(long = "auth-timeout", default_value_t = 300)]
     auth_timeout: u64,
+    #[arg(long = "claude-login-mode", default_value = "claudeai")]
+    claude_login_mode: String,
+    #[arg(long = "claude-login-email")]
+    claude_login_email: Option<String>,
 
     #[arg(long = "file", alias = "tag-file", action = ArgAction::Append)]
     files: Vec<PathBuf>,
@@ -251,6 +277,12 @@ pub struct CliArgs {
     linear_ci_timeout: u64,
     #[arg(long = "linear-ci-poll-interval", default_value_t = 30)]
     linear_ci_poll_interval: u64,
+    #[arg(long = "linear-poll-interval", default_value_t = 60)]
+    linear_poll_interval: u64,
+    #[arg(long = "linear-max-attempts", default_value_t = 3)]
+    linear_max_attempts: usize,
+    #[arg(long = "linear-retry-base", default_value_t = 60)]
+    linear_retry_base: u64,
     #[arg(long = "linear-workspace-strategy", default_value = "worktree")]
     linear_workspace_strategy: String,
     #[arg(long = "linear-state-file")]
@@ -263,6 +295,10 @@ pub struct CliArgs {
     linear_attach_media: Vec<String>,
     #[arg(long = "linear-attachment-title")]
     linear_attachment_title: Option<String>,
+    #[arg(long = "no-linear-comments", action = ArgAction::SetTrue)]
+    no_linear_comments: bool,
+    #[arg(long = "linear-update-review-state", action = ArgAction::SetTrue)]
+    linear_update_review_state: bool,
     #[arg(long = "delivery-phases", value_delimiter = ',')]
     delivery_phases: Vec<String>,
 
@@ -313,6 +349,7 @@ pub struct CouncilResult {
     members_requested: Vec<String>,
     summarizer_requested: String,
     workflow: Workflow,
+    prompt_commands: Vec<CommandTelemetry>,
     members: Vec<EngineResult>,
     summary: EngineResult,
 }
@@ -340,6 +377,8 @@ pub struct EngineResult {
     output: String,
     command: String,
     token_usage: TokenUsage,
+    tool_calls: Vec<ToolUsage>,
+    sub_agents: Vec<EngineResult>,
     role: String,
     iteration: usize,
     total_iterations: usize,
@@ -355,6 +394,32 @@ struct TokenUsage {
     source: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+struct ToolUsage {
+    name: String,
+    kind: String,
+    status: String,
+    detail: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct CommandTelemetry {
+    command: String,
+    status: String,
+    detail: String,
+    exit_code: Option<i32>,
+    duration_ms: u128,
+    stdout_chars: usize,
+    stderr_chars: usize,
+    timed_out: bool,
+}
+
+#[derive(Debug)]
+struct PromptContext {
+    prompt: String,
+    commands: Vec<CommandTelemetry>,
+}
+
 #[derive(Debug)]
 struct CommandResult {
     command: String,
@@ -365,6 +430,7 @@ struct CommandResult {
     timed_out: bool,
     error: Option<String>,
     timeout_ms: u64,
+    duration_ms: u128,
 }
 
 #[derive(Debug, Clone)]
@@ -381,6 +447,7 @@ struct EngineRunOptions {
     iteration: usize,
     total_iterations: usize,
     team_size: usize,
+    is_sub_agent: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -391,8 +458,35 @@ struct ProviderCapability {
     mcp_config: Vec<String>,
     allowed_tools: Vec<String>,
     disallowed_tools: Vec<String>,
+    tools: Vec<String>,
+    agent: Option<String>,
+    agents_json: Option<String>,
+    plugin_dirs: Vec<String>,
+    strict_mcp_config: bool,
+    disable_slash_commands: bool,
     settings: Option<String>,
     tools_profile: Vec<String>,
+    allowed_mcp_servers: Vec<String>,
+    policy: Vec<String>,
+    admin_policy: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct ProviderAuthStatus {
+    provider: String,
+    configured: bool,
+    status: String,
+    source: String,
+    detail: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct ProviderCapabilityStatus {
+    provider: String,
+    mcp: CommandTelemetry,
+    skills: Option<CommandTelemetry>,
+    tools: Option<CommandTelemetry>,
+    detail: String,
 }
 
 struct TempSettings {
@@ -445,6 +539,33 @@ where
         return studio::run_studio(&resolved);
     }
 
+    if resolved.raw.auth_status {
+        println!(
+            "{}",
+            render_auth_statuses(&collect_auth_statuses(&resolved))
+        );
+        if resolved.prompt.trim().is_empty()
+            && !resolved.raw.auth_login
+            && !resolved.raw.deliver_linear
+            && !resolved.raw.capabilities_status
+        {
+            return 0;
+        }
+    }
+
+    if resolved.raw.capabilities_status {
+        println!(
+            "{}",
+            render_provider_capability_statuses(&collect_provider_capability_statuses(&resolved))
+        );
+        if resolved.prompt.trim().is_empty()
+            && !resolved.raw.auth_login
+            && !resolved.raw.deliver_linear
+        {
+            return 0;
+        }
+    }
+
     if resolved.raw.auth_login {
         if let Err(error) = run_social_login(&resolved) {
             eprintln!("{error}");
@@ -495,8 +616,8 @@ where
         return 64;
     }
 
-    let prompt = match build_prompt_with_context(&resolved) {
-        Ok(prompt) => prompt,
+    let prompt_context = match build_prompt_context(&resolved) {
+        Ok(context) => context,
         Err(error) => {
             eprintln!("{error}");
             return 1;
@@ -507,7 +628,7 @@ where
         eprintln!("{}", render_banner());
     }
 
-    let result = run_council(&resolved, prompt);
+    let result = run_council(&resolved, prompt_context.prompt, prompt_context.commands);
     if resolved.raw.json || resolved.raw.json_stream {
         let serialized = if resolved.raw.json_stream {
             serde_json::to_string(&result)
@@ -550,6 +671,26 @@ fn resolve_args(raw: CliArgs) -> Result<ResolvedArgs, String> {
     validate_provider_effort("codex", raw.codex_effort.as_deref())?;
     validate_provider_effort("claude", raw.claude_effort.as_deref())?;
     validate_provider_effort("gemini", raw.gemini_effort.as_deref())?;
+    validate_choice(
+        "--claude-login-mode",
+        &raw.claude_login_mode,
+        &["claudeai", "console", "sso"],
+    )?;
+    validate_choice(
+        "--codex-capabilities",
+        &raw.codex_capabilities,
+        &[CAPABILITY_INHERIT, CAPABILITY_OVERRIDE],
+    )?;
+    validate_choice(
+        "--claude-capabilities",
+        &raw.claude_capabilities,
+        &[CAPABILITY_INHERIT, CAPABILITY_OVERRIDE],
+    )?;
+    validate_choice(
+        "--gemini-capabilities",
+        &raw.gemini_capabilities,
+        &[CAPABILITY_INHERIT, CAPABILITY_OVERRIDE],
+    )?;
 
     let mut prompt = raw.prompt.join(" ");
     if prompt.trim().is_empty() && !io::stdin().is_terminal() {
@@ -645,6 +786,283 @@ fn validate_provider_effort(provider: &str, value: Option<&str>) -> Result<(), S
     }
 }
 
+fn validate_choice(flag: &str, value: &str, allowed: &[&str]) -> Result<(), String> {
+    if allowed.contains(&value) {
+        Ok(())
+    } else {
+        Err(format!("{flag} must be one of: {}", allowed.join(", ")))
+    }
+}
+
+fn collect_auth_statuses(resolved: &ResolvedArgs) -> Vec<ProviderAuthStatus> {
+    resolved
+        .members
+        .iter()
+        .map(|provider| provider_auth_status(provider, resolved))
+        .collect()
+}
+
+fn provider_auth_status(provider: &str, resolved: &ResolvedArgs) -> ProviderAuthStatus {
+    let auth = provider_auth(resolved, provider);
+    match provider {
+        "codex" => {
+            let bin = resolve_binary("codex");
+            let args = vec!["login".to_string(), "status".to_string()];
+            status_from_command(provider, &auth, &bin, &args, &resolved.cwd)
+        }
+        "claude" => {
+            let bin = resolve_binary("claude");
+            let args = vec![
+                "auth".to_string(),
+                "status".to_string(),
+                "--text".to_string(),
+            ];
+            status_from_command(provider, &auth, &bin, &args, &resolved.cwd)
+        }
+        "gemini" => {
+            let has_api_key = std::env::var("GEMINI_API_KEY")
+                .ok()
+                .is_some_and(|value| !value.trim().is_empty());
+            let home = std::env::var("HOME").unwrap_or_default();
+            let has_oauth_file = !home.is_empty()
+                && [
+                    ".gemini/oauth_creds.json",
+                    ".gemini/oauth_tokens.json",
+                    ".gemini/settings.json",
+                ]
+                .iter()
+                .any(|path| Path::new(&home).join(path).exists());
+            let configured = has_api_key || has_oauth_file;
+            ProviderAuthStatus {
+                provider: provider.to_string(),
+                configured,
+                status: if configured { "configured" } else { "unknown" }.to_string(),
+                source: auth,
+                detail: if has_api_key {
+                    "GEMINI_API_KEY is present.".to_string()
+                } else if has_oauth_file {
+                    "Gemini local auth/config files are present.".to_string()
+                } else {
+                    "Gemini CLI does not currently expose a stable headless auth status command; use Social login from Studio or run gemini interactively.".to_string()
+                },
+            }
+        }
+        _ => ProviderAuthStatus {
+            provider: provider.to_string(),
+            configured: false,
+            status: "unknown".to_string(),
+            source: auth,
+            detail: "Unknown provider.".to_string(),
+        },
+    }
+}
+
+fn status_from_command(
+    provider: &str,
+    auth: &str,
+    bin: &str,
+    args: &[String],
+    cwd: &Path,
+) -> ProviderAuthStatus {
+    let result = run_command(bin, args, cwd, None, 15_000, HashMap::new());
+    let configured = result.code == Some(0);
+    ProviderAuthStatus {
+        provider: provider.to_string(),
+        configured,
+        status: if configured {
+            "configured"
+        } else if result.error.is_some() {
+            "missing-cli"
+        } else {
+            "not-configured"
+        }
+        .to_string(),
+        source: auth.to_string(),
+        detail: sanitize_status_detail(&compact_failure(&result)),
+    }
+}
+
+fn sanitize_status_detail(detail: &str) -> String {
+    let detail = detail.trim();
+    if detail.is_empty() {
+        return "No status detail returned.".to_string();
+    }
+    let detail = detail
+        .lines()
+        .take(6)
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(redact_possible_secret)
+        .collect::<Vec<_>>()
+        .join(" ");
+    redact_local_paths(&detail)
+}
+
+fn redact_possible_secret(value: &str) -> String {
+    value
+        .split_whitespace()
+        .map(|token| {
+            if looks_sensitive_token(token) {
+                "[redacted]"
+            } else if looks_like_email(token) {
+                "[email]"
+            } else {
+                token
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn looks_sensitive_token(token: &str) -> bool {
+    let trimmed =
+        token.trim_matches(|ch: char| !ch.is_ascii_alphanumeric() && ch != '-' && ch != '_');
+    trimmed.len() >= 28
+        && (trimmed.starts_with("sk-")
+            || trimmed.starts_with("sk_")
+            || trimmed.starts_with("gho_")
+            || trimmed.starts_with("ghp_")
+            || trimmed.starts_with("ghs_")
+            || trimmed.starts_with("ghu_")
+            || trimmed.starts_with("AIza")
+            || trimmed.starts_with("AQ."))
+}
+
+fn looks_like_email(token: &str) -> bool {
+    let trimmed = token.trim_matches(|ch: char| {
+        !ch.is_ascii_alphanumeric() && !matches!(ch, '@' | '.' | '_' | '-' | '+')
+    });
+    trimmed.contains('@') && trimmed.rsplit_once('.').is_some()
+}
+
+fn redact_local_paths(value: &str) -> String {
+    let mut redacted = value.to_string();
+    if let Ok(home) = std::env::var("HOME") {
+        if !home.trim().is_empty() {
+            redacted = redacted.replace(&home, "~");
+        }
+    }
+    redacted
+}
+
+fn render_auth_statuses(statuses: &[ProviderAuthStatus]) -> String {
+    let mut lines = vec!["Provider auth status".to_string()];
+    for status in statuses {
+        lines.push(format!(
+            "- {}: {} via {} ({})",
+            status.provider, status.status, status.source, status.detail
+        ));
+    }
+    lines.join("\n")
+}
+
+fn collect_provider_capability_statuses(resolved: &ResolvedArgs) -> Vec<ProviderCapabilityStatus> {
+    resolved
+        .members
+        .iter()
+        .map(|provider| provider_capability_status(provider, resolved))
+        .collect()
+}
+
+fn provider_capability_status(provider: &str, resolved: &ResolvedArgs) -> ProviderCapabilityStatus {
+    match provider {
+        "codex" => {
+            let bin = resolve_binary("codex");
+            let mcp = run_capability_probe(&bin, &["mcp", "list"], &resolved.cwd);
+            ProviderCapabilityStatus {
+                provider: provider.to_string(),
+                mcp,
+                skills: None,
+                tools: Some(run_capability_probe(
+                    &bin,
+                    &["plugin", "marketplace", "--help"],
+                    &resolved.cwd,
+                )),
+                detail:
+                    "Codex inherits ~/.codex config unless --codex-capabilities override is set."
+                        .to_string(),
+            }
+        }
+        "claude" => {
+            let bin = resolve_binary("claude");
+            ProviderCapabilityStatus {
+                provider: provider.to_string(),
+                mcp: run_capability_probe(&bin, &["mcp", "list"], &resolved.cwd),
+                skills: Some(run_capability_probe(&bin, &["plugin", "list"], &resolved.cwd)),
+                tools: Some(run_capability_probe(&bin, &["agents"], &resolved.cwd)),
+                detail: "Claude override can manage MCP config, tools, agents, plugin dirs, and slash-command skills.".to_string(),
+            }
+        }
+        "gemini" => {
+            let bin = resolve_binary("gemini");
+            ProviderCapabilityStatus {
+                provider: provider.to_string(),
+                mcp: run_capability_probe(&bin, &["mcp", "list"], &resolved.cwd),
+                skills: Some(run_capability_probe(&bin, &["skills", "list"], &resolved.cwd)),
+                tools: Some(run_capability_probe(&bin, &["extensions", "list"], &resolved.cwd)),
+                detail: "Gemini override can manage settings, extensions, MCP server allowlists, and policy files.".to_string(),
+            }
+        }
+        _ => ProviderCapabilityStatus {
+            provider: provider.to_string(),
+            mcp: CommandTelemetry {
+                command: provider.to_string(),
+                status: "unknown".to_string(),
+                detail: "Unknown provider.".to_string(),
+                exit_code: None,
+                duration_ms: 0,
+                stdout_chars: 0,
+                stderr_chars: 0,
+                timed_out: false,
+            },
+            skills: None,
+            tools: None,
+            detail: "Unknown provider.".to_string(),
+        },
+    }
+}
+
+fn run_capability_probe(bin: &str, args: &[&str], cwd: &Path) -> CommandTelemetry {
+    let args = args
+        .iter()
+        .map(|arg| (*arg).to_string())
+        .collect::<Vec<_>>();
+    command_telemetry(&run_command(bin, &args, cwd, None, 20_000, HashMap::new()))
+}
+
+fn render_provider_capability_statuses(statuses: &[ProviderCapabilityStatus]) -> String {
+    let mut lines = vec!["Provider capabilities".to_string()];
+    for status in statuses {
+        lines.push(format!(
+            "- {} MCP: {} ({})",
+            status.provider, status.mcp.status, status.mcp.command
+        ));
+        if !status.mcp.detail.trim().is_empty() {
+            lines.push(format!("  {}", status.mcp.detail));
+        }
+        if let Some(skills) = &status.skills {
+            lines.push(format!(
+                "  skills/plugins: {} ({})",
+                skills.status, skills.command
+            ));
+            if !skills.detail.trim().is_empty() {
+                lines.push(format!("  {}", skills.detail));
+            }
+        }
+        if let Some(tools) = &status.tools {
+            lines.push(format!(
+                "  tools/extensions: {} ({})",
+                tools.status, tools.command
+            ));
+            if !tools.detail.trim().is_empty() {
+                lines.push(format!("  {}", tools.detail));
+            }
+        }
+        lines.push(format!("  {}", status.detail));
+    }
+    lines.join("\n")
+}
+
 fn run_social_login(resolved: &ResolvedArgs) -> Result<(), String> {
     let providers = if resolved.raw.auth_login_providers.is_empty() {
         resolved.members.clone()
@@ -659,7 +1077,7 @@ fn run_social_login(resolved: &ResolvedArgs) -> Result<(), String> {
                 "codex" => {
                     let mut args = vec!["login".to_string()];
                     if resolved.raw.auth_device_code {
-                        args.push("--device-code".to_string());
+                        args.push("--device-auth".to_string());
                     }
                     (
                         resolve_binary("codex"),
@@ -667,11 +1085,22 @@ fn run_social_login(resolved: &ResolvedArgs) -> Result<(), String> {
                         "Complete the Codex browser login. Deeplinks and pasted codes are supported by the provider CLI when prompted.",
                     )
                 }
-                "claude" => (
-                    resolve_binary("claude"),
-                    vec!["auth".to_string(), "login".to_string()],
-                    "Complete the Claude browser login. Paste any shown login code into this terminal when prompted.",
-                ),
+                "claude" => {
+                    let mut args = vec!["auth".to_string(), "login".to_string()];
+                    match resolved.raw.claude_login_mode.as_str() {
+                        "console" => args.push("--console".to_string()),
+                        "sso" => args.push("--sso".to_string()),
+                        _ => args.push("--claudeai".to_string()),
+                    }
+                    if let Some(email) = &resolved.raw.claude_login_email {
+                        push_arg(&mut args, "--email", email.clone());
+                    }
+                    (
+                        resolve_binary("claude"),
+                        args,
+                        "Complete the Claude browser login. Paste any shown login code into this terminal when prompted; deeplinks are opened when the CLI emits them.",
+                    )
+                }
                 "gemini" => (
                     resolve_binary("gemini"),
                     vec![],
@@ -698,6 +1127,8 @@ fn run_social_login(resolved: &ResolvedArgs) -> Result<(), String> {
                 compact_failure(&result)
             ));
         }
+        let status = provider_auth_status(&provider, resolved);
+        eprintln!("[auth] {provider}: {} ({})", status.status, status.detail);
     }
     Ok(())
 }
@@ -710,6 +1141,7 @@ fn run_interactive_auth_command(
     open_browser: bool,
     provider: &str,
 ) -> CommandResult {
+    let started = Instant::now();
     let mut child = match Command::new(command)
         .args(args)
         .current_dir(cwd)
@@ -729,6 +1161,7 @@ fn run_interactive_auth_command(
                 timed_out: false,
                 error: Some(error.to_string()),
                 timeout_ms,
+                duration_ms: started.elapsed().as_millis(),
             }
         }
     };
@@ -752,7 +1185,6 @@ fn run_interactive_auth_command(
             Arc::clone(&seen_urls),
         )
     });
-    let started = Instant::now();
     let timeout = Duration::from_millis(timeout_ms);
     let mut timed_out = false;
     let code;
@@ -782,6 +1214,7 @@ fn run_interactive_auth_command(
                     timed_out,
                     error: Some(error.to_string()),
                     timeout_ms,
+                    duration_ms: started.elapsed().as_millis(),
                 }
             }
         }
@@ -800,6 +1233,7 @@ fn run_interactive_auth_command(
         timed_out,
         error: None,
         timeout_ms,
+        duration_ms: started.elapsed().as_millis(),
     }
 }
 
@@ -898,9 +1332,10 @@ fn open_browser_url(url: &str) -> Result<(), String> {
         .map_err(|error| error.to_string())
 }
 
-fn build_prompt_with_context(resolved: &ResolvedArgs) -> Result<String, String> {
+fn build_prompt_context(resolved: &ResolvedArgs) -> Result<PromptContext, String> {
     let mut prompt = resolved.prompt.trim().to_string();
     let mut sections = Vec::new();
+    let mut commands = Vec::new();
 
     for file in &resolved.raw.files {
         let path = if file.is_absolute() {
@@ -928,6 +1363,7 @@ fn build_prompt_with_context(resolved: &ResolvedArgs) -> Result<String, String> 
             resolved.raw.timeout * 1000,
             HashMap::new(),
         );
+        commands.push(command_telemetry(&result));
         sections.push(format!(
             "--- command: {} (exit {}) ---\nstdout:\n{}\nstderr:\n{}",
             command,
@@ -944,10 +1380,14 @@ fn build_prompt_with_context(resolved: &ResolvedArgs) -> Result<String, String> 
         prompt.push_str("\n\nPrompt context:\n");
         prompt.push_str(&sections.join("\n\n"));
     }
-    Ok(prompt)
+    Ok(PromptContext { prompt, commands })
 }
 
-fn run_council(resolved: &ResolvedArgs, query: String) -> CouncilResult {
+fn run_council(
+    resolved: &ResolvedArgs,
+    query: String,
+    prompt_commands: Vec<CommandTelemetry>,
+) -> CouncilResult {
     let workflow = build_workflow(resolved);
     let mut previous_iteration = Vec::new();
     let mut final_members = Vec::new();
@@ -975,6 +1415,8 @@ fn run_council(resolved: &ResolvedArgs, query: String) -> CouncilResult {
             output: String::new(),
             command: String::new(),
             token_usage: token_usage("", ""),
+            tool_calls: vec![],
+            sub_agents: vec![],
             role: "summary".to_string(),
             iteration: workflow.iterations,
             total_iterations: workflow.iterations,
@@ -993,6 +1435,7 @@ fn run_council(resolved: &ResolvedArgs, query: String) -> CouncilResult {
             &workflow,
         );
         options.role = "summary".to_string();
+        options.team_size = 0;
         run_engine(&summarizer, options)
     };
 
@@ -1002,6 +1445,7 @@ fn run_council(resolved: &ResolvedArgs, query: String) -> CouncilResult {
         members_requested: resolved.members.clone(),
         summarizer_requested: resolved.raw.summarizer.clone(),
         workflow,
+        prompt_commands,
         members: final_members,
         summary,
     }
@@ -1148,6 +1592,7 @@ fn engine_options(
         iteration,
         total_iterations: workflow.iterations,
         team_size: *workflow.teams.get(member).unwrap_or(&DEFAULT_TEAM_SIZE),
+        is_sub_agent: false,
     }
 }
 
@@ -1204,37 +1649,73 @@ fn provider_capability(resolved: &ResolvedArgs, member: &str) -> ProviderCapabil
             mcp_config: vec![],
             allowed_tools: vec![],
             disallowed_tools: vec![],
+            tools: vec![],
+            agent: None,
+            agents_json: None,
+            plugin_dirs: vec![],
+            strict_mcp_config: false,
+            disable_slash_commands: false,
             settings: None,
             tools_profile: vec![],
+            allowed_mcp_servers: vec![],
+            policy: vec![],
+            admin_policy: vec![],
         },
         Engine::Claude => ProviderCapability {
             mode: inferred_capability_mode(
                 &resolved.raw.claude_capabilities,
                 !resolved.raw.claude_mcp_config.is_empty()
                     || !resolved.raw.claude_allowed_tools.is_empty()
-                    || !resolved.raw.claude_disallowed_tools.is_empty(),
+                    || !resolved.raw.claude_disallowed_tools.is_empty()
+                    || !resolved.raw.claude_tools.is_empty()
+                    || resolved.raw.claude_agent.is_some()
+                    || resolved.raw.claude_agents_json.is_some()
+                    || !resolved.raw.claude_plugin_dir.is_empty()
+                    || resolved.raw.claude_strict_mcp_config
+                    || resolved.raw.claude_disable_slash_commands,
             ),
             config: vec![],
             mcp_profile: None,
             mcp_config: resolved.raw.claude_mcp_config.clone(),
             allowed_tools: resolved.raw.claude_allowed_tools.clone(),
             disallowed_tools: resolved.raw.claude_disallowed_tools.clone(),
+            tools: resolved.raw.claude_tools.clone(),
+            agent: resolved.raw.claude_agent.clone(),
+            agents_json: resolved.raw.claude_agents_json.clone(),
+            plugin_dirs: resolved.raw.claude_plugin_dir.clone(),
+            strict_mcp_config: resolved.raw.claude_strict_mcp_config,
+            disable_slash_commands: resolved.raw.claude_disable_slash_commands,
             settings: None,
             tools_profile: vec![],
+            allowed_mcp_servers: vec![],
+            policy: vec![],
+            admin_policy: vec![],
         },
         Engine::Gemini => ProviderCapability {
             mode: inferred_capability_mode(
                 &resolved.raw.gemini_capabilities,
                 resolved.raw.gemini_settings.is_some()
-                    || !resolved.raw.gemini_tools_profile.is_empty(),
+                    || !resolved.raw.gemini_tools_profile.is_empty()
+                    || !resolved.raw.gemini_allowed_mcp_servers.is_empty()
+                    || !resolved.raw.gemini_policy.is_empty()
+                    || !resolved.raw.gemini_admin_policy.is_empty(),
             ),
             config: vec![],
             mcp_profile: None,
             mcp_config: vec![],
             allowed_tools: vec![],
             disallowed_tools: vec![],
+            tools: vec![],
+            agent: None,
+            agents_json: None,
+            plugin_dirs: vec![],
+            strict_mcp_config: false,
+            disable_slash_commands: false,
             settings: resolved.raw.gemini_settings.clone(),
             tools_profile: resolved.raw.gemini_tools_profile.clone(),
+            allowed_mcp_servers: resolved.raw.gemini_allowed_mcp_servers.clone(),
+            policy: resolved.raw.gemini_policy.clone(),
+            admin_policy: resolved.raw.gemini_admin_policy.clone(),
         },
     }
 }
@@ -1261,7 +1742,81 @@ fn provider_option(
     }
 }
 
+fn build_sub_agent_prompt(original: &str, role: &str, index: usize, total: usize) -> String {
+    format!(
+        "You are sub-agent {index} of {total} for a Council provider assigned role `{role}`.\n\
+         Work independently on a useful slice of the task. Inspect, reason, or verify as needed, \
+         then return concise findings, risks, and concrete recommendations for the provider lead.\n\n\
+         Original provider prompt:\n{original}"
+    )
+}
+
+fn build_team_lead_prompt(original: &str, sub_agents: &[EngineResult]) -> String {
+    let handoff = sub_agents
+        .iter()
+        .map(|agent| {
+            format!(
+                "### {} [{}]\n{}",
+                agent.role,
+                agent.status,
+                if agent.output.trim().is_empty() {
+                    agent.detail.trim()
+                } else {
+                    agent.output.trim()
+                }
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    format!(
+        "You are the provider lead. Use the sub-agent handoffs below, resolve disagreements, \
+         and produce the final provider response for the original Council role.\n\n\
+         Sub-agent handoffs:\n{handoff}\n\nOriginal provider prompt:\n{original}"
+    )
+}
+
 fn run_engine(name: &str, options: EngineRunOptions) -> EngineResult {
+    if options.team_size > 0 && options.role != "summary" && !options.is_sub_agent {
+        return run_engine_team(name, options);
+    }
+    run_engine_single(name, options, vec![])
+}
+
+fn run_engine_team(name: &str, options: EngineRunOptions) -> EngineResult {
+    let team_size = options.team_size;
+    let (tx, rx) = mpsc::channel();
+    for index in 1..=team_size {
+        let tx = tx.clone();
+        let name = name.to_string();
+        let mut sub_options = options.clone();
+        sub_options.team_size = 0;
+        sub_options.is_sub_agent = true;
+        sub_options.role = format!("{}:sub-agent-{index}", options.role);
+        sub_options.prompt =
+            build_sub_agent_prompt(&options.prompt, &options.role, index, team_size);
+        thread::spawn(move || {
+            let _ = tx.send((index, run_engine_single(&name, sub_options, vec![])));
+        });
+    }
+    drop(tx);
+
+    let mut indexed = rx.into_iter().collect::<Vec<_>>();
+    indexed.sort_by_key(|(index, _)| *index);
+    let sub_agents = indexed
+        .into_iter()
+        .map(|(_, result)| result)
+        .collect::<Vec<_>>();
+    let mut lead_options = options.clone();
+    lead_options.prompt = build_team_lead_prompt(&options.prompt, &sub_agents);
+    lead_options.is_sub_agent = true;
+    run_engine_single(name, lead_options, sub_agents)
+}
+
+fn run_engine_single(
+    name: &str,
+    options: EngineRunOptions,
+    sub_agents: Vec<EngineResult>,
+) -> EngineResult {
     let started = Instant::now();
     let bin = resolve_binary(name);
     let result = match Engine::parse(name) {
@@ -1277,9 +1832,17 @@ fn run_engine(name: &str, options: EngineRunOptions) -> EngineResult {
             timed_out: false,
             error: Some(format!("Unknown engine: {name}")),
             timeout_ms: options.timeout_ms,
+            duration_ms: started.elapsed().as_millis(),
         },
     };
-    finalize_engine(name, &bin, started.elapsed().as_millis(), result, options)
+    finalize_engine(
+        name,
+        &bin,
+        started.elapsed().as_millis(),
+        result,
+        options,
+        sub_agents,
+    )
 }
 
 fn push_arg(args: &mut Vec<String>, flag: &str, value: impl Into<String>) {
@@ -1300,6 +1863,12 @@ fn push_repeated_flag(args: &mut Vec<String>, flag: &str, values: &[String]) {
     }
 }
 
+fn push_each_arg(args: &mut Vec<String>, flag: &str, values: &[String]) {
+    for value in values {
+        push_arg(args, flag, value.clone());
+    }
+}
+
 fn run_codex(bin: &str, options: &EngineRunOptions) -> CommandResult {
     let temp = match tempfile::tempdir() {
         Ok(temp) => temp,
@@ -1313,6 +1882,7 @@ fn run_codex(bin: &str, options: &EngineRunOptions) -> CommandResult {
                 timed_out: false,
                 error: Some(error.to_string()),
                 timeout_ms: options.timeout_ms,
+                duration_ms: 0,
             }
         }
     };
@@ -1395,6 +1965,16 @@ fn run_claude(bin: &str, options: &EngineRunOptions) -> CommandResult {
             "--disallowedTools",
             &options.capability.disallowed_tools,
         );
+        push_repeated_flag(&mut args, "--tools", &options.capability.tools);
+        push_optional_arg(&mut args, "--agent", &options.capability.agent);
+        push_optional_arg(&mut args, "--agents", &options.capability.agents_json);
+        push_each_arg(&mut args, "--plugin-dir", &options.capability.plugin_dirs);
+        if options.capability.strict_mcp_config {
+            args.push("--strict-mcp-config".to_string());
+        }
+        if options.capability.disable_slash_commands {
+            args.push("--disable-slash-commands".to_string());
+        }
     }
     run_command(
         bin,
@@ -1411,6 +1991,17 @@ fn run_gemini(bin: &str, options: &EngineRunOptions) -> CommandResult {
     push_optional_arg(&mut args, "--model", &options.model);
     if options.capability.mode == CAPABILITY_OVERRIDE {
         push_repeated_flag(&mut args, "--extensions", &options.capability.tools_profile);
+        push_repeated_flag(
+            &mut args,
+            "--allowed-mcp-server-names",
+            &options.capability.allowed_mcp_servers,
+        );
+        push_repeated_flag(&mut args, "--policy", &options.capability.policy);
+        push_repeated_flag(
+            &mut args,
+            "--admin-policy",
+            &options.capability.admin_policy,
+        );
     }
     args.extend([
         "-p".to_string(),
@@ -1495,6 +2086,7 @@ fn run_command(
     timeout_ms: u64,
     envs: HashMap<String, String>,
 ) -> CommandResult {
+    let started = Instant::now();
     let mut child = match Command::new(command)
         .args(args)
         .current_dir(cwd)
@@ -1515,6 +2107,7 @@ fn run_command(
                 timed_out: false,
                 error: Some(error.to_string()),
                 timeout_ms,
+                duration_ms: started.elapsed().as_millis(),
             }
         }
     };
@@ -1527,7 +2120,6 @@ fn run_command(
 
     let stdout = child.stdout.take().map(read_pipe);
     let stderr = child.stderr.take().map(read_pipe);
-    let started = Instant::now();
     let timeout = Duration::from_millis(timeout_ms);
     let mut timed_out = false;
     let code;
@@ -1557,6 +2149,7 @@ fn run_command(
                     timed_out,
                     error: Some(error.to_string()),
                     timeout_ms,
+                    duration_ms: started.elapsed().as_millis(),
                 }
             }
         }
@@ -1575,6 +2168,7 @@ fn run_command(
         timed_out,
         error: None,
         timeout_ms,
+        duration_ms: started.elapsed().as_millis(),
     }
 }
 
@@ -1595,6 +2189,7 @@ fn finalize_engine(
     duration_ms: u128,
     command_result: CommandResult,
     options: EngineRunOptions,
+    sub_agents: Vec<EngineResult>,
 ) -> EngineResult {
     let output = match Engine::parse(name) {
         Some(Engine::Claude) => parse_claude_output(&command_result.stdout),
@@ -1618,7 +2213,12 @@ fn finalize_engine(
     } else {
         compact_failure(&command_result)
     };
-    let usage = token_usage(&options.prompt, &output);
+    let usage = aggregate_token_usage(
+        extract_token_usage(&command_result.stdout, &options.prompt, &output)
+            .unwrap_or_else(|| token_usage(&options.prompt, &output)),
+        &sub_agents,
+    );
+    let tool_calls = extract_tool_usage(name, &command_result.stdout, &command_result.stderr);
     EngineResult {
         name: name.to_string(),
         bin: Some(bin.to_string()),
@@ -1631,6 +2231,8 @@ fn finalize_engine(
         output,
         command: format_command(&command_result.command, &command_result.args),
         token_usage: usage,
+        tool_calls,
+        sub_agents,
         role: options.role,
         iteration: options.iteration,
         total_iterations: options.total_iterations,
@@ -1652,6 +2254,28 @@ fn compact_failure(result: &CommandResult) -> String {
         .code
         .map(|code| format!("Exited with code {code}."))
         .unwrap_or_else(|| "Command failed.".to_string())
+}
+
+fn command_telemetry(result: &CommandResult) -> CommandTelemetry {
+    let status = if result.error.is_some() {
+        "missing"
+    } else if result.timed_out {
+        "timeout"
+    } else if result.code == Some(0) {
+        "ok"
+    } else {
+        "error"
+    };
+    CommandTelemetry {
+        command: format_command(&result.command, &result.args),
+        status: status.to_string(),
+        detail: truncate(&sanitize_status_detail(&compact_failure(result)), 600),
+        exit_code: result.code,
+        duration_ms: result.duration_ms,
+        stdout_chars: result.stdout.len(),
+        stderr_chars: result.stderr.len(),
+        timed_out: result.timed_out,
+    }
 }
 
 fn parse_codex_output(stdout: &str) -> String {
@@ -1885,6 +2509,177 @@ fn token_usage(prompt: &str, output: &str) -> TokenUsage {
     }
 }
 
+fn aggregate_token_usage(mut usage: TokenUsage, sub_agents: &[EngineResult]) -> TokenUsage {
+    if sub_agents.is_empty() {
+        return usage;
+    }
+    for agent in sub_agents {
+        usage.input += agent.token_usage.input;
+        usage.output += agent.token_usage.output;
+        usage.total += agent.token_usage.total;
+        usage.estimated |= agent.token_usage.estimated;
+    }
+    usage.source = format!("{}+sub-agents", usage.source);
+    usage
+}
+
+fn extract_token_usage(stdout: &str, prompt: &str, output: &str) -> Option<TokenUsage> {
+    let mut usage = TokenAccumulator::default();
+    for value in json_values(stdout) {
+        collect_token_counts(&value, &mut usage);
+    }
+    if usage.input.is_none() && usage.output.is_none() && usage.total.is_none() {
+        return None;
+    }
+    let input = usage.input.unwrap_or_else(|| estimate_tokens(prompt));
+    let output = usage.output.unwrap_or_else(|| estimate_tokens(output));
+    let total = usage.total.unwrap_or(input + output);
+    Some(TokenUsage {
+        input,
+        output,
+        total,
+        estimated: usage.input.is_none() || usage.output.is_none(),
+        source: "provider".to_string(),
+    })
+}
+
+#[derive(Default)]
+struct TokenAccumulator {
+    input: Option<usize>,
+    output: Option<usize>,
+    total: Option<usize>,
+}
+
+fn collect_token_counts(value: &Value, usage: &mut TokenAccumulator) {
+    match value {
+        Value::Object(map) => {
+            for (key, value) in map {
+                let normalized = key.replace(['_', '-'], "").to_ascii_lowercase();
+                if let Some(count) = value.as_u64().map(|value| value as usize) {
+                    match normalized.as_str() {
+                        "inputtokens" | "inputtokencount" | "prompttokens" | "prompttokencount" => {
+                            usage.input = Some(count)
+                        }
+                        "outputtokens"
+                        | "outputtokencount"
+                        | "completiontokens"
+                        | "candidatestokencount" => usage.output = Some(count),
+                        "totaltokens" | "totaltokencount" => usage.total = Some(count),
+                        _ => {}
+                    }
+                }
+                collect_token_counts(value, usage);
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                collect_token_counts(value, usage);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn extract_tool_usage(provider: &str, stdout: &str, stderr: &str) -> Vec<ToolUsage> {
+    let mut tools = Vec::new();
+    for value in json_values(stdout) {
+        collect_tool_usage(&value, &mut tools);
+    }
+    for line in stdout.lines().chain(stderr.lines()) {
+        if let Some(tool) = line_tool_usage(provider, line) {
+            tools.push(tool);
+        }
+    }
+    dedupe_tools(tools)
+}
+
+fn collect_tool_usage(value: &Value, tools: &mut Vec<ToolUsage>) {
+    match value {
+        Value::Object(map) => {
+            let type_name = map.get("type").and_then(Value::as_str).unwrap_or_default();
+            let name = map
+                .get("name")
+                .or_else(|| map.get("tool"))
+                .or_else(|| map.get("tool_name"))
+                .or_else(|| map.get("toolName"))
+                .and_then(Value::as_str);
+            if let Some(name) = name.filter(|_| {
+                type_name.contains("tool")
+                    || map.contains_key("input")
+                    || map.contains_key("arguments")
+                    || map.contains_key("toolCall")
+            }) {
+                tools.push(ToolUsage {
+                    name: name.to_string(),
+                    kind: if type_name.is_empty() {
+                        "tool"
+                    } else {
+                        type_name
+                    }
+                    .to_string(),
+                    status: "observed".to_string(),
+                    detail: short_json_detail(value),
+                });
+            }
+            for value in map.values() {
+                collect_tool_usage(value, tools);
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                collect_tool_usage(value, tools);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn line_tool_usage(provider: &str, line: &str) -> Option<ToolUsage> {
+    let trimmed = line.trim();
+    let lowered = trimmed.to_ascii_lowercase();
+    let marker = ["running shell:", "tool:", "tool_use", "mcp:", "command:"]
+        .iter()
+        .find(|marker| lowered.contains(**marker))?;
+    Some(ToolUsage {
+        name: marker.trim_end_matches(':').to_string(),
+        kind: provider.to_string(),
+        status: "observed".to_string(),
+        detail: truncate(trimmed, 240),
+    })
+}
+
+fn short_json_detail(value: &Value) -> String {
+    serde_json::to_string(value)
+        .map(|text| truncate(&text, 240))
+        .unwrap_or_default()
+}
+
+fn dedupe_tools(tools: Vec<ToolUsage>) -> Vec<ToolUsage> {
+    let mut seen = HashSet::new();
+    tools
+        .into_iter()
+        .filter(|tool| seen.insert(format!("{}:{}:{}", tool.kind, tool.name, tool.detail)))
+        .collect()
+}
+
+fn json_values(text: &str) -> Vec<Value> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return vec![];
+    }
+    let mut values = Vec::new();
+    if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+        values.push(value);
+        return values;
+    }
+    for line in trimmed.lines() {
+        if let Ok(value) = serde_json::from_str::<Value>(line.trim()) {
+            values.push(value);
+        }
+    }
+    values
+}
+
 fn estimate_tokens(text: &str) -> usize {
     if text.trim().is_empty() {
         0
@@ -1936,17 +2731,37 @@ fn render_human_result(result: &CouncilResult, verbose: bool) -> String {
             "Council consulted: {}",
             result.members_requested.join(", ")
         ));
+        for command in &result.prompt_commands {
+            lines.push(format!(
+                "cmd [{}] {} ({:.1}s)",
+                command.status,
+                command.command,
+                command.duration_ms as f64 / 1000.0
+            ));
+        }
         for (index, member) in result.members.iter().enumerate() {
             lines.push(format!(
-                "{}. [{}] {} ({:.1}s){}",
+                "{}. [{}] {} ({:.1}s, tokens:{}, tools:{}, sub-agents:{}){}",
                 index + 1,
                 member.status,
                 member.name,
                 member.duration_ms as f64 / 1000.0,
+                member.token_usage.total,
+                member.tool_calls.len(),
+                member.sub_agents.len(),
                 if member.detail.is_empty() { "" } else { ": " }
             ));
             if !member.detail.is_empty() {
                 lines.push(format!("   {}", member.detail));
+            }
+            for sub_agent in &member.sub_agents {
+                lines.push(format!(
+                    "   - {} [{}] tokens:{} tools:{}",
+                    sub_agent.role,
+                    sub_agent.status,
+                    sub_agent.token_usage.total,
+                    sub_agent.tool_calls.len()
+                ));
             }
             if member.status == "ok" {
                 lines.push(indent(&member.output, "   "));
@@ -1993,6 +2808,12 @@ mod tests {
             "override",
             "--claude-allowed-tools",
             "Read,Bash(git:*)",
+            "--claude-tools",
+            "Read,Edit",
+            "--claude-agent",
+            "reviewer",
+            "--gemini-allowed-mcp-servers",
+            "linear,github",
             "ship it",
         ])
         .unwrap();
@@ -2002,6 +2823,12 @@ mod tests {
         assert_eq!(
             resolved.raw.claude_allowed_tools,
             vec!["Read", "Bash(git:*)"]
+        );
+        assert_eq!(resolved.raw.claude_tools, vec!["Read", "Edit"]);
+        assert_eq!(resolved.raw.claude_agent.as_deref(), Some("reviewer"));
+        assert_eq!(
+            resolved.raw.gemini_allowed_mcp_servers,
+            vec!["linear", "github"]
         );
     }
 
@@ -2053,6 +2880,50 @@ mod tests {
             extract_auth_urls("deeplink: claude://login/complete."),
             vec!["claude://login/complete"]
         );
+    }
+
+    #[test]
+    fn parses_provider_token_usage() {
+        let stdout = r#"{"usage":{"input_tokens":12,"output_tokens":8,"total_tokens":20}}"#;
+        let usage = extract_token_usage(stdout, "hello", "world").unwrap();
+        assert_eq!(usage.input, 12);
+        assert_eq!(usage.output, 8);
+        assert_eq!(usage.total, 20);
+        assert!(!usage.estimated);
+    }
+
+    #[test]
+    fn extracts_tool_usage_from_provider_streams() {
+        let stdout = r#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"git status"}}]}}"#;
+        let tools = extract_tool_usage("claude", stdout, "");
+        assert!(tools.iter().any(|tool| tool.name == "Bash"));
+    }
+
+    #[test]
+    fn builds_real_sub_agent_handoff_prompt() {
+        let agent = EngineResult {
+            name: "codex".to_string(),
+            bin: Some("codex".to_string()),
+            status: "ok".to_string(),
+            duration_ms: 1,
+            detail: String::new(),
+            exit_code: Some(0),
+            stdout: String::new(),
+            stderr: String::new(),
+            output: "inspect parser".to_string(),
+            command: "codex exec".to_string(),
+            token_usage: token_usage("a", "b"),
+            tool_calls: vec![],
+            sub_agents: vec![],
+            role: "executor:sub-agent-1".to_string(),
+            iteration: 1,
+            total_iterations: 1,
+            team_size: 0,
+        };
+        let prompt = build_team_lead_prompt("ship it", &[agent]);
+        assert!(prompt.contains("Sub-agent handoffs"));
+        assert!(prompt.contains("inspect parser"));
+        assert!(prompt.contains("Original provider prompt"));
     }
 
     #[test]
