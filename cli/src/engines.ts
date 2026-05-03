@@ -224,7 +224,6 @@ async function runClaude({ prompt, cwd, timeoutMs, env, effort, onProgress }) {
   const commandResult = await runCommand({
     command: bin,
     args: [
-      '--bare',
       '-p',
       '--permission-mode',
       'plan',

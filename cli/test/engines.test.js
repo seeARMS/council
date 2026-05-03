@@ -219,6 +219,29 @@ test('runEngine forwards --effort to claude via --effort', async () => {
   }
 });
 
+test('runEngine does not pass --bare to claude so OAuth auth remains available', async () => {
+  const fake = await createFakeCouncilEnvironment({
+    claude: { member: { mode: 'echo-argv' } }
+  });
+
+  try {
+    const result = await runEngine('claude', {
+      prompt: 'hi',
+      cwd: process.cwd(),
+      timeoutMs: 5_000,
+      env: fake.env
+    });
+
+    assert.equal(result.status, 'ok');
+    const argv = JSON.parse(result.output);
+    assert.equal(argv.includes('--bare'), false);
+    assert.ok(argv.includes('-p'), 'claude should still run in print mode');
+    assert.equal(argv.includes('--no-session-persistence'), true);
+  } finally {
+    await fake.cleanup();
+  }
+});
+
 test('runEngine forwards --effort to gemini via thinkingBudget settings (no model swap)', async () => {
   const fake = await createFakeCouncilEnvironment({
     gemini: { member: { mode: 'echo-env' } }
