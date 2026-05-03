@@ -7,7 +7,7 @@ use std::fs;
 use std::io::{self, IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -20,6 +20,51 @@ const TOKEN_ESTIMATE_CHARS_PER_TOKEN: usize = 4;
 
 const ENGINES: [&str; 3] = ["codex", "claude", "gemini"];
 const DEFAULT_SUMMARIZER_ORDER: [&str; 3] = ["codex", "claude", "gemini"];
+const DEFAULT_AUTH_MODE: &str = "auto";
+const CAPABILITY_INHERIT: &str = "inherit";
+const CAPABILITY_OVERRIDE: &str = "override";
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+enum Engine {
+    Codex,
+    Claude,
+    Gemini,
+}
+
+impl Engine {
+    fn parse(name: &str) -> Option<Self> {
+        match name {
+            "codex" => Some(Self::Codex),
+            "claude" => Some(Self::Claude),
+            "gemini" => Some(Self::Gemini),
+            _ => None,
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Codex => "codex",
+            Self::Claude => "claude",
+            Self::Gemini => "gemini",
+        }
+    }
+
+    fn binary_env_var(self) -> &'static str {
+        match self {
+            Self::Codex => "COUNCIL_CODEX_BIN",
+            Self::Claude => "COUNCIL_CLAUDE_BIN",
+            Self::Gemini => "COUNCIL_GEMINI_BIN",
+        }
+    }
+
+    fn allowed_efforts(self) -> &'static [&'static str] {
+        match self {
+            Self::Codex => &["low", "medium", "high", "xhigh", ""],
+            Self::Claude => &["low", "medium", "high", "xhigh", "max"],
+            Self::Gemini => &["low", "medium", "high", ""],
+        }
+    }
+}
 
 #[derive(Parser, Debug, Clone)]
 #[command(
@@ -561,7 +606,7 @@ fn validate_engine_name(name: &str, allow_auto: bool, flag: &str) -> Result<(), 
     if allow_auto && name == "auto" {
         return Ok(());
     }
-    if ENGINES.contains(&name) {
+    if Engine::parse(name).is_some() {
         Ok(())
     } else {
         Err(format!(
@@ -579,13 +624,8 @@ fn validate_provider_effort(provider: &str, value: Option<&str>) -> Result<(), S
     let Some(value) = value else {
         return Ok(());
     };
-    let allowed: &[&str] = match provider {
-        "codex" => &["low", "medium", "high", "xhigh", ""],
-        "claude" => &["low", "medium", "high", "xhigh", "max"],
-        "gemini" => &["low", "medium", "high", ""],
-        _ => unreachable!(),
-    };
-    if allowed.contains(&value) {
+    let engine = Engine::parse(provider).expect("provider effort validation uses known engines");
+    if engine.allowed_efforts().contains(&value) {
         Ok(())
     } else {
         Err(format!("Unsupported --{provider}-effort value: {value}"))
@@ -899,13 +939,17 @@ fn run_iteration(
         .into_iter()
         .filter(|member| Some(member) != planner.as_ref())
         .collect::<Vec<_>>();
+    let resolved = Arc::new(resolved.clone());
+    let workflow = Arc::new(workflow.clone());
+    let previous_iteration = Arc::new(previous_iteration.to_vec());
+    let plan_output = Arc::new(plan_output);
     for member in executors.clone() {
         let tx = tx.clone();
-        let resolved = resolved.clone();
-        let workflow = workflow.clone();
+        let resolved = Arc::clone(&resolved);
+        let workflow = Arc::clone(&workflow);
         let query = query.to_string();
-        let previous_iteration = previous_iteration.to_vec();
-        let plan_output = plan_output.clone();
+        let previous_iteration = Arc::clone(&previous_iteration);
+        let plan_output = Arc::clone(&plan_output);
         thread::spawn(move || {
             let role = role_for(&member, &workflow);
             let prompt = build_member_prompt(
@@ -913,7 +957,7 @@ fn run_iteration(
                 &role,
                 &workflow,
                 iteration,
-                &previous_iteration,
+                previous_iteration.as_slice(),
                 &[],
                 &plan_output,
             );
@@ -958,12 +1002,12 @@ fn engine_options(
 }
 
 fn provider_effort(resolved: &ResolvedArgs, member: &str) -> Option<String> {
-    match member {
-        "codex" => resolved.raw.codex_effort.clone(),
-        "claude" => resolved.raw.claude_effort.clone(),
-        "gemini" => resolved.raw.gemini_effort.clone(),
-        _ => None,
-    }
+    provider_option(
+        member,
+        &resolved.raw.codex_effort,
+        &resolved.raw.claude_effort,
+        &resolved.raw.gemini_effort,
+    )
     .or_else(|| {
         resolved
             .raw
@@ -973,34 +1017,34 @@ fn provider_effort(resolved: &ResolvedArgs, member: &str) -> Option<String> {
 }
 
 fn provider_model(resolved: &ResolvedArgs, member: &str) -> Option<String> {
-    match member {
-        "codex" => resolved.raw.codex_model.clone(),
-        "claude" => resolved.raw.claude_model.clone(),
-        "gemini" => resolved.raw.gemini_model.clone(),
-        _ => None,
-    }
+    provider_option(
+        member,
+        &resolved.raw.codex_model,
+        &resolved.raw.claude_model,
+        &resolved.raw.gemini_model,
+    )
 }
 
 fn provider_permission(resolved: &ResolvedArgs, member: &str) -> Option<String> {
-    match member {
-        "codex" => Some(resolved.raw.codex_sandbox.clone()),
-        "claude" => Some(resolved.raw.claude_permission_mode.clone()),
-        _ => None,
+    match Engine::parse(member) {
+        Some(Engine::Codex) => Some(resolved.raw.codex_sandbox.clone()),
+        Some(Engine::Claude) => Some(resolved.raw.claude_permission_mode.clone()),
+        Some(Engine::Gemini) | None => None,
     }
 }
 
 fn provider_auth(resolved: &ResolvedArgs, member: &str) -> String {
-    match member {
-        "codex" => resolved.raw.codex_auth.clone(),
-        "claude" => resolved.raw.claude_auth.clone(),
-        "gemini" => resolved.raw.gemini_auth.clone(),
-        _ => "auto".to_string(),
+    match Engine::parse(member) {
+        Some(Engine::Codex) => resolved.raw.codex_auth.clone(),
+        Some(Engine::Claude) => resolved.raw.claude_auth.clone(),
+        Some(Engine::Gemini) => resolved.raw.gemini_auth.clone(),
+        None => DEFAULT_AUTH_MODE.to_string(),
     }
 }
 
 fn provider_capability(resolved: &ResolvedArgs, member: &str) -> ProviderCapability {
-    match member {
-        "codex" => ProviderCapability {
+    match Engine::parse(member).expect("provider capabilities use validated engines") {
+        Engine::Codex => ProviderCapability {
             mode: inferred_capability_mode(
                 &resolved.raw.codex_capabilities,
                 !resolved.raw.codex_config.is_empty() || resolved.raw.codex_mcp_profile.is_some(),
@@ -1013,7 +1057,7 @@ fn provider_capability(resolved: &ResolvedArgs, member: &str) -> ProviderCapabil
             settings: None,
             tools_profile: vec![],
         },
-        "claude" => ProviderCapability {
+        Engine::Claude => ProviderCapability {
             mode: inferred_capability_mode(
                 &resolved.raw.claude_capabilities,
                 !resolved.raw.claude_mcp_config.is_empty()
@@ -1028,7 +1072,7 @@ fn provider_capability(resolved: &ResolvedArgs, member: &str) -> ProviderCapabil
             settings: None,
             tools_profile: vec![],
         },
-        "gemini" => ProviderCapability {
+        Engine::Gemini => ProviderCapability {
             mode: inferred_capability_mode(
                 &resolved.raw.gemini_capabilities,
                 resolved.raw.gemini_settings.is_some()
@@ -1042,26 +1086,39 @@ fn provider_capability(resolved: &ResolvedArgs, member: &str) -> ProviderCapabil
             settings: resolved.raw.gemini_settings.clone(),
             tools_profile: resolved.raw.gemini_tools_profile.clone(),
         },
-        _ => unreachable!(),
     }
 }
 
 fn inferred_capability_mode(configured: &str, has_override_flags: bool) -> String {
-    if configured == "inherit" && has_override_flags {
-        "override".to_string()
+    if configured == CAPABILITY_INHERIT && has_override_flags {
+        CAPABILITY_OVERRIDE.to_string()
     } else {
         configured.to_string()
+    }
+}
+
+fn provider_option(
+    member: &str,
+    codex: &Option<String>,
+    claude: &Option<String>,
+    gemini: &Option<String>,
+) -> Option<String> {
+    match Engine::parse(member) {
+        Some(Engine::Codex) => codex.clone(),
+        Some(Engine::Claude) => claude.clone(),
+        Some(Engine::Gemini) => gemini.clone(),
+        None => None,
     }
 }
 
 fn run_engine(name: &str, options: EngineRunOptions) -> EngineResult {
     let started = Instant::now();
     let bin = resolve_binary(name);
-    let result = match name {
-        "codex" => run_codex(&bin, &options),
-        "claude" => run_claude(&bin, &options),
-        "gemini" => run_gemini(&bin, &options),
-        _ => CommandResult {
+    let result = match Engine::parse(name) {
+        Some(Engine::Codex) => run_codex(&bin, &options),
+        Some(Engine::Claude) => run_claude(&bin, &options),
+        Some(Engine::Gemini) => run_gemini(&bin, &options),
+        None => CommandResult {
             command: name.to_string(),
             args: vec![],
             code: None,
@@ -1073,6 +1130,24 @@ fn run_engine(name: &str, options: EngineRunOptions) -> EngineResult {
         },
     };
     finalize_engine(name, &bin, started.elapsed().as_millis(), result, options)
+}
+
+fn push_arg(args: &mut Vec<String>, flag: &str, value: impl Into<String>) {
+    args.push(flag.to_string());
+    args.push(value.into());
+}
+
+fn push_optional_arg(args: &mut Vec<String>, flag: &str, value: &Option<String>) {
+    if let Some(value) = value {
+        push_arg(args, flag, value.clone());
+    }
+}
+
+fn push_repeated_flag(args: &mut Vec<String>, flag: &str, values: &[String]) {
+    if !values.is_empty() {
+        args.push(flag.to_string());
+        args.extend(values.iter().cloned());
+    }
 }
 
 fn run_codex(bin: &str, options: &EngineRunOptions) -> CommandResult {
@@ -1093,19 +1168,15 @@ fn run_codex(bin: &str, options: &EngineRunOptions) -> CommandResult {
     };
     let output_path = temp.path().join("last-message.txt");
     let mut args = vec!["exec".to_string()];
-    if let Some(model) = &options.model {
-        args.extend(["--model".to_string(), model.clone()]);
-    }
+    push_optional_arg(&mut args, "--model", &options.model);
     if let Some(effort) = &options.effort {
-        args.extend(["-c".to_string(), format!("model_reasoning_effort={effort}")]);
+        push_arg(&mut args, "-c", format!("model_reasoning_effort={effort}"));
     }
-    if options.capability.mode == "override" {
+    if options.capability.mode == CAPABILITY_OVERRIDE {
         for config in &options.capability.config {
-            args.extend(["-c".to_string(), config.clone()]);
+            push_arg(&mut args, "-c", config.clone());
         }
-        if let Some(profile) = &options.capability.mcp_profile {
-            args.extend(["--profile".to_string(), profile.clone()]);
-        }
+        push_optional_arg(&mut args, "--profile", &options.capability.mcp_profile);
     }
     args.extend([
         "--skip-git-repo-check".to_string(),
@@ -1154,29 +1225,26 @@ fn run_claude(bin: &str, options: &EngineRunOptions) -> CommandResult {
         "--include-partial-messages".to_string(),
         "--no-session-persistence".to_string(),
     ]);
-    if let Some(model) = &options.model {
-        args.extend(["--model".to_string(), model.clone()]);
-    }
+    push_optional_arg(&mut args, "--model", &options.model);
     if let Some(effort) = options
         .effort
         .clone()
         .or_else(|| std::env::var("CLAUDE_CODE_EFFORT_LEVEL").ok())
     {
-        args.extend(["--effort".to_string(), effort]);
+        push_arg(&mut args, "--effort", effort);
     }
-    if options.capability.mode == "override" {
-        if !options.capability.mcp_config.is_empty() {
-            args.push("--mcp-config".to_string());
-            args.extend(options.capability.mcp_config.clone());
-        }
-        if !options.capability.allowed_tools.is_empty() {
-            args.push("--allowedTools".to_string());
-            args.extend(options.capability.allowed_tools.clone());
-        }
-        if !options.capability.disallowed_tools.is_empty() {
-            args.push("--disallowedTools".to_string());
-            args.extend(options.capability.disallowed_tools.clone());
-        }
+    if options.capability.mode == CAPABILITY_OVERRIDE {
+        push_repeated_flag(&mut args, "--mcp-config", &options.capability.mcp_config);
+        push_repeated_flag(
+            &mut args,
+            "--allowedTools",
+            &options.capability.allowed_tools,
+        );
+        push_repeated_flag(
+            &mut args,
+            "--disallowedTools",
+            &options.capability.disallowed_tools,
+        );
     }
     run_command(
         bin,
@@ -1190,12 +1258,9 @@ fn run_claude(bin: &str, options: &EngineRunOptions) -> CommandResult {
 
 fn run_gemini(bin: &str, options: &EngineRunOptions) -> CommandResult {
     let mut args = Vec::new();
-    if let Some(model) = &options.model {
-        args.extend(["--model".to_string(), model.clone()]);
-    }
-    if options.capability.mode == "override" && !options.capability.tools_profile.is_empty() {
-        args.push("--extensions".to_string());
-        args.extend(options.capability.tools_profile.clone());
+    push_optional_arg(&mut args, "--model", &options.model);
+    if options.capability.mode == CAPABILITY_OVERRIDE {
+        push_repeated_flag(&mut args, "--extensions", &options.capability.tools_profile);
     }
     args.extend([
         "-p".to_string(),
@@ -1213,7 +1278,7 @@ fn run_gemini(bin: &str, options: &EngineRunOptions) -> CommandResult {
             "GEMINI_CLI_SYSTEM_SETTINGS_PATH".to_string(),
             path.path.display().to_string(),
         );
-    } else if options.capability.mode == "override" {
+    } else if options.capability.mode == CAPABILITY_OVERRIDE {
         if let Some(settings) = &options.capability.settings {
             envs.insert(
                 "GEMINI_CLI_SYSTEM_SETTINGS_PATH".to_string(),
@@ -1234,7 +1299,7 @@ fn prepare_gemini_settings(options: &EngineRunOptions) -> Option<TempSettings> {
     };
     let dir = tempfile::tempdir().ok()?;
     let path = dir.path().join("settings.json");
-    let mut settings = if options.capability.mode == "override" {
+    let mut settings = if options.capability.mode == CAPABILITY_OVERRIDE {
         options
             .capability
             .settings
@@ -1381,11 +1446,11 @@ fn finalize_engine(
     command_result: CommandResult,
     options: EngineRunOptions,
 ) -> EngineResult {
-    let output = match name {
-        "claude" => parse_claude_output(&command_result.stdout),
-        "gemini" => parse_gemini_output(&command_result.stdout),
-        "codex" => parse_codex_output(&command_result.stdout),
-        _ => command_result.stdout.trim().to_string(),
+    let output = match Engine::parse(name) {
+        Some(Engine::Claude) => parse_claude_output(&command_result.stdout),
+        Some(Engine::Gemini) => parse_gemini_output(&command_result.stdout),
+        Some(Engine::Codex) => parse_codex_output(&command_result.stdout),
+        None => command_result.stdout.trim().to_string(),
     };
     let status = if command_result.error.is_some() {
         "missing"
@@ -1649,16 +1714,13 @@ fn pick_summarizer(resolved: &ResolvedArgs, successes: &[EngineResult]) -> Strin
 }
 
 fn resolve_binary(name: &str) -> String {
-    let env_name = match name {
-        "codex" => "COUNCIL_CODEX_BIN",
-        "claude" => "COUNCIL_CLAUDE_BIN",
-        "gemini" => "COUNCIL_GEMINI_BIN",
-        _ => "",
+    let Some(engine) = Engine::parse(name) else {
+        return name.to_string();
     };
-    std::env::var(env_name)
+    std::env::var(engine.binary_env_var())
         .ok()
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| name.to_string())
+        .unwrap_or_else(|| engine.as_str().to_string())
 }
 
 fn token_usage(prompt: &str, output: &str) -> TokenUsage {
@@ -1677,7 +1739,7 @@ fn estimate_tokens(text: &str) -> usize {
     if text.trim().is_empty() {
         0
     } else {
-        (text.len() / TOKEN_ESTIMATE_CHARS_PER_TOKEN).max(1)
+        text.len().div_ceil(TOKEN_ESTIMATE_CHARS_PER_TOKEN)
     }
 }
 
@@ -1827,6 +1889,14 @@ mod tests {
     fn formats_linear_status_targets() {
         assert_eq!(empty_as_any(&[]), "any");
         assert_eq!(empty_as_any(&["ENG-1".to_string()]), "ENG-1");
+    }
+
+    #[test]
+    fn estimates_tokens_with_ceiling_chunks() {
+        assert_eq!(estimate_tokens(""), 0);
+        assert_eq!(estimate_tokens("abc"), 1);
+        assert_eq!(estimate_tokens("abcd"), 1);
+        assert_eq!(estimate_tokens("abcde"), 2);
     }
 
     #[test]

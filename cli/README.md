@@ -1,7 +1,5 @@
 # council
 
-> Native CLI migration: Council is moving from this legacy TypeScript/npm package to the Rust crate in [`../crates/council`](../crates/council). New CLI development and CI should target Cargo; this package remains as a reference until full feature parity is retired or archived.
-
 `council` is a tiny CLI that asks multiple coding CLIs the same question and then synthesizes their answers into one final response.
 
 Today it supports:
