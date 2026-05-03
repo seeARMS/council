@@ -1,15 +1,18 @@
 use clap::{ArgAction, CommandFactory, Parser, ValueEnum};
 use serde::Serialize;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
 use std::fs;
 use std::io::{self, IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::{mpsc, Arc};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
+
+mod linear_delivery;
+mod studio;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const DEFAULT_TIMEOUT_MS: u64 = 600_000;
@@ -439,9 +442,7 @@ where
     };
 
     if resolved.raw.studio {
-        eprintln!(
-            "Council Studio is being ported to the native Rust TUI; continuing with the native text runner."
-        );
+        return studio::run_studio(&resolved);
     }
 
     if resolved.raw.auth_login {
@@ -455,23 +456,35 @@ where
     }
 
     if resolved.raw.linear_setup || resolved.raw.linear_status {
-        print_linear_status(&resolved);
-        return 0;
+        match linear_delivery::get_linear_status(&resolved) {
+            Ok(status) => {
+                println!("{}", linear_delivery::render_linear_status(&status));
+                return 0;
+            }
+            Err(error) => {
+                eprintln!("{error}");
+                return 1;
+            }
+        }
     }
 
     if resolved.raw.deliver_linear
         || resolved.raw.linear_until_complete
         || resolved.raw.linear_watch
     {
-        eprintln!("Native Rust Linear delivery is wired for configuration/status flags; the task execution loop is the next migration slice.");
-        eprintln!(
-            "Requested target: issues={}, projects={}, epics={}, gate={}",
-            resolved.raw.linear_issue.join(","),
-            resolved.raw.linear_project.join(","),
-            resolved.raw.linear_epic.join(","),
-            resolved.raw.linear_completion_gate
-        );
-        return 64;
+        match linear_delivery::run_linear_delivery(&resolved) {
+            Ok(result) => {
+                println!(
+                    "{}",
+                    linear_delivery::render_linear_delivery_result(&result)
+                );
+                return if result.success { 0 } else { 1 };
+            }
+            Err(error) => {
+                eprintln!("{error}");
+                return 1;
+            }
+        }
     }
 
     if resolved.prompt.trim().is_empty() {
@@ -641,32 +654,43 @@ fn run_social_login(resolved: &ResolvedArgs) -> Result<(), String> {
 
     for provider in providers {
         validate_engine_name(&provider, false, "--auth-login-providers")?;
-        let (bin, args): (String, Vec<String>) = match provider.as_str() {
-            "codex" => {
-                let mut args = vec!["login".to_string()];
-                if resolved.raw.auth_device_code {
-                    args.push("--device-code".to_string());
+        let (bin, args, instruction): (String, Vec<String>, &str) =
+            match provider.as_str() {
+                "codex" => {
+                    let mut args = vec!["login".to_string()];
+                    if resolved.raw.auth_device_code {
+                        args.push("--device-code".to_string());
+                    }
+                    (
+                        resolve_binary("codex"),
+                        args,
+                        "Complete the Codex browser login. Deeplinks and pasted codes are supported by the provider CLI when prompted.",
+                    )
                 }
-                (resolve_binary("codex"), args)
-            }
-            "claude" => (
-                resolve_binary("claude"),
-                vec!["auth".to_string(), "login".to_string()],
-            ),
-            "gemini" => (resolve_binary("gemini"), vec![]),
-            _ => unreachable!(),
-        };
+                "claude" => (
+                    resolve_binary("claude"),
+                    vec!["auth".to_string(), "login".to_string()],
+                    "Complete the Claude browser login. Paste any shown login code into this terminal when prompted.",
+                ),
+                "gemini" => (
+                    resolve_binary("gemini"),
+                    vec![],
+                    "Use the Gemini CLI auth selector, choose browser/social login, and complete local callback or code paste when prompted.",
+                ),
+                _ => unreachable!(),
+            };
         eprintln!(
             "[auth] launching {provider}: {}",
             format_command(&bin, &args)
         );
-        let result = run_command(
+        eprintln!("[auth] {provider}: {instruction}");
+        let result = run_interactive_auth_command(
             &bin,
             &args,
             &resolved.cwd,
-            None,
             resolved.raw.auth_timeout * 1000,
-            HashMap::new(),
+            !resolved.raw.no_auth_open_browser,
+            &provider,
         );
         if result.code.unwrap_or(1) != 0 {
             return Err(format!(
@@ -678,74 +702,200 @@ fn run_social_login(resolved: &ResolvedArgs) -> Result<(), String> {
     Ok(())
 }
 
-fn print_linear_status(resolved: &ResolvedArgs) {
-    let api_key = std::env::var(&resolved.raw.linear_api_key_env)
-        .ok()
-        .filter(|value| !value.trim().is_empty());
-    let oauth = std::env::var(&resolved.raw.linear_oauth_token_env)
-        .ok()
-        .filter(|value| !value.trim().is_empty());
-    let state_file = resolved
-        .raw
-        .linear_state_file
-        .clone()
-        .unwrap_or_else(|| resolved.cwd.join(".council/linear-delivery-state.json"));
-    let workspace_root = resolved
-        .raw
-        .linear_workspace_root
-        .clone()
-        .unwrap_or_else(|| resolved.cwd.join(".council/linear-workspaces"));
-    let observability = resolved
-        .raw
-        .linear_observability_dir
-        .clone()
-        .unwrap_or_else(|| resolved.cwd.join(".council/linear-observability"));
+fn run_interactive_auth_command(
+    command: &str,
+    args: &[String],
+    cwd: &Path,
+    timeout_ms: u64,
+    open_browser: bool,
+    provider: &str,
+) -> CommandResult {
+    let mut child = match Command::new(command)
+        .args(args)
+        .current_dir(cwd)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+    {
+        Ok(child) => child,
+        Err(error) => {
+            return CommandResult {
+                command: command.to_string(),
+                args: args.to_vec(),
+                code: None,
+                stdout: String::new(),
+                stderr: String::new(),
+                timed_out: false,
+                error: Some(error.to_string()),
+                timeout_ms,
+            }
+        }
+    };
 
-    println!("Linear integration status");
-    println!("- auth method: {}", resolved.raw.linear_auth);
-    println!(
-        "- API key env {}: {}",
-        resolved.raw.linear_api_key_env,
-        if api_key.is_some() {
-            "configured"
-        } else {
-            "missing"
+    let seen_urls = Arc::new(Mutex::new(HashSet::new()));
+    let stdout = child.stdout.take().map(|pipe| {
+        read_auth_pipe(
+            pipe,
+            true,
+            provider.to_string(),
+            open_browser,
+            Arc::clone(&seen_urls),
+        )
+    });
+    let stderr = child.stderr.take().map(|pipe| {
+        read_auth_pipe(
+            pipe,
+            false,
+            provider.to_string(),
+            open_browser,
+            Arc::clone(&seen_urls),
+        )
+    });
+    let started = Instant::now();
+    let timeout = Duration::from_millis(timeout_ms);
+    let mut timed_out = false;
+    let code;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                code = status.code();
+                break;
+            }
+            Ok(None) => {
+                if timeout_ms > 0 && started.elapsed() >= timeout {
+                    timed_out = true;
+                    let _ = child.kill();
+                    let status = child.wait().ok();
+                    code = status.and_then(|status| status.code());
+                    break;
+                }
+                thread::sleep(Duration::from_millis(50));
+            }
+            Err(error) => {
+                return CommandResult {
+                    command: command.to_string(),
+                    args: args.to_vec(),
+                    code: None,
+                    stdout: String::new(),
+                    stderr: String::new(),
+                    timed_out,
+                    error: Some(error.to_string()),
+                    timeout_ms,
+                }
+            }
         }
-    );
-    println!(
-        "- OAuth token env {}: {}",
-        resolved.raw.linear_oauth_token_env,
-        if oauth.is_some() {
-            "configured"
-        } else {
-            "missing"
-        }
-    );
-    println!("- state: {}", state_file.display());
-    println!("- workspaces: {}", workspace_root.display());
-    println!("- observability: {}", observability.display());
-    println!(
-        "- target issues: {}",
-        empty_as_any(&resolved.raw.linear_issue)
-    );
-    println!(
-        "- target projects: {}",
-        empty_as_any(&resolved.raw.linear_project)
-    );
-    println!(
-        "- target epics: {}",
-        empty_as_any(&resolved.raw.linear_epic)
-    );
-    println!("- until complete: {}", resolved.raw.linear_until_complete);
-    println!("- completion gate: {}", resolved.raw.linear_completion_gate);
+    }
+
+    CommandResult {
+        command: command.to_string(),
+        args: args.to_vec(),
+        code,
+        stdout: stdout
+            .and_then(|handle| handle.join().ok())
+            .unwrap_or_default(),
+        stderr: stderr
+            .and_then(|handle| handle.join().ok())
+            .unwrap_or_default(),
+        timed_out,
+        error: None,
+        timeout_ms,
+    }
 }
 
-fn empty_as_any(values: &[String]) -> String {
-    if values.is_empty() {
-        "any".to_string()
+fn read_auth_pipe<R>(
+    mut pipe: R,
+    stdout: bool,
+    provider: String,
+    open_browser: bool,
+    seen_urls: Arc<Mutex<HashSet<String>>>,
+) -> thread::JoinHandle<String>
+where
+    R: Read + Send + 'static,
+{
+    thread::spawn(move || {
+        let mut text = String::new();
+        let mut buffer = [0u8; 4096];
+        loop {
+            let read = match pipe.read(&mut buffer) {
+                Ok(0) => break,
+                Ok(read) => read,
+                Err(_) => break,
+            };
+            let chunk = String::from_utf8_lossy(&buffer[..read]).to_string();
+            text.push_str(&chunk);
+            if stdout {
+                print!("{chunk}");
+                let _ = io::stdout().flush();
+            } else {
+                eprint!("{chunk}");
+                let _ = io::stderr().flush();
+            }
+            if open_browser {
+                for url in extract_auth_urls(&chunk) {
+                    let mut seen = seen_urls.lock().ok();
+                    if seen.as_mut().is_some_and(|seen| !seen.insert(url.clone())) {
+                        continue;
+                    }
+                    eprintln!("[auth] {provider}: opening {url}");
+                    if let Err(error) = open_browser_url(&url) {
+                        eprintln!("[auth] {provider}: failed to open {url}: {error}");
+                    }
+                }
+            }
+        }
+        text
+    })
+}
+
+fn extract_auth_urls(text: &str) -> Vec<String> {
+    text.split_whitespace()
+        .map(|token| {
+            token.trim_matches(|ch: char| {
+                matches!(ch, '<' | '>' | '"' | '\'' | ')' | '(' | ',' | ';')
+            })
+        })
+        .map(|token| token.trim_end_matches(['.', ':', ',', ';']))
+        .filter(|token| {
+            token.starts_with("http://")
+                || token.starts_with("https://")
+                || token.starts_with("codex://")
+                || token.starts_with("openai://")
+                || token.starts_with("claude://")
+                || token.starts_with("anthropic://")
+                || token.starts_with("gemini://")
+                || token.starts_with("google://")
+        })
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn open_browser_url(url: &str) -> Result<(), String> {
+    let (command, args): (&str, Vec<String>) = if cfg!(target_os = "macos") {
+        ("open", vec![url.to_string()])
+    } else if cfg!(target_os = "windows") {
+        (
+            "cmd",
+            vec![
+                "/c".to_string(),
+                "start".to_string(),
+                "".to_string(),
+                url.to_string(),
+            ],
+        )
     } else {
-        values.join(",")
-    }
+        ("xdg-open", vec![url.to_string()])
+    };
+    Command::new(command)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map(|mut child| {
+            let _ = child.try_wait();
+        })
+        .map_err(|error| error.to_string())
 }
 
 fn build_prompt_with_context(resolved: &ResolvedArgs) -> Result<String, String> {
@@ -1886,17 +2036,23 @@ mod tests {
     }
 
     #[test]
-    fn formats_linear_status_targets() {
-        assert_eq!(empty_as_any(&[]), "any");
-        assert_eq!(empty_as_any(&["ENG-1".to_string()]), "ENG-1");
-    }
-
-    #[test]
     fn estimates_tokens_with_ceiling_chunks() {
         assert_eq!(estimate_tokens(""), 0);
         assert_eq!(estimate_tokens("abc"), 1);
         assert_eq!(estimate_tokens("abcd"), 1);
         assert_eq!(estimate_tokens("abcde"), 2);
+    }
+
+    #[test]
+    fn extracts_social_login_urls() {
+        assert_eq!(
+            extract_auth_urls("Open https://example.com/callback?code=123, then continue"),
+            vec!["https://example.com/callback?code=123"]
+        );
+        assert_eq!(
+            extract_auth_urls("deeplink: claude://login/complete."),
+            vec!["claude://login/complete"]
+        );
     }
 
     #[test]

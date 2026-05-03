@@ -21,7 +21,10 @@ name = "council"
 path = "src/main.rs"
 
 [dependencies]
+chrono = { version = "0.4.42", default-features = false, features = ["clock", "serde"] }
 clap = { version = "4.5.52", features = ["derive"] }
+crossterm = "0.29.0"
+reqwest = { version = "0.12.24", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 tempfile = "3.23.0"

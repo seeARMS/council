@@ -47,7 +47,7 @@ cargo test --workspace
 cd web && npm install && npm run dev
 ```
 
-If you are working on the CLI from a git checkout, run `cargo run -p council -- --help` or install it locally with `cargo install --path crates/council`.
+If you are working on the CLI from a git checkout, run `cargo run -p council -- --help`, launch the native Studio with `cargo run -p council -- --studio`, or install it locally with `cargo install --path crates/council`.
 
 ## License
 

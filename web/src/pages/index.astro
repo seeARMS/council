@@ -612,11 +612,11 @@ const structuredData = JSON.stringify([
                 <div class="grid gap-3 text-sm">
                   <div class="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
                     <h2 class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Native by default</h2>
-                    <p class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Run provider consultations, change auth and permissions, tag files, run prompt commands, inspect JSON, and keep the legacy Studio available while the Rust TUI lands.</p>
+                    <p class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Run provider consultations, change auth and permissions, tag files, run prompt commands, inspect JSON, and use the native Studio TUI without relying on the removed npm CLI.</p>
                   </div>
                   <div class="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
                     <h2 class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Linear migration path</h2>
-                    <p class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Carry project, epic, review, and CI gate settings through the native CLI while the full Rust worker loop catches up to the legacy implementation.</p>
+                    <p class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Target Linear issues, projects, and epics from the native CLI with isolated workspaces, persisted state, retry/reconciliation, media attachments, and review or CI completion gates.</p>
                   </div>
                 </div>
               </div>
@@ -637,8 +637,8 @@ const structuredData = JSON.stringify([
                   <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Launch Codex, Claude, and Gemini auth flows from the CLI. Browser tabs, deeplink callbacks, local callbacks, and pasted verification codes stay connected to the provider CLI doing the login.</dd>
                 </div>
                 <div>
-                  <dt class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Linear worker migration</dt>
-                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Keep Linear auth, project, epic, review-state, and CI gate configuration in the native binary while the full long-running worker loop is ported from the legacy implementation.</dd>
+                  <dt class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Linear delivery loop</dt>
+                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Poll Linear, target issues by project or epic, prepare isolated workspaces, run phased council delivery, persist retry state, attach media, and finish on human-review or GitHub CI gates.</dd>
                 </div>
                 <div>
                   <dt class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Telemetry you can inspect</dt>
