@@ -8,32 +8,25 @@ on:
 
 jobs:
   cli:
-    name: CLI
+    name: Rust CLI
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: cli/package-lock.json
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Install CLI deps
-        working-directory: cli
-        run: npm ci
+      - name: Check formatting
+        run: cargo fmt --all --check
 
       - name: Build CLI
-        working-directory: cli
-        run: npm run build
+        run: cargo build --workspace --locked
 
       - name: Test CLI
-        working-directory: cli
-        run: npm test
+        run: cargo test --workspace --locked
 
-      - name: Typecheck CLI
-        working-directory: cli
-        run: npm run typecheck
+      - name: Lint CLI
+        run: cargo clippy --workspace --locked -- -D warnings
 
   web:
     name: Web

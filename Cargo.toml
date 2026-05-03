@@ -1,0 +1,9 @@
+[workspace]
+members = ["crates/council"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+homepage = "https://council.armstr.ng"
+repository = "https://github.com/seeARMS/council"

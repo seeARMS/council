@@ -4,7 +4,7 @@
 
 Security fixes are currently provided for:
 
-- the latest published `@armstrng/council` npm release
+- the latest published `council` Rust crate release
 - the `main` branch in this repository
 
 Older releases may not receive patches.

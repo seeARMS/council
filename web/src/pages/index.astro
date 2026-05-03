@@ -1,6 +1,5 @@
 ---
 import { Font, Image } from "astro:assets";
-import cliPackage from "../../../cli/package.json";
 import councilNavLogo from "../assets/council-64.png";
 import councilHeroLogo from "../assets/council-256.png";
 import codexLogo from "../assets/agent-logos/codex.png";
@@ -21,10 +20,12 @@ import "../styles/global.css";
 const siteUrl = Astro.site?.toString().replace(/\/$/, "") ?? defaultSiteUrl;
 const pageUrl = `${siteUrl}/`;
 const metaImage = `${siteUrl}${ogImagePath}`;
-const repoUrl = cliPackage.repository.url.replace(/^git\+/, "").replace(/\.git$/, "");
-const docsUrl = `${repoUrl}/blob/main/cli/README.md`;
+const repoUrl = "https://github.com/seeARMS/council";
+const crateName = "council";
+const crateVersion = "0.1.5";
+const docsUrl = `${repoUrl}/blob/main/crates/council/README.md`;
 const licenseUrl = `${repoUrl}/blob/main/LICENSE`;
-const npmUrl = `https://www.npmjs.com/package/${cliPackage.name}`;
+const crateUrl = `https://crates.io/crates/${crateName}`;
 const xUrl = "https://x.com/colinarms";
 const GA_MEASUREMENT_ID = "G-VLG18DVXN5";
 const robotsContent = "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1";
@@ -51,14 +52,14 @@ const structuredData = JSON.stringify([
     mainEntityOfPage: pageUrl,
     applicationCategory: "DeveloperApplication",
     applicationSubCategory: "Command-line interface",
-    softwareVersion: cliPackage.version,
-    downloadUrl: npmUrl,
-    installUrl: npmUrl,
+    softwareVersion: crateVersion,
+    downloadUrl: crateUrl,
+    installUrl: crateUrl,
     softwareHelp: {
       "@type": "CreativeWork",
       url: docsUrl,
     },
-    runtimePlatform: "Node.js >= 22",
+    runtimePlatform: "Native Rust binary",
     softwareRequirements: "At least one authenticated Codex, Claude, or Gemini CLI installed locally",
     license: licenseUrl,
     image: metaImage,
@@ -76,13 +77,13 @@ const structuredData = JSON.stringify([
     featureList: [
       "Runs Codex, Claude, and Gemini in parallel",
       "Synthesizes one answer across multiple model outputs",
-      "Provides an interactive terminal studio for provider settings, lead and planner roles, handoffs, iterations, and team sizes",
+      "Provides native provider settings, lead and planner roles, handoffs, iterations, and team sizes",
       "Launches provider social-login flows and preserves browser deeplink and code paste authentication",
-      "Delivers Linear issues with polling, isolated workspaces, retries, observability, and media attachments",
+      "Carries Linear setup/status and delivery flags forward while the native worker loop is ported",
       "Shows provider token usage and tool command telemetry",
       "Inherits provider-native tools, skills, and MCP configuration from the underlying CLIs when their permission modes allow it",
     ],
-    sameAs: [repoUrl, npmUrl, xUrl],
+    sameAs: [repoUrl, crateUrl, xUrl],
   },
 ]);
 ---
@@ -478,7 +479,7 @@ const structuredData = JSON.stringify([
                 <span class="block mt-2 sm:mt-3">Get one answer.</span>
               </h1>
               <p class="stagger-fade mt-6 text-lg leading-[1.55] text-zinc-600 text-pretty max-w-[48ch] mx-auto md:mx-0 dark:text-zinc-400" style="--stagger-fade-delay: 180ms;">
-                Council runs Codex, Claude, and Gemini against the same prompt, coordinates them from a terminal studio, and synthesizes one answer &mdash; using the subscriptions and local CLI setups you already have.
+                Council runs Codex, Claude, and Gemini against the same prompt, coordinates them from a native Rust binary, and synthesizes one answer &mdash; using the subscriptions and local CLI setups you already have.
               </p>
               <div class="stagger-fade mt-8 space-y-8" style="--stagger-fade-delay: 235ms;">
                 <div class="stagger-fade-group space-y-3" style="--stagger-fade-base-delay: 260ms;">
@@ -504,13 +505,15 @@ const structuredData = JSON.stringify([
                   <div
                     class="command-shell rounded-2xl border text-left"
                     data-command-box
-                    data-copy-text={`npx ${cliPackage.name} ${examplePrompt}`}
+                    data-copy-text={`cargo install ${crateName} && ${crateName} ${examplePrompt}`}
                   >
                     <div class="relative z-10 flex items-center gap-3 px-5 py-4 sm:px-6 sm:py-5">
                       <code class="flex-1 min-w-0 font-mono text-sm sm:text-[0.95rem] leading-7 text-zinc-100 break-words">
                         <span class="select-none text-zinc-600">$</span>
-                        <span class="text-zinc-500"> npx</span>
-                        <span class="text-zinc-300"> {cliPackage.name}</span>
+                        <span class="text-zinc-500"> cargo install</span>
+                        <span class="text-zinc-300"> {crateName}</span>
+                        <span class="text-zinc-500"> &&</span>
+                        <span class="text-zinc-300"> {crateName}</span>
                         <span class="text-zinc-100"> {examplePrompt}</span>
                       </code>
                       <button
@@ -608,12 +611,12 @@ const structuredData = JSON.stringify([
                 </div>
                 <div class="grid gap-3 text-sm">
                   <div class="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-                    <h2 class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Interactive by default</h2>
-                    <p class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Move between panes, change provider auth and permissions, tag files, run prompt commands, inspect telemetry, and re-run without restarting Node.</p>
+                    <h2 class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Native by default</h2>
+                    <p class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Run provider consultations, change auth and permissions, tag files, run prompt commands, inspect JSON, and keep the legacy Studio available while the Rust TUI lands.</p>
                   </div>
                   <div class="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-                    <h2 class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Linear-aware delivery</h2>
-                    <p class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Poll Linear, isolate each issue workspace, retry with reconciliation state, attach proof media, and keep JSONL observability logs.</p>
+                    <h2 class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Linear migration path</h2>
+                    <p class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Carry project, epic, review, and CI gate settings through the native CLI while the full Rust worker loop catches up to the legacy implementation.</p>
                   </div>
                 </div>
               </div>
@@ -626,16 +629,16 @@ const structuredData = JSON.stringify([
                   <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Detects <code>codex</code>, <code>claude</code>, and <code>gemini</code> on your <code>PATH</code> and runs whichever subset is there. Each provider still loads its own local config, including native tools, skills, and MCP servers when that CLI and permission mode allow them.</dd>
                 </div>
                 <div>
-                  <dt class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Studio for real coordination</dt>
-                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Use <code>--studio</code> to select a lead, planner, executors, auth method, sandbox, permission mode, model, effort, iterations, handoffs, provider team sizes, tagged files, and prompt commands from one terminal UI.</dd>
+                  <dt class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Coordination without glue scripts</dt>
+                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Select a lead, planner, executors, auth method, sandbox, permission mode, model, effort, iterations, handoffs, provider team sizes, tagged files, and prompt commands from the native CLI.</dd>
                 </div>
                 <div>
                   <dt class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Social login without leaving the flow</dt>
-                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Launch Codex, Claude, and Gemini auth flows from the CLI or Studio. Browser tabs, deeplink callbacks, local callbacks, and pasted verification codes stay connected to the provider CLI doing the login.</dd>
+                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Launch Codex, Claude, and Gemini auth flows from the CLI. Browser tabs, deeplink callbacks, local callbacks, and pasted verification codes stay connected to the provider CLI doing the login.</dd>
                 </div>
                 <div>
-                  <dt class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Linear worker built in</dt>
-                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Fetch issues, poll long-running queues, create per-issue workspaces, run plan/implement/verify/ship phases, retry with backoff, reconcile state, attach media, and watch observability events.</dd>
+                  <dt class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Linear worker migration</dt>
+                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Keep Linear auth, project, epic, review-state, and CI gate configuration in the native binary while the full long-running worker loop is ported from the legacy implementation.</dd>
                 </div>
                 <div>
                   <dt class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Telemetry you can inspect</dt>
@@ -643,7 +646,7 @@ const structuredData = JSON.stringify([
                 </div>
                 <div>
                   <dt class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Still fits automation</dt>
-                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Pipe stdin with <code>echo &quot;...&quot; | council</code>, get structured output with <code>--json</code> or <code>--json-stream</code>, skip the dashboard with <code>--headless</code>, or import <code>runCouncil()</code> directly in Node.</dd>
+                  <dd class="mt-2 leading-relaxed text-zinc-600 dark:text-zinc-400">Pipe stdin with <code>echo &quot;...&quot; | council</code>, get structured output with <code>--json</code> or <code>--json-stream</code>, skip the dashboard with <code>--headless</code>, or embed the Rust crate from a larger native workflow.</dd>
                 </div>
               </dl>
             </div>

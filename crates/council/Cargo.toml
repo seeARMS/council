@@ -1,0 +1,27 @@
+[package]
+name = "council"
+version = "0.1.5"
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+description = "Consensus-oriented native CLI that asks Codex, Claude, and Gemini in parallel and synthesizes their answers."
+readme = "README.md"
+keywords = ["ai", "agents", "automation", "cli", "llm"]
+categories = ["command-line-utilities", "development-tools"]
+include = [
+  "Cargo.toml",
+  "CHANGELOG.md",
+  "README.md",
+  "src/**/*.rs"
+]
+
+[[bin]]
+name = "council"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.5.52", features = ["derive"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+tempfile = "3.23.0"

@@ -24,39 +24,28 @@ jobs:
           manifest-file: .release-please-manifest.json
 
       - name: Checkout
-        if: ${{ steps.release.outputs['cli--release_created'] }}
+        if: ${{ steps.release.outputs['crates/council--release_created'] }}
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        if: ${{ steps.release.outputs['cli--release_created'] }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          registry-url: https://registry.npmjs.org
-          cache: npm
-          cache-dependency-path: cli/package-lock.json
-
-      - name: Install CLI deps
-        if: ${{ steps.release.outputs['cli--release_created'] }}
-        working-directory: cli
-        run: npm ci
+      - name: Setup Rust
+        if: ${{ steps.release.outputs['crates/council--release_created'] }}
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Build CLI
-        if: ${{ steps.release.outputs['cli--release_created'] }}
-        working-directory: cli
-        run: npm run build
+        if: ${{ steps.release.outputs['crates/council--release_created'] }}
+        run: cargo build --workspace --locked
 
       - name: Test CLI
-        if: ${{ steps.release.outputs['cli--release_created'] }}
-        working-directory: cli
-        run: npm test
+        if: ${{ steps.release.outputs['crates/council--release_created'] }}
+        run: cargo test --workspace --locked
 
-      - name: Typecheck CLI
-        if: ${{ steps.release.outputs['cli--release_created'] }}
-        working-directory: cli
-        run: npm run typecheck
+      - name: Authenticate to crates.io
+        if: ${{ steps.release.outputs['crates/council--release_created'] }}
+        id: crates-io-auth
+        uses: rust-lang/crates-io-auth-action@v1
 
-      - name: Publish CLI to npm
-        if: ${{ steps.release.outputs['cli--release_created'] }}
-        working-directory: cli
-        run: npm publish
+      - name: Publish CLI to crates.io
+        if: ${{ steps.release.outputs['crates/council--release_created'] }}
+        run: cargo publish -p council --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token }}

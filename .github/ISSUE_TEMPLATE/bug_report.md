@@ -13,7 +13,7 @@ Describe the problem clearly.
 ## Environment
 
 - OS:
-- Node version:
+- Rust/Cargo version:
 - Package version or commit:
 - Affected area:
   - CLI

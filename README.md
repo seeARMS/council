@@ -4,12 +4,14 @@ A small open-source CLI that asks multiple AI coding CLIs (`codex`, `claude`, `g
 
 This repo holds two things:
 
-- [`cli/`](./cli) — the `council` CLI itself, published to npm
+- [`crates/council/`](./crates/council) — the native Rust `council` CLI
+- [`cli/`](./cli) — the legacy TypeScript/npm CLI kept temporarily as migration reference
 - [`web/`](./web) — the landing page hosted at [council.armstr.ng](https://council.armstr.ng)
 
 ## Prerequisites
 
-- Node `>=22` for local development
+- Rust stable for the native CLI
+- Node `>=22` only for the Astro web app and the legacy TypeScript CLI reference
 - For the CLI itself: at least one supported upstream CLI installed and authenticated
   Supported CLIs today: `codex`, `claude`, `gemini`
 
@@ -18,26 +20,35 @@ If none of those CLIs are installed or authenticated, `council` cannot produce a
 ## Quick start
 
 ```bash
-npx @armstrng/council "How should I structure this CLI?"
+cargo run -p council -- "How should I structure this CLI?"
 ```
 
-See [`cli/README.md`](./cli/README.md) for full usage, flags, and output modes.
+Install the native binary from a checkout:
+
+```bash
+cargo install --path crates/council
+council --members codex,claude,gemini "How should I structure this CLI?"
+```
+
+See [`crates/council/README.md`](./crates/council/README.md) for native CLI notes. The legacy TypeScript CLI docs remain in [`cli/README.md`](./cli/README.md) while the remaining Studio and Linear delivery surfaces are ported.
 
 The landing page has its own notes in [`web/README.md`](./web/README.md), including how its vendored browser assets are tracked.
 
 ## Development
 
-The two subprojects are independent — each has its own `package.json` and is installed separately.
+The CLI is now a Cargo workspace member. The web app remains an independent Astro project with its own `package.json`.
 
 ```bash
 # CLI
-cd cli && npm install && npm run build && npm test
+cargo fmt --all --check
+cargo build --workspace
+cargo test --workspace
 
 # Site
 cd web && npm install && npm run dev
 ```
 
-If you are working on the CLI from a git checkout, run `npm run build` in `cli/` before invoking `./bin/council.js` directly so the launcher has a local `dist/` build to execute.
+If you are working on the CLI from a git checkout, run `cargo run -p council -- --help` or install it locally with `cargo install --path crates/council`.
 
 ## License
 
@@ -57,6 +68,6 @@ See [SECURITY.md](./SECURITY.md).
 
 ## Releases
 
-The published npm package lives in [`cli/`](./cli). Releases are managed by `release-please`, which opens a release PR from commits on `main`, updates [`cli/CHANGELOG.md`](./cli/CHANGELOG.md), bumps the package version, tags the release, and publishes `@armstrng/council` from GitHub Actions.
+The native Rust crate lives in [`crates/council/`](./crates/council). Releases are managed by `release-please`, which opens a release PR from commits on `main`, updates the Rust crate changelog, bumps `Cargo.toml`, tags the release, and publishes the crate from GitHub Actions.
 
-One-time maintainer setup is still required on npm: configure a trusted publisher for the `seeARMS/council` repository and the `.github/workflows/release-please.yml` workflow, then restrict token-based publishing once that flow is verified.
+One-time maintainer setup is still required on crates.io: publish or reserve the crate name, then configure either crates.io trusted publishing for `.github/workflows/release-please.yml` or provide a scoped `CARGO_REGISTRY_TOKEN` secret.
