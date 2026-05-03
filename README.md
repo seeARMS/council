@@ -5,13 +5,12 @@ A small open-source CLI that asks multiple AI coding CLIs (`codex`, `claude`, `g
 This repo holds two things:
 
 - [`crates/council/`](./crates/council) — the native Rust `council` CLI
-- [`cli/`](./cli) — the legacy TypeScript/npm CLI kept temporarily as migration reference
 - [`web/`](./web) — the landing page hosted at [council.armstr.ng](https://council.armstr.ng)
 
 ## Prerequisites
 
 - Rust stable for the native CLI
-- Node `>=22` only for the Astro web app and the legacy TypeScript CLI reference
+- Node `>=22` only for the Astro web app
 - For the CLI itself: at least one supported upstream CLI installed and authenticated
   Supported CLIs today: `codex`, `claude`, `gemini`
 
@@ -30,13 +29,13 @@ cargo install --path crates/council
 council --members codex,claude,gemini "How should I structure this CLI?"
 ```
 
-See [`crates/council/README.md`](./crates/council/README.md) for native CLI notes. The legacy TypeScript CLI docs remain in [`cli/README.md`](./cli/README.md) while the remaining Studio and Linear delivery surfaces are ported.
+See [`crates/council/README.md`](./crates/council/README.md) for native CLI notes.
 
 The landing page has its own notes in [`web/README.md`](./web/README.md), including how its vendored browser assets are tracked.
 
 ## Development
 
-The CLI is now a Cargo workspace member. The web app remains an independent Astro project with its own `package.json`.
+The CLI is a Cargo workspace member. The web app remains an independent Astro project with its own `package.json`.
 
 ```bash
 # CLI

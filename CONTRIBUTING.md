@@ -3,7 +3,6 @@
 This repo has two subprojects:
 
 - `crates/council/` is the native Rust `council` CLI crate.
-- `cli/` is the legacy TypeScript/npm CLI kept temporarily as migration reference.
 - `web/` is the landing page deployed separately.
 
 ## Setup

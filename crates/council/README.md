@@ -23,4 +23,4 @@ Migration status:
 - Native prompt file/command context: implemented.
 - Native social-login command bootstrap: implemented.
 - Native Linear setup/status flags: implemented.
-- Native Studio TUI and full Linear delivery loop: being ported from the legacy TypeScript implementation.
+- Native Studio TUI and full Linear delivery loop: next Rust migration slices.
