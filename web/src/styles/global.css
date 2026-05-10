@@ -9,30 +9,27 @@
 
 @keyframes stagger-fade-enter {
   from {
-    opacity: 0;
+    opacity: 0.01;
     transform: translateY(var(--stagger-fade-y, 10px));
-    filter: blur(var(--stagger-fade-blur, 4px));
   }
 
   to {
     opacity: 1;
     transform: translateY(0);
-    filter: blur(0);
   }
 }
 
 .stagger-fade,
 .stagger-fade-group > * {
-  --stagger-fade-duration: 320ms;
-  --stagger-fade-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --stagger-fade-duration: 600ms;
+  --stagger-fade-ease: ease-out;
 }
 
 @media (prefers-reduced-motion: no-preference) {
   .motion-pending .stagger-fade,
   .motion-pending .stagger-fade-group > * {
-    opacity: 0;
+    opacity: 0.01;
     transform: translateY(var(--stagger-fade-y, 10px));
-    filter: blur(var(--stagger-fade-blur, 4px));
   }
 
   .motion-ready .stagger-fade,
@@ -40,7 +37,7 @@
     animation: stagger-fade-enter var(--stagger-fade-duration)
       var(--stagger-fade-ease) both;
     animation-delay: var(--stagger-fade-delay, 0ms);
-    will-change: opacity, transform, filter;
+    will-change: opacity, transform;
   }
 
   .stagger-fade-group > :nth-child(1) {
