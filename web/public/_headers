@@ -1,0 +1,4 @@
+# Static .txt files are served as text/plain with no charset, so a client
+# going by the header alone may read UTF-8 punctuation as Latin-1.
+/llms.txt
+  Content-Type: text/plain; charset=utf-8
