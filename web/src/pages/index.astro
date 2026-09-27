@@ -10,8 +10,12 @@ import {
   defaultSiteUrl,
   description,
   examplePrompt,
+  headline,
+  intro,
+  licenseNote,
   ogImageAlt,
   ogImagePath,
+  pitch,
   siteName,
   title,
   xHandle,
@@ -34,6 +38,7 @@ const author = {
   "@id": "https://armstr.ng/#person",
   name: authorName,
   url: "https://armstr.ng/",
+  disambiguatingDescription: "Founder and CEO of Paragraph (paragraph.com), a software engineer and entrepreneur in the San Francisco Bay Area who previously worked at Google and Coinbase.",
   sameAs: [xUrl, "https://github.com/seeARMS", "https://linkedin.com/in/colinarms"],
 };
 const structuredData = JSON.stringify({
@@ -54,6 +59,7 @@ const structuredData = JSON.stringify({
       name: siteName,
       url: pageUrl,
       description,
+      disambiguatingDescription: "Open-source command-line tool by Colin Armstrong, published on npm as @armstrng/council, that runs the Codex, Claude and Gemini CLIs on the same prompt and merges their answers into one.",
       mainEntityOfPage: pageUrl,
       applicationCategory: "DeveloperApplication",
       applicationSubCategory: "Command-line interface",
@@ -113,6 +119,8 @@ const structuredData = JSON.stringify({
     <meta name="googlebot" content={robotsContent} />
     <link rel="canonical" href={pageUrl} />
     <link rel="sitemap" type="application/xml" href={`${siteUrl}/sitemap.xml`} />
+    <link rel="alternate" type="text/markdown" href="/index.md" />
+    <link rel="describedby" href="/llms.txt" />
 
     <title>{title}</title>
     <meta name="description" content={description} />
@@ -478,17 +486,18 @@ const structuredData = JSON.stringify({
                 style="--stagger-fade-delay: 70ms;"
               />
               <h1 class="stagger-fade text-4xl sm:text-5xl md:text-[3.5rem] lg:text-6xl font-semibold tracking-[-0.025em] leading-[1.04] text-zinc-950 text-balance max-w-[18ch] mx-auto md:mx-0 dark:text-zinc-50" style="--stagger-fade-delay: 125ms;">
-                Ask three agents.
-                <span class="block mt-2 sm:mt-3">Get one answer.</span>
+                {headline[0]}
+                <span class="block mt-2 sm:mt-3">{headline[1]}</span>
               </h1>
               <p class="stagger-fade mt-6 text-lg leading-[1.55] text-zinc-600 text-pretty max-w-[48ch] mx-auto md:mx-0 dark:text-zinc-400" style="--stagger-fade-delay: 180ms;">
-                Council runs Codex, Claude, and Gemini in parallel against the same prompt and synthesizes their responses &mdash; using the subscriptions you already pay for.
+                {intro}
               </p>
               <div class="stagger-fade mt-8 space-y-8" style="--stagger-fade-delay: 235ms;">
                 <div class="stagger-fade-group space-y-3" style="--stagger-fade-base-delay: 260ms;">
                   <p class="text-xs font-mono uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">
                     Works with
                   </p>
+                  {/* index.md.ts lists these agents too; update both. */}
                   <div class="agent-chip-row justify-center md:justify-start text-zinc-950 font-medium dark:text-zinc-100" aria-label="Supported agents">
                     <span class="agent-chip">
                       <Image src={codexLogo} alt="" aria-hidden="true" width={36} height={36} class="agent-chip-codex-logo" />
@@ -532,7 +541,7 @@ const structuredData = JSON.stringify({
                     </div>
                   </div>
                   <div class="relative z-10 flex flex-col items-center justify-between gap-3 text-sm text-zinc-500 dark:text-zinc-400 sm:flex-row">
-                    <p>Free and open source. MIT licensed.</p>
+                    <p>{licenseNote}</p>
                     <a
                       href={repoUrl}
                       target="_blank"
@@ -577,10 +586,11 @@ const structuredData = JSON.stringify({
         <div class="max-w-6xl mx-auto px-6">
           <div class="stagger-fade-group" style="--stagger-fade-base-delay: 420ms;">
             <p class="mx-auto max-w-3xl text-center text-lg leading-8 text-zinc-700 text-balance dark:text-zinc-300">
-              Three models, three sets of blind spots. Council runs them in parallel and surfaces where they agree, where they don&apos;t, and where one of them is probably wrong.
+              {pitch}
             </p>
             <div class="mt-16 max-w-3xl mx-auto md:mt-20">
               <h2 class="font-mono text-xs tracking-[0.18em] uppercase text-zinc-500 mb-6 dark:text-zinc-500">Features</h2>
+              {/* index.md.ts repeats these features in Markdown; update both. */}
               <dl class="features-dl stagger-fade-group space-y-6 text-sm" style="--stagger-fade-base-delay: 510ms;">
                 <div>
                   <dt class="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">Works with what you&apos;ve already got</dt>
