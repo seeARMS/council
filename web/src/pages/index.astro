@@ -28,61 +28,67 @@ const npmUrl = `https://www.npmjs.com/package/${cliPackage.name}`;
 const xUrl = "https://x.com/colinarms";
 const GA_MEASUREMENT_ID = "G-SR4GRB4SNM";
 const robotsContent = "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1";
-const structuredData = JSON.stringify([
-  {
-    "@context": "https://schema.org",
-    "@type": "WebSite",
-    name: siteName,
-    url: siteUrl,
-    description,
-    inLanguage: "en-US",
-    publisher: {
-      "@type": "Person",
-      name: authorName,
-      url: xUrl,
+// The same @id armstr.ng uses for Colin, so search engines tie this app to him.
+const author = {
+  "@type": "Person",
+  "@id": "https://armstr.ng/#person",
+  name: authorName,
+  url: "https://armstr.ng/",
+  sameAs: [xUrl, "https://github.com/seeARMS", "https://linkedin.com/in/colinarms"],
+};
+const structuredData = JSON.stringify({
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": `${siteUrl}/#website`,
+      name: siteName,
+      url: pageUrl,
+      description,
+      inLanguage: "en-US",
+      publisher: { "@id": author["@id"] },
     },
-  },
-  {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    name: siteName,
-    url: pageUrl,
-    description,
-    mainEntityOfPage: pageUrl,
-    applicationCategory: "DeveloperApplication",
-    applicationSubCategory: "Command-line interface",
-    softwareVersion: cliPackage.version,
-    downloadUrl: npmUrl,
-    installUrl: npmUrl,
-    softwareHelp: {
-      "@type": "CreativeWork",
-      url: docsUrl,
+    {
+      "@type": "SoftwareApplication",
+      "@id": `${siteUrl}/#app`,
+      name: siteName,
+      url: pageUrl,
+      description,
+      mainEntityOfPage: pageUrl,
+      applicationCategory: "DeveloperApplication",
+      applicationSubCategory: "Command-line interface",
+      operatingSystem: "macOS, Linux, Windows",
+      softwareVersion: cliPackage.version,
+      downloadUrl: npmUrl,
+      installUrl: npmUrl,
+      softwareHelp: {
+        "@type": "CreativeWork",
+        url: docsUrl,
+      },
+      runtimePlatform: "Node.js >= 22",
+      softwareRequirements: "At least one authenticated Codex, Claude, or Gemini CLI installed locally",
+      license: licenseUrl,
+      image: metaImage,
+      screenshot: [
+        `${siteUrl}/screenshots/screenshot-1.jpg`,
+        `${siteUrl}/screenshots/screenshot-3.jpg`,
+      ],
+      author,
+      creator: { "@id": author["@id"] },
+      isAccessibleForFree: true,
+      offers: { "@type": "Offer", price: 0, priceCurrency: "USD" },
+      keywords: "Codex, Claude, Gemini, AI coding CLI, developer tools, multi-agent CLI",
+      featureList: [
+        "Runs Codex, Claude, and Gemini in parallel",
+        "Synthesizes one answer across multiple model outputs",
+        "Surfaces disagreements instead of hiding them",
+        "Supports interactive terminal, JSON, JSONL, and headless modes",
+        "Uses the subscriptions you already pay for",
+      ],
+      sameAs: [repoUrl, npmUrl],
     },
-    runtimePlatform: "Node.js >= 22",
-    softwareRequirements: "At least one authenticated Codex, Claude, or Gemini CLI installed locally",
-    license: licenseUrl,
-    image: metaImage,
-    screenshot: [
-      `${siteUrl}/screenshots/screenshot-1.jpg`,
-      `${siteUrl}/screenshots/screenshot-3.jpg`,
-    ],
-    author: {
-      "@type": "Person",
-      name: authorName,
-      url: xUrl,
-    },
-    isAccessibleForFree: true,
-    keywords: "Codex, Claude, Gemini, AI coding CLI, developer tools, multi-agent CLI",
-    featureList: [
-      "Runs Codex, Claude, and Gemini in parallel",
-      "Synthesizes one answer across multiple model outputs",
-      "Surfaces disagreements instead of hiding them",
-      "Supports interactive terminal, JSON, JSONL, and headless modes",
-      "Uses the subscriptions you already pay for",
-    ],
-    sameAs: [repoUrl, npmUrl, xUrl],
-  },
-]);
+  ],
+});
 ---
 
 <!DOCTYPE html>
