@@ -2,6 +2,8 @@
 
 A small open-source CLI that asks multiple AI coding CLIs (`codex`, `claude`, `gemini`) the same question in parallel and synthesizes their answers into one final response.
 
+Made by [Colin Armstrong](https://armstr.ng).
+
 This repo holds two things:
 
 - [`cli/`](./cli) — the `council` CLI itself, published to npm
@@ -41,7 +43,7 @@ If you are working on the CLI from a git checkout, run `npm run build` in `cli/`
 
 ## License
 
-[MIT](./LICENSE)
+[MIT](./LICENSE) © [Colin Armstrong](https://armstr.ng)
 
 ## Contributing
 

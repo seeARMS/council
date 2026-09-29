@@ -40,7 +40,7 @@
     "gemini",
     "llm"
   ],
-  "author": "Colin Armstrong",
+  "author": "Colin Armstrong <colin@armstr.ng> (https://armstr.ng)",
   "license": "MIT",
   "homepage": "https://council.armstr.ng",
   "repository": {

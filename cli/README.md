@@ -2,6 +2,8 @@
 
 `council` is a tiny CLI that asks multiple coding CLIs the same question and then synthesizes their answers into one final response.
 
+Website: [council.armstr.ng](https://council.armstr.ng). Made by [Colin Armstrong](https://armstr.ng).
+
 Today it supports:
 
 - `codex`
